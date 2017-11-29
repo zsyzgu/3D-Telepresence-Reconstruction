@@ -1,9 +1,9 @@
 cmake_minimum_required( VERSION 2.8 )
 set( CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH} )
 
-project( sample )
-add_executable( sample kinect2_grabber.h main.cpp )
-set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "sample" )
+project( pc-recog )
+add_executable( pc-recog kinect2_grabber.h main.cpp )
+set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "pc-recog" )
 
 # Find Packages
 find_package( KinectSDK2 REQUIRED )
@@ -22,6 +22,6 @@ if( PCL_FOUND AND KinectSDK2_FOUND )
   link_directories( ${KinectSDK2_LIBRARY_DIRS} )
 
   # Additional Dependencies
-  target_link_libraries( sample ${PCL_LIBRARIES} )
-  target_link_libraries( sample ${KinectSDK2_LIBRARIES} )
+  target_link_libraries( pc-recog ${PCL_LIBRARIES} )
+  target_link_libraries( pc-recog ${KinectSDK2_LIBRARIES} )
 endif()
