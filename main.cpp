@@ -3,11 +3,11 @@
 #include "Kinect2Pcd.h"
 
 int main(int argc, char *argv[]) {
-	//Recognition recognition;
-	//recognition.run("milk.pcd", "milk_scene.pcd");
+	Recognition recognition;
+	recognition.run("save2.pcd", "save.pcd");
 
-	Kinect2Pcd kinect2Pcd;
-	kinect2Pcd.run();
+	//Kinect2Pcd kinect2Pcd;
+	//kinect2Pcd.run();
 
 	return 0;
 }

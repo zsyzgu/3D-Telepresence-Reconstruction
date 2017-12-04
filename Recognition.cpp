@@ -34,7 +34,7 @@ double Recognition::computeCloudResolution(const pcl::PointCloud<PointType>::Con
 Recognition::Recognition()
 {
 	model_ss_ = 10.0f;
-	scene_ss_ = 30.0f;
+	scene_ss_ = 10.0f;
 	rf_rad_ = 15.0f;
 	descr_rad_ = 20.0f;
 	cg_size_ = 10.0f;

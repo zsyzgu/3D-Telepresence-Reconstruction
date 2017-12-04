@@ -59,4 +59,26 @@ void Kinect2Pcd::run()
 	}
 
 	pcl::io::savePCDFileASCII("save.pcd", *cloud);
+
+	pcl::PointCloud<PointType>::Ptr cloud2(new pcl::PointCloud<PointType>());
+	float minX = 1e8, maxX = -1e8;
+	float minY = 1e8, maxY = -1e8;
+	for (int i = cloud->size() / 3; i < cloud->size() / 3 * 2; i++) {
+		float x = cloud->at(i).x;
+		float y = cloud->at(i).y;
+		minX = std::min(minX, x);
+		maxX = std::max(maxX, x);
+		minY = std::min(minY, y);
+		maxY = std::max(maxY, y);
+	}
+	for (int i = cloud->size() / 3; i < cloud->size() / 3 * 2; i++) {
+		float x = cloud->at(i).x;
+		float y = cloud->at(i).y;
+		if (minX * 2 / 3 + maxX / 3 <= x && x <= minX / 3 + maxX * 2 / 3) {
+			if (minY * 2 / 3 + maxY / 3 <= y && y <= minY / 3 + maxY * 2 / 3) {
+				cloud2->push_back(cloud->at(i));
+			}
+		}
+	}
+	pcl::io::savePCDFileASCII("save2.pcd", *cloud2);
 }
