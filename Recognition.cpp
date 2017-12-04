@@ -41,30 +41,14 @@ Recognition::Recognition()
 	cg_thresh_ = 5.0f;
 }
 
-void Recognition::run(char * modelFileName, char * sceneFileName)
+void Recognition::recognize(const pcl::PointCloud<PointType>::ConstPtr & model, const pcl::PointCloud<PointType>::ConstPtr & scene)
 {
-	pcl::PointCloud<PointType>::Ptr model(new pcl::PointCloud<PointType>());
 	pcl::PointCloud<PointType>::Ptr model_keypoints(new pcl::PointCloud<PointType>());
-	pcl::PointCloud<PointType>::Ptr scene(new pcl::PointCloud<PointType>());
 	pcl::PointCloud<PointType>::Ptr scene_keypoints(new pcl::PointCloud<PointType>());
 	pcl::PointCloud<NormalType>::Ptr model_normals(new pcl::PointCloud<NormalType>());
 	pcl::PointCloud<NormalType>::Ptr scene_normals(new pcl::PointCloud<NormalType>());
 	pcl::PointCloud<DescriptorType>::Ptr model_descriptors(new pcl::PointCloud<DescriptorType>());
 	pcl::PointCloud<DescriptorType>::Ptr scene_descriptors(new pcl::PointCloud<DescriptorType>());
-
-	//
-	//  Load clouds
-	//
-	if (pcl::io::loadPCDFile(modelFileName, *model) < 0)
-	{
-		std::cout << "Error loading model cloud." << std::endl;
-		return;
-	}
-	if (pcl::io::loadPCDFile(sceneFileName, *scene) < 0)
-	{
-		std::cout << "Error loading scene cloud." << std::endl;
-		return;
-	}
 
 	//
 	//  Set up resolution invariance
@@ -85,7 +69,7 @@ void Recognition::run(char * modelFileName, char * sceneFileName)
 	std::cout << "LRF support radius:     " << rf_rad_ << std::endl;
 	std::cout << "SHOT descriptor radius: " << descr_rad_ << std::endl;
 	std::cout << "Clustering bin size:    " << cg_size_ << std::endl << std::endl;
-	
+
 
 	//
 	//  Compute Normals
@@ -198,7 +182,6 @@ void Recognition::run(char * modelFileName, char * sceneFileName)
 	//clusterer.cluster (clustered_corrs);
 	clusterer.recognize(rototranslations, clustered_corrs);
 
-
 	//
 	//  Output results
 	//
@@ -219,6 +202,35 @@ void Recognition::run(char * modelFileName, char * sceneFileName)
 		printf("\n");
 		printf("        t = < %0.3f, %0.3f, %0.3f >\n", translation(0), translation(1), translation(2));
 	}
+
+	//
+	// Record results
+	//
+	this->model_keypoints = model_keypoints->makeShared();
+	this->scene_keypoints = scene_keypoints->makeShared();
+	this->rototranslations = rototranslations;
+	this->clustered_corrs = clustered_corrs;
+}
+
+pcl::PointCloud<Recognition::PointType>::Ptr Recognition::getModelKeypoints()
+{
+	return model_keypoints;
+}
+
+pcl::PointCloud<Recognition::PointType>::Ptr Recognition::getSceneKeypoints()
+{
+	return scene_keypoints;
+}
+
+std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > Recognition::getRototranslations() {
+	return rototranslations;
+}
+
+std::vector<pcl::Correspondences> Recognition::getClusteredCorrs() {
+	return clustered_corrs;
+}
+
+/*
 
 	//
 	//  Visualization
@@ -272,4 +284,4 @@ void Recognition::run(char * modelFileName, char * sceneFileName)
 	{
 		viewer.spinOnce();
 	}
-}
+}*/

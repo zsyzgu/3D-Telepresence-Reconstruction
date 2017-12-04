@@ -18,7 +18,7 @@
 
 class Recognition {
 private:
-	typedef pcl::PointXYZRGBA PointType;
+	typedef pcl::PointXYZRGB PointType;
 	typedef pcl::Normal NormalType;
 	typedef pcl::ReferenceFrame RFType;
 	typedef pcl::SHOT352 DescriptorType;
@@ -31,10 +31,22 @@ private:
 	float cg_size_;
 	float cg_thresh_;
 
+	//Results
+	pcl::PointCloud<PointType>::Ptr model_keypoints;
+	pcl::PointCloud<PointType>::Ptr scene_keypoints;
+	std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > rototranslations;
+	std::vector<pcl::Correspondences> clustered_corrs;
+
 	double computeCloudResolution(const pcl::PointCloud<PointType>::ConstPtr &cloud);
+
 public:
 	Recognition();
-	void run(char* modelFileName, char* sceneFileName);
+	void recognize(const pcl::PointCloud<PointType>::ConstPtr &model, const pcl::PointCloud<PointType>::ConstPtr &scene);
+	pcl::PointCloud<PointType>::Ptr getModelKeypoints();
+	pcl::PointCloud<PointType>::Ptr getSceneKeypoints();
+	std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > getRototranslations();
+	std::vector<pcl::Correspondences> getClusteredCorrs();
+	//void run(char* modelFileName, char* sceneFileName);
 };
 
 #endif
