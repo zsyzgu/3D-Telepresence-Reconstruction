@@ -2,14 +2,19 @@
 #include "Recognition.h"
 #include "Kinect2Pcd.h"
 
+
 typedef pcl::PointXYZRGB PointType;
 
+// ===== Recognize Model From Scene =====
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName);
+
+// ===== Capture Model And Scene By Kinect =====
 void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName);
+void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewerVoid);
 
 int main(int argc, char *argv[]) {
-	//recognizeModelFromScene("kinect_model.pcd", "kinect_scene.pcd");
-	captureModelAndSceneByKinect("kinect_model.pcd", "kinect_scene.pcd");
+	recognizeModelFromScene("Samsung.pcd", "scene.pcd");
+	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 
 	return 0;
 }
@@ -83,20 +88,67 @@ void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {
 	}
 }
 
+int capturePointCnt = 0;
+Eigen::Vector2f captureWindowMin;
+Eigen::Vector2f captureWindowMax;
+
 void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName) {
+	const int screenWidth = 1280;
+	const int screenHeight = 720;
+
 	Kinect2Pcd kinect2Pcd;
+	pcl::PointCloud<PointType>::Ptr scene;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
+	viewer->setSize(screenWidth, screenHeight);
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
+	viewer->addCoordinateSystem();
+	viewer->registerMouseCallback(mouseEventOccurred, (void*)viewer.get());
 
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
 		if (kinect2Pcd.isUpdated()) {
-			pcl::PointCloud<PointType>::Ptr cloud = kinect2Pcd.getPointCloud();
-			if (!viewer->updatePointCloud(cloud, "cloud")) {
-				viewer->addPointCloud(cloud, "cloud");
+			scene = kinect2Pcd.getPointCloud();
+			if (!viewer->updatePointCloud(scene, "cloud")) {
+				viewer->addPointCloud(scene, "cloud");
 			}
+		}
+	}
+
+	pcl::visualization::Camera camera;
+	viewer->getCameraParameters(camera);
+	camera.window_size[0] = screenWidth;
+	camera.window_size[1] = screenHeight;
+
+	pcl::PointCloud<PointType>::Ptr model(new pcl::PointCloud<PointType>());
+
+	for (int i = 0; i < scene->size() ; i++) {
+		PointType pt = scene->at(i);
+		if (pt.x != 0) {
+			Eigen::Vector4d windowCord;
+			camera.cvtWindowCoordinates(pt, windowCord);
+			float screenX = windowCord[0];
+			float screenY = windowCord[1];
+			if (captureWindowMin.x() <= screenX && screenX <= captureWindowMax.x() && captureWindowMin.y() <= screenY && screenY <= captureWindowMax.y()) {
+				model->push_back(scene->at(i));
+			}
+		}
+	}
+
+	pcl::io::savePCDFileASCII(sceneFileName, *scene);
+	pcl::io::savePCDFileASCII(modelFileName, *model);
+}
+
+void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewerVoid) {
+	pcl::visualization::PCLVisualizer* viewer = static_cast<pcl::visualization::PCLVisualizer *>(viewerVoid);
+
+	if (event.getButton() == pcl::visualization::MouseEvent::RightButton && event.getType() == pcl::visualization::MouseEvent::MouseButtonPress) {
+		std::cout << "clicked: " << event.getX() << " " << event.getY() << std::endl;
+		if ((capturePointCnt++) % 2 == 0) {
+			captureWindowMin = Eigen::Vector2f(event.getX(), event.getY());
+		} else {
+			captureWindowMax = Eigen::Vector2f(event.getX(), event.getY());
 		}
 	}
 }
