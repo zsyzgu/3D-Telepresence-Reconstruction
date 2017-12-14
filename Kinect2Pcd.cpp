@@ -1,6 +1,6 @@
 #include "Kinect2Pcd.h"
+#include "Kinect2Grabber.h"
 #include "pcl/io/pcd_io.h"
-#include "kinect2_grabber.h"
 
 Kinect2Pcd::Kinect2Pcd() {
 	boost::function<void(const pcl::PointCloud<PointType>::ConstPtr&)> function = [this](const pcl::PointCloud<PointType>::ConstPtr& ptr) {

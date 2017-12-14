@@ -2,19 +2,56 @@
 #include "Recognition.h"
 #include "Kinect2Pcd.h"
 
-
 typedef pcl::PointXYZRGB PointType;
 
 // ===== Recognize Model From Scene =====
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName);
 
 // ===== Capture Model And Scene By Kinect =====
+int capturePointCnt = 0;
+Eigen::Vector2f captureWindowMin;
+Eigen::Vector2f captureWindowMax;
 void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName);
 void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewerVoid);
 
 int main(int argc, char *argv[]) {
-	recognizeModelFromScene("Samsung.pcd", "scene.pcd");
+	//recognizeModelFromScene("chair.pcd", "scene.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
+
+	/*pcl::PointCloud<PointType>::Ptr model1(new pcl::PointCloud<PointType>());
+	if (pcl::io::loadPCDFile("model1.pcd", *model1) < 0) {
+		std::cout << "Error loading model 1" << std::endl;
+	}
+
+	pcl::PointCloud<PointType>::Ptr model2(new pcl::PointCloud<PointType>());
+	if (pcl::io::loadPCDFile("model2.pcd", *model2) < 0) {
+		std::cout << "Error loading model 2" << std::endl;
+	}
+	
+	pcl::visualization::PCLVisualizer viewer("Camera");
+	viewer.addPointCloud(model1, "model1");
+	viewer.addPointCloud(model2, "model2");
+
+	while (viewer.wasStopped() == false) {
+		viewer.spinOnce();
+	}*/
+
+	Kinect2Pcd kinect2Pcd;
+	pcl::PointCloud<PointType>::Ptr scene;
+
+	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
+	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
+
+	while (!viewer->wasStopped()) {
+		viewer->spinOnce();
+
+		if (kinect2Pcd.isUpdated()) {
+			scene = kinect2Pcd.getPointCloud();
+			if (!viewer->updatePointCloud(scene, "cloud")) {
+				viewer->addPointCloud(scene, "cloud");
+			}
+		}
+	}
 
 	return 0;
 }
@@ -88,10 +125,6 @@ void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {
 	}
 }
 
-int capturePointCnt = 0;
-Eigen::Vector2f captureWindowMin;
-Eigen::Vector2f captureWindowMax;
-
 void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName) {
 	const int screenWidth = 1280;
 	const int screenHeight = 720;
@@ -102,7 +135,6 @@ void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName) {
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setSize(screenWidth, screenHeight);
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
-	viewer->addCoordinateSystem();
 	viewer->registerMouseCallback(mouseEventOccurred, (void*)viewer.get());
 
 	while (!viewer->wasStopped()) {
