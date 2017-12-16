@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
 	//recognizeModelFromScene("chair.pcd", "scene.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 
-	/*pcl::PointCloud<PointType>::Ptr model1(new pcl::PointCloud<PointType>());
+	pcl::PointCloud<PointType>::Ptr model1(new pcl::PointCloud<PointType>());
 	if (pcl::io::loadPCDFile("model1.pcd", *model1) < 0) {
 		std::cout << "Error loading model 1" << std::endl;
 	}
@@ -27,30 +27,57 @@ int main(int argc, char *argv[]) {
 	if (pcl::io::loadPCDFile("model2.pcd", *model2) < 0) {
 		std::cout << "Error loading model 2" << std::endl;
 	}
-	
+
+	// ===== Merge two point clouds =====
+	float resolution = (Recognition::computeCloudResolution(model1) + Recognition::computeCloudResolution(model2)) / 2;
+
+	pcl::search::KdTree<PointType> tree;
+	tree.setInputCloud(model2);
+
+	pcl::PointCloud<PointType>::Ptr model(new pcl::PointCloud<PointType>());
+	std::vector<int> indices(1);
+	std::vector<float> sqrDistances(2);
+	std::vector<bool> usedModel2Point(model2->size());
+	for (int i = 0; i < model1->size(); i++) {
+		PointType point = model1->at(i);
+		if (!pcl_isfinite(point.x)) {
+			continue;
+		}
+
+		int nres = tree.nearestKSearch(point, 1, indices, sqrDistances);
+
+		if (nres == 1) {
+			int index = indices[0];
+			float distance = sqrt(sqrDistances[0]);
+
+			if (distance < resolution) {
+				PointType point2 = model2->at(index);
+				PointType avePoint(((UINT16)point.r + point2.r) / 2 , ((UINT16)point.g + point2.g) / 2, ((UINT16)point.g + point2.g) / 2);
+				avePoint.x = (point.x + point2.x) / 2;
+				avePoint.y = (point.y + point2.y) / 2;
+				avePoint.z = (point.z + point2.z) / 2;
+				model->push_back(avePoint);
+				usedModel2Point[index] = true;
+			} else {
+				model->push_back(point);
+			}
+		}
+	}
+	for (int i = 0; i < model2->size(); i++) {
+		PointType point = model2->at(i);
+		if (!pcl_isfinite(point.x)) {
+			continue;
+		}
+		if (!usedModel2Point[i]) {
+			model->push_back(point);
+		}
+	}
+
 	pcl::visualization::PCLVisualizer viewer("Camera");
-	viewer.addPointCloud(model1, "model1");
-	viewer.addPointCloud(model2, "model2");
+	viewer.addPointCloud(model, "model");
 
 	while (viewer.wasStopped() == false) {
 		viewer.spinOnce();
-	}*/
-
-	Kinect2Pcd kinect2Pcd;
-	pcl::PointCloud<PointType>::Ptr scene;
-
-	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
-	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
-
-	while (!viewer->wasStopped()) {
-		viewer->spinOnce();
-
-		if (kinect2Pcd.isUpdated()) {
-			scene = kinect2Pcd.getPointCloud();
-			if (!viewer->updatePointCloud(scene, "cloud")) {
-				viewer->addPointCloud(scene, "cloud");
-			}
-		}
 	}
 
 	return 0;

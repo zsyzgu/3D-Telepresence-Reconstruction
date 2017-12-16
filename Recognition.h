@@ -37,10 +37,9 @@ private:
 	std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > rototranslations;
 	std::vector<pcl::Correspondences> clustered_corrs;
 
-	double computeCloudResolution(const pcl::PointCloud<PointType>::ConstPtr &cloud);
-
 public:
 	Recognition();
+	static float computeCloudResolution(const pcl::PointCloud<PointType>::ConstPtr &cloud);
 	void recognize(const pcl::PointCloud<PointType>::ConstPtr &model, const pcl::PointCloud<PointType>::ConstPtr &scene);
 	pcl::PointCloud<PointType>::Ptr getModelKeypoints();
 	pcl::PointCloud<PointType>::Ptr getSceneKeypoints();

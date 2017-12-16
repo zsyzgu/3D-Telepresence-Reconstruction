@@ -1,6 +1,16 @@
 #include "Recognition.h"
 
-double Recognition::computeCloudResolution(const pcl::PointCloud<PointType>::ConstPtr & cloud)
+Recognition::Recognition()
+{
+	model_ss_ = 10.0f;
+	scene_ss_ = 10.0f;
+	rf_rad_ = 15.0f;
+	descr_rad_ = 20.0f;
+	cg_size_ = 10.0f;
+	cg_thresh_ = 5.0f;
+}
+
+float Recognition::computeCloudResolution(const pcl::PointCloud<PointType>::ConstPtr & cloud)
 {
 	double res = 0.0;
 	int n_points = 0;
@@ -29,16 +39,6 @@ double Recognition::computeCloudResolution(const pcl::PointCloud<PointType>::Con
 		res /= n_points;
 	}
 	return res;
-}
-
-Recognition::Recognition()
-{
-	model_ss_ = 10.0f;
-	scene_ss_ = 10.0f;
-	rf_rad_ = 15.0f;
-	descr_rad_ = 20.0f;
-	cg_size_ = 10.0f;
-	cg_thresh_ = 5.0f;
 }
 
 void Recognition::recognize(const pcl::PointCloud<PointType>::ConstPtr & model, const pcl::PointCloud<PointType>::ConstPtr & scene)
