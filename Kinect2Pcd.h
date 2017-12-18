@@ -6,21 +6,19 @@
 
 class Kinect2Pcd {
 private:
-	typedef pcl::PointXYZRGB PointType;
-
 	boost::mutex mutex;
 	boost::shared_ptr<pcl::Grabber> grabber;
 	boost::signals2::connection connection;
 
 	//Result
 	bool updated;
-	pcl::PointCloud<PointType>::Ptr cloud;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 
 public:
 	Kinect2Pcd();
 	~Kinect2Pcd();
 	bool isUpdated();
-	pcl::PointCloud<PointType>::Ptr getPointCloud();
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
 };
 
 #endif

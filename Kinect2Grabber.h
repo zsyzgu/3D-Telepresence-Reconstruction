@@ -10,7 +10,6 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
-
 namespace pcl
 {
 	struct pcl::PointXYZ;
@@ -275,7 +274,7 @@ namespace pcl
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthBuffer)
 	{
-		//This two filtering is added by zsyzgu.
+		//These two filters for depth image are added by zsyzgu.
 		spatialFiltering(depthBuffer);
 		temporalFiltering(depthBuffer);
 

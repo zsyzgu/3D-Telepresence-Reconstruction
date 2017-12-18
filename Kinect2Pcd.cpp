@@ -3,7 +3,7 @@
 #include "pcl/io/pcd_io.h"
 
 Kinect2Pcd::Kinect2Pcd() {
-	boost::function<void(const pcl::PointCloud<PointType>::ConstPtr&)> function = [this](const pcl::PointCloud<PointType>::ConstPtr& ptr) {
+	boost::function<void(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr&)> function = [this](const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& ptr) {
 		boost::mutex::scoped_lock lock(mutex);
 		cloud = ptr->makeShared();
 		updated = true;
@@ -28,7 +28,7 @@ bool Kinect2Pcd::isUpdated() {
 	return updated;
 }
 
-pcl::PointCloud<Kinect2Pcd::PointType>::Ptr Kinect2Pcd::getPointCloud() {
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr Kinect2Pcd::getPointCloud() {
 	while (true) {
 		boost::mutex::scoped_try_lock lock(mutex);
 		if (lock.owns_lock()) {
@@ -42,6 +42,6 @@ pcl::PointCloud<Kinect2Pcd::PointType>::Ptr Kinect2Pcd::getPointCloud() {
 		return cloud;
 	}
 	else {
-		return pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
+		return pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	}
 }

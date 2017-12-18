@@ -1,92 +1,33 @@
 #include "Timer.h"
 #include "Recognition.h"
 #include "Kinect2Pcd.h"
+#include "PointCloudProcess.h"
 
-typedef pcl::PointXYZRGB PointType;
-
-// ===== Recognize Model From Scene =====
+// ===== Recognize Model from Scene =====
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName);
 
-// ===== Capture Model And Scene By Kinect =====
+// ===== Capture Model and Scene by Kinect =====
+void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName);
 int capturePointCnt = 0;
 Eigen::Vector2f captureWindowMin;
 Eigen::Vector2f captureWindowMax;
-void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName);
 void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewerVoid);
+
+// ===== Merge Two Point Cloud =====
+void merge2PointClouds(char* model1FileName, char* model2FileName);
 
 int main(int argc, char *argv[]) {
 	//recognizeModelFromScene("chair.pcd", "scene.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
-
-	pcl::PointCloud<PointType>::Ptr model1(new pcl::PointCloud<PointType>());
-	if (pcl::io::loadPCDFile("model1.pcd", *model1) < 0) {
-		std::cout << "Error loading model 1" << std::endl;
-	}
-
-	pcl::PointCloud<PointType>::Ptr model2(new pcl::PointCloud<PointType>());
-	if (pcl::io::loadPCDFile("model2.pcd", *model2) < 0) {
-		std::cout << "Error loading model 2" << std::endl;
-	}
-
-	// ===== Merge two point clouds =====
-	float resolution = (Recognition::computeCloudResolution(model1) + Recognition::computeCloudResolution(model2)) / 2;
-
-	pcl::search::KdTree<PointType> tree;
-	tree.setInputCloud(model2);
-
-	pcl::PointCloud<PointType>::Ptr model(new pcl::PointCloud<PointType>());
-	std::vector<int> indices(1);
-	std::vector<float> sqrDistances(2);
-	std::vector<bool> usedModel2Point(model2->size());
-	for (int i = 0; i < model1->size(); i++) {
-		PointType point = model1->at(i);
-		if (!pcl_isfinite(point.x)) {
-			continue;
-		}
-
-		int nres = tree.nearestKSearch(point, 1, indices, sqrDistances);
-
-		if (nres == 1) {
-			int index = indices[0];
-			float distance = sqrt(sqrDistances[0]);
-
-			if (distance < resolution) {
-				PointType point2 = model2->at(index);
-				PointType avePoint(((UINT16)point.r + point2.r) / 2 , ((UINT16)point.g + point2.g) / 2, ((UINT16)point.g + point2.g) / 2);
-				avePoint.x = (point.x + point2.x) / 2;
-				avePoint.y = (point.y + point2.y) / 2;
-				avePoint.z = (point.z + point2.z) / 2;
-				model->push_back(avePoint);
-				usedModel2Point[index] = true;
-			} else {
-				model->push_back(point);
-			}
-		}
-	}
-	for (int i = 0; i < model2->size(); i++) {
-		PointType point = model2->at(i);
-		if (!pcl_isfinite(point.x)) {
-			continue;
-		}
-		if (!usedModel2Point[i]) {
-			model->push_back(point);
-		}
-	}
-
-	pcl::visualization::PCLVisualizer viewer("Camera");
-	viewer.addPointCloud(model, "model");
-
-	while (viewer.wasStopped() == false) {
-		viewer.spinOnce();
-	}
+	merge2PointClouds("model3.pcd", "model4.pcd");
 
 	return 0;
 }
 
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {
 	Recognition recognition;
-	pcl::PointCloud<PointType>::Ptr model(new pcl::PointCloud<PointType>());
-	pcl::PointCloud<PointType>::Ptr scene(new pcl::PointCloud<PointType>());
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr model(new pcl::PointCloud<pcl::PointXYZRGB>());
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene(new pcl::PointCloud<pcl::PointXYZRGB>());
 	if (pcl::io::loadPCDFile(modelFileName, *model) < 0) {
 		std::cout << "Error loading model cloud" << std::endl;
 		return;
@@ -97,52 +38,52 @@ void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {
 	}
 	recognition.recognize(model, scene);
 
-	pcl::PointCloud<PointType>::Ptr modelKeypoints = recognition.getModelKeypoints();
-	pcl::PointCloud<PointType>::Ptr sceneKeypoints = recognition.getSceneKeypoints();
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr modelKeypoints = recognition.getModelKeypoints();
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr sceneKeypoints = recognition.getSceneKeypoints();
 	std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f> > rototranslations = recognition.getRototranslations();
 	std::vector<pcl::Correspondences> clustered_corrs = recognition.getClusteredCorrs();
 
 	pcl::visualization::PCLVisualizer viewer("Correspondence Grouping");
 	viewer.addPointCloud(scene, "scene_cloud");
 
-	pcl::PointCloud<PointType>::Ptr off_scene_model(new pcl::PointCloud<PointType>());
-	pcl::PointCloud<PointType>::Ptr off_scene_model_keypoints(new pcl::PointCloud<PointType>());
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr off_scene_model(new pcl::PointCloud<pcl::PointXYZRGB>());
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr off_scene_model_keypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
 
 	//  We are translating the model so that it doesn't end in the middle of the scene representation
 	pcl::transformPointCloud(*model, *off_scene_model, Eigen::Vector3f(-1, 0, 0), Eigen::Quaternionf(1, 0, 0, 0));
 	pcl::transformPointCloud(*modelKeypoints, *off_scene_model_keypoints, Eigen::Vector3f(-1, 0, 0), Eigen::Quaternionf(1, 0, 0, 0));
 
-	pcl::visualization::PointCloudColorHandlerCustom<PointType> off_scene_model_color_handler(off_scene_model, 255, 255, 128);
+	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> off_scene_model_color_handler(off_scene_model, 255, 255, 128);
 	viewer.addPointCloud(off_scene_model, off_scene_model_color_handler, "off_scene_model");
 
-	pcl::visualization::PointCloudColorHandlerCustom<PointType> scene_keypoints_color_handler(sceneKeypoints, 0, 0, 255);
+	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> scene_keypoints_color_handler(sceneKeypoints, 0, 0, 255);
 	viewer.addPointCloud(sceneKeypoints, scene_keypoints_color_handler, "scene_keypoints");
 	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "scene_keypoints");
 
-	pcl::visualization::PointCloudColorHandlerCustom<PointType> off_scene_model_keypoints_color_handler(off_scene_model_keypoints, 0, 0, 255);
+	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> off_scene_model_keypoints_color_handler(off_scene_model_keypoints, 0, 0, 255);
 	viewer.addPointCloud(off_scene_model_keypoints, off_scene_model_keypoints_color_handler, "off_scene_model_keypoints");
 	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "off_scene_model_keypoints");
 
 	for (size_t i = 0; i < rototranslations.size(); ++i)
 	{
-		pcl::PointCloud<PointType>::Ptr rotated_model(new pcl::PointCloud<PointType>());
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr rotated_model(new pcl::PointCloud<pcl::PointXYZRGB>());
 		pcl::transformPointCloud(*model, *rotated_model, rototranslations[i]);
 
 		std::stringstream ss_cloud;
 		ss_cloud << "instance" << i;
 
-		pcl::visualization::PointCloudColorHandlerCustom<PointType> rotated_model_color_handler(rotated_model, 255, 0, 0);
+		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> rotated_model_color_handler(rotated_model, 255, 0, 0);
 		viewer.addPointCloud(rotated_model, rotated_model_color_handler, ss_cloud.str());
 
 		for (size_t j = 0; j < clustered_corrs[i].size(); ++j)
 		{
 			std::stringstream ss_line;
 			ss_line << "correspondence_line" << i << "_" << j;
-			PointType& model_point = off_scene_model_keypoints->at(clustered_corrs[i][j].index_query);
-			PointType& scene_point = sceneKeypoints->at(clustered_corrs[i][j].index_match);
+			pcl::PointXYZRGB& model_point = off_scene_model_keypoints->at(clustered_corrs[i][j].index_query);
+			pcl::PointXYZRGB& scene_point = sceneKeypoints->at(clustered_corrs[i][j].index_match);
 
 			//  We are drawing a line for each pair of clustered correspondences found between the model and the scene
-			viewer.addLine<PointType, PointType>(model_point, scene_point, 0, 255, 0, ss_line.str());
+			viewer.addLine<pcl::PointXYZRGB, pcl::PointXYZRGB>(model_point, scene_point, 0, 255, 0, ss_line.str());
 		}
 	}
 
@@ -157,7 +98,7 @@ void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName) {
 	const int screenHeight = 720;
 
 	Kinect2Pcd kinect2Pcd;
-	pcl::PointCloud<PointType>::Ptr scene;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setSize(screenWidth, screenHeight);
@@ -180,10 +121,10 @@ void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName) {
 	camera.window_size[0] = screenWidth;
 	camera.window_size[1] = screenHeight;
 
-	pcl::PointCloud<PointType>::Ptr model(new pcl::PointCloud<PointType>());
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr model(new pcl::PointCloud<pcl::PointXYZRGB>());
 
 	for (int i = 0; i < scene->size() ; i++) {
-		PointType pt = scene->at(i);
+		pcl::PointXYZRGB pt = scene->at(i);
 		if (pt.x != 0) {
 			Eigen::Vector4d windowCord;
 			camera.cvtWindowCoordinates(pt, windowCord);
@@ -209,5 +150,31 @@ void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewe
 		} else {
 			captureWindowMax = Eigen::Vector2f(event.getX(), event.getY());
 		}
+	}
+}
+
+void merge2PointClouds(char* model1FileName, char* model2FileName)
+{
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZRGB>());
+	if (pcl::io::loadPCDFile(model1FileName, *cloud1) < 0) {
+		std::cout << "Error loading model 1" << std::endl;
+	}
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
+	if (pcl::io::loadPCDFile(model2FileName, *cloud2) < 0) {
+		std::cout << "Error loading model 2" << std::endl;
+	}
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+	PointCloudProcess::merge2PointClouds(cloud, cloud1, cloud2);
+	PointCloudProcess::mlsFiltering(cloud);
+	pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh());
+	PointCloudProcess::pointCloud2Mesh(mesh, cloud);
+
+	pcl::visualization::PCLVisualizer viewer("Camera");
+	viewer.addPolygonMesh(*mesh, "model");
+
+	while (viewer.wasStopped() == false) {
+		viewer.spinOnce();
 	}
 }

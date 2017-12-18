@@ -97,7 +97,6 @@ void Recognition::recognize(const pcl::PointCloud<PointType>::ConstPtr & model, 
 	uniform_sampling.filter(*scene_keypoints);
 	std::cout << "Scene total points: " << scene->size() << "; Selected Keypoints: " << scene_keypoints->size() << std::endl;
 
-
 	//
 	//  Compute Descriptor for keypoints
 	//
