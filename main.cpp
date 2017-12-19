@@ -159,11 +159,13 @@ void merge2PointClouds(char* model1FileName, char* model2FileName)
 	if (pcl::io::loadPCDFile(model1FileName, *cloud1) < 0) {
 		std::cout << "Error loading model 1" << std::endl;
 	}
+	PointCloudProcess::mlsFiltering(cloud1);
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
 	if (pcl::io::loadPCDFile(model2FileName, *cloud2) < 0) {
 		std::cout << "Error loading model 2" << std::endl;
 	}
+	PointCloudProcess::mlsFiltering(cloud2);
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 	PointCloudProcess::merge2PointClouds(cloud, cloud1, cloud2);
@@ -172,7 +174,9 @@ void merge2PointClouds(char* model1FileName, char* model2FileName)
 	PointCloudProcess::pointCloud2Mesh(mesh, cloud);
 
 	pcl::visualization::PCLVisualizer viewer("Camera");
-	viewer.addPolygonMesh(*mesh, "model");
+	//viewer.addPolygonMesh(*mesh, "model");
+	viewer.addPointCloud(cloud, "model");
+	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "model");
 
 	while (viewer.wasStopped() == false) {
 		viewer.spinOnce();

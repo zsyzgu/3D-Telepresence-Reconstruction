@@ -111,7 +111,7 @@ void PointCloudProcess::pointCloud2Mesh(pcl::PolygonMesh::Ptr mesh, pcl::PointCl
 	gp3.setSearchRadius(0.025);
 
 	gp3.setMu(2.5);
-	gp3.setMaximumNearestNeighbors(100);
+	gp3.setMaximumNearestNeighbors(50);
 	gp3.setMaximumSurfaceAngle(M_PI / 4);
 	gp3.setMinimumAngle(M_PI / 18);
 	gp3.setMaximumAngle(M_PI * 2 / 3);
