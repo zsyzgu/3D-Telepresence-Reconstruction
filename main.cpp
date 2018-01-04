@@ -2,6 +2,7 @@
 #include "Recognition.h"
 #include "Kinect2Pcd.h"
 #include "PointCloudProcess.h"
+#include "GpuDrawCloud.h"
 
 // ===== Recognize Model from Scene =====
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName);
@@ -19,9 +20,29 @@ void merge2PointClouds(char* model1FileName, char* model2FileName);
 int main(int argc, char *argv[]) {
 	//recognizeModelFromScene("chair.pcd", "scene.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
-	merge2PointClouds("model3.pcd", "model4.pcd");
+	merge2PointClouds("model1.pcd", "model2.pcd");
 
-	return 0;
+	/*pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+	if (pcl::io::loadPCDFile("model6.pcd", *cloud) < 0) {
+		return -1;
+	}
+
+	PointCloudProcess::mlsFiltering(cloud);
+
+	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normalEstimation;
+	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdTree(new pcl::search::KdTree<pcl::PointXYZRGB>);
+	kdTree->setInputCloud(cloud);
+	normalEstimation.setInputCloud(cloud);
+	normalEstimation.setSearchMethod(kdTree);
+	normalEstimation.setKSearch(20);
+	normalEstimation.compute(*normals);
+
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloudWithNormals(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
+	pcl::concatenateFields(*cloud, *normals, *cloudWithNormals);
+
+	pcl::io::savePCDFileASCII("model6_with_normal.pcd", *cloudWithNormals);
+	return 0;*/
 }
 
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {
@@ -170,11 +191,11 @@ void merge2PointClouds(char* model1FileName, char* model2FileName)
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 	PointCloudProcess::merge2PointClouds(cloud, cloud1, cloud2);
 	PointCloudProcess::mlsFiltering(cloud);
-	pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh());
+	/*pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh());
 	PointCloudProcess::pointCloud2Mesh(mesh, cloud);
+	viewer.addPolygonMesh(*mesh, "model");*/
 
 	pcl::visualization::PCLVisualizer viewer("Camera");
-	//viewer.addPolygonMesh(*mesh, "model");
 	viewer.addPointCloud(cloud, "model");
 	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "model");
 

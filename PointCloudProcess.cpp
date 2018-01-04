@@ -16,6 +16,7 @@
 #include <pcl/common/transforms.h>
 #include <pcl/console/parse.h>
 #include "pcl/surface/gp3.h"
+#include "pcl/gpu/octree/octree.hpp"
 
 void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
