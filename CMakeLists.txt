@@ -8,6 +8,7 @@ set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "pc-recog" )
 find_package( KinectSDK2 REQUIRED )
 find_package( PCL 1.8 REQUIRED )
 find_package(CUDA REQUIRED)
+INCLUDE(FindCUDA)
 
 # Additional Include Directories
 include_directories( ${PCL_INCLUDE_DIRS} )
@@ -33,7 +34,7 @@ foreach(d ${vtk_flags})
     remove_definitions(-D${d})
 endforeach()
 
-cuda_add_executable( pc-recog Kinect2Grabber.h main.cpp Kinect2Pcd.cpp Kinect2Pcd.h PointCloudProcess.cpp PointCloudProcess.h Recognition.cpp Recognition.h Timer.cpp Timer.h )
+cuda_add_executable( pc-recog Kinect2Grabber.h main.cu Kinect2Pcd.cpp Kinect2Pcd.h PointCloudProcess.cpp PointCloudProcess.h Recognition.cpp Recognition.h Timer.cpp Timer.h )
 
 # Additional Dependencies
 target_link_libraries( pc-recog ${PCL_LIBRARIES} )
