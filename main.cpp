@@ -16,15 +16,18 @@ void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewe
 // ===== Merge Two Point Cloud =====
 void merge2PointClouds(char* model1FileName, char* model2FileName);
 
-
-#include <vector>
-
 int main(int argc, char *argv[]) {
 	//recognizeModelFromScene("chair.pcd", "scene.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
-	Kinect2Pcd kinect2Pcd;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+	pcl::io::loadPCDFile("model1.pcd", *cloud);
+	PointCloudProcess::mlsFiltering(cloud);
+	pcl::io::savePCDFileASCII("output.pcd", *cloud);
+	return 0;
+
+	/*Kinect2Pcd kinect2Pcd;
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
@@ -59,7 +62,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	return 0;
+	return 0;*/
 }
 
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {

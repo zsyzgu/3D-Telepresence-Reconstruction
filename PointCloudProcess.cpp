@@ -16,7 +16,7 @@
 #include <pcl/common/transforms.h>
 #include <pcl/console/parse.h>
 #include "pcl/surface/gp3.h"
-#include "pcl/gpu/octree/octree.hpp"
+#include "Timer.h"
 
 void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
@@ -29,7 +29,14 @@ void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
 	mls.setSearchMethod(tree);
 	mls.setSearchRadius(0.01);
 	mls.setPolynomialOrder(1);
+
+
+	Timer timer;
+	timer.reset();
 	mls.process(mlsPoints);
+	std::cout << timer.getTime() * 1e3f << " ms" << std::endl;
+
+
 	cloud->points.resize(mlsPoints.size());
 	for (int i = 0; i < cloud->size(); i++) {
 		cloud->points[i].x = mlsPoints.points[i].x;
