@@ -17,62 +17,49 @@ void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewe
 void merge2PointClouds(char* model1FileName, char* model2FileName);
 
 
-
-
-
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-
-extern "C"
-cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
+#include <vector>
 
 int main(int argc, char *argv[]) {
-	const int arraySize = 5;
-	const int a[arraySize] = { 1, 2, 3, 4, 5 };
-	const int b[arraySize] = { 10, 20, 30, 40, 50 };
-	int c[arraySize] = { 0 };
-
-	// Add vectors in parallel.
-	cudaError_t cudaStatus = addWithCuda(c, a, b, arraySize);
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "addWithCuda failed!");
-		return 1;
-	}
-
-	cout << "{1,2,3,4,5} + {10,20,30,40,50} = {" << c[0] << ',' << c[1] << ',' << c[2] << ',' << c[3] << ',' << c[4] << '}' << endl;
-
-	cudaStatus = cudaDeviceReset();
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaDeviceReset failed!");
-		return 1;
-	}
-	return 0;
-
 	//recognizeModelFromScene("chair.pcd", "scene.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
-	/*pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-	if (pcl::io::loadPCDFile("model6.pcd", *cloud) < 0) {
-		return -1;
+	Kinect2Pcd kinect2Pcd;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene;
+
+	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
+	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
+
+	Timer timer;
+	std::vector<float> timeRecords;
+	timer.reset();
+	
+	while (!viewer->wasStopped()) {
+		viewer->spinOnce();
+
+		if (kinect2Pcd.isUpdated()) {
+			while (timeRecords.size() >= 10) {
+				timeRecords.erase(timeRecords.begin());
+			}
+			timeRecords.push_back(timer.getTime());
+			timer.reset();
+			float aveTime = 0;
+			for (int i = 0; i < timeRecords.size(); i++) {
+				aveTime += timeRecords[i];
+			}
+			if (timeRecords.size() != 0) {
+				aveTime /= timeRecords.size();
+				std::cout << aveTime * 1000 << " ms" << std::endl;
+			}
+
+			scene = kinect2Pcd.getPointCloud();
+			if (!viewer->updatePointCloud(scene, "cloud")) {
+				viewer->addPointCloud(scene, "cloud");
+			}
+		}
 	}
 
-	PointCloudProcess::mlsFiltering(cloud);
-
-	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normalEstimation;
-	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdTree(new pcl::search::KdTree<pcl::PointXYZRGB>);
-	kdTree->setInputCloud(cloud);
-	normalEstimation.setInputCloud(cloud);
-	normalEstimation.setSearchMethod(kdTree);
-	normalEstimation.setKSearch(20);
-	normalEstimation.compute(*normals);
-
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloudWithNormals(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
-	pcl::concatenateFields(*cloud, *normals, *cloudWithNormals);
-
-	pcl::io::savePCDFileASCII("model6_with_normal.pcd", *cloudWithNormals);
-	return 0;*/
+	return 0;
 }
 
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {

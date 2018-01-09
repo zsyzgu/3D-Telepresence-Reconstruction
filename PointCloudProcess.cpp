@@ -122,3 +122,20 @@ void PointCloudProcess::pointCloud2Mesh(pcl::PolygonMesh::Ptr mesh, pcl::PointCl
 	gp3.setSearchMethod(tree2);
 	gp3.reconstruct(*mesh);
 }
+
+void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr pcNormal, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
+{
+	mlsFiltering(cloud);
+
+	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normalEstimation;
+
+	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdTree(new pcl::search::KdTree<pcl::PointXYZRGB>);
+	kdTree->setInputCloud(cloud);
+	normalEstimation.setInputCloud(cloud);
+	normalEstimation.setSearchMethod(kdTree);
+	normalEstimation.setKSearch(20);
+	normalEstimation.compute(*normals);
+
+	pcl::concatenateFields(*cloud, *normals, *pcNormal);
+}

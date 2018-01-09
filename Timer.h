@@ -3,7 +3,8 @@
 class Timer
 {
 private:
-	std::clock_t start;
+	__int64 start;
+	__int64 nFreq;
 public:
 	Timer();
 	~Timer();

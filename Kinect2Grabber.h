@@ -4,11 +4,16 @@
 #define NOMINMAX
 #include <Windows.h>
 #include <Kinect.h>
+#include <ppl.h>
 
 #include <pcl/io/boost.h>
 #include <pcl/io/grabber.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include "Timer.h"
+
+extern "C"
+void cudaSpatialFiltering(UINT16* depthData);
 
 namespace pcl
 {
@@ -322,7 +327,42 @@ namespace pcl
 		return cloud;
 	}
 
-	void pcl::Kinect2Grabber::spatialFiltering(UINT16* depthData) {
+	void pcl::Kinect2Grabber::spatialFiltering(UINT16* depth) {
+		// 170 us
+		static const int n = 512 * 424;
+		static UINT16 rawDepth[n];
+
+		memcpy(rawDepth, depth, n * sizeof(UINT16));
+
+		Concurrency::parallel_for(int(0), H, [&](int y) {
+			for (int x = 0; x < W; x++) {
+				int index = y * W + x;
+				if (rawDepth[index] == 0) {
+					int num = 0;
+					int sum = 0;
+					for (int dx = -2; dx <= 2; dx++) {
+						for (int dy = -2; dy <= 2; dy++) {
+							if (dx != 0 || dy != 0) {
+								int xSearch = x + dx;
+								int ySearch = y + dy;
+
+								if (0 <= xSearch && xSearch < W && 0 <= ySearch && ySearch < H) {
+									int searchIndex = ySearch * W + xSearch;
+									if (rawDepth[searchIndex] != 0) {
+										num++;
+										sum += rawDepth[searchIndex];
+									}
+								}
+							}
+						}
+					}
+					if (num != 0) {
+						depth[index] = sum / num;
+					}
+				}
+			}
+		});
+		/*
 		// Abstract: Depth image captured by Kinect2 is usually missing some pixels. We use their neighbor pixels to estimate them.
 		// Implemention [9 * O(n)]: Constantly find the unkonwn pixel with the most known neighbours, and assign it by averaging its neighbours.
 
@@ -406,10 +446,12 @@ namespace pcl
 			}
 		}
 
-		delete[] uncertainty;
+		delete[] uncertainty;*/
 	}
 
 	void pcl::Kinect2Grabber::temporalFiltering(UINT16* depthData) {
+		// 360 us
+
 		// Abstract: The system error of a pixel from the depth image is nearly white noise. We use several frames to smooth it.
 		// Implementation: If a pixel not change a lot in this frame, we would smooth it by averaging the pixels in several frames.
 
@@ -420,7 +462,8 @@ namespace pcl
 		static int t = 0;
 		
 		memcpy(depthQueue[t], depthData, n * sizeof(UINT16));
-		for (int y = 0; y < H; y++) {
+
+		Concurrency::parallel_for(int(0), H, [&](int y) {
 			for (int x = 0; x < W; x++) {
 				int index = y * W + x;
 				int sum = 0;
@@ -443,7 +486,7 @@ namespace pcl
 					}
 				}
 			}
-		}
+		});
 
 		t = (t + 1) % QUEUE_LENGTH;
 	}
