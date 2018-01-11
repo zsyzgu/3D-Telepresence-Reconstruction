@@ -20,9 +20,11 @@
 
 void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
+	// 370 ms
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::PointXYZRGBNormal> mlsPoints;
-	pcl::MovingLeastSquares<pcl::PointXYZRGB, pcl::PointXYZRGBNormal> mls;
+	pcl::MovingLeastSquaresOMP<pcl::PointXYZRGB, pcl::PointXYZRGBNormal> mls;
+	mls.setNumberOfThreads(8);
 	mls.setComputeNormals(true);
 	mls.setInputCloud(cloud);
 	mls.setPolynomialFit(true);
@@ -30,12 +32,10 @@ void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
 	mls.setSearchRadius(0.01);
 	mls.setPolynomialOrder(1);
 
-
 	Timer timer;
 	timer.reset();
 	mls.process(mlsPoints);
 	std::cout << timer.getTime() * 1e3f << " ms" << std::endl;
-
 
 	cloud->points.resize(mlsPoints.size());
 	for (int i = 0; i < cloud->size(); i++) {

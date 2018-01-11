@@ -21,39 +21,20 @@ int main(int argc, char *argv[]) {
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-	pcl::io::loadPCDFile("model1.pcd", *cloud);
-	PointCloudProcess::mlsFiltering(cloud);
-	pcl::io::savePCDFileASCII("output.pcd", *cloud);
-	return 0;
-
-	/*Kinect2Pcd kinect2Pcd;
+	Kinect2Pcd kinect2Pcd;
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
 
 	Timer timer;
-	std::vector<float> timeRecords;
-	timer.reset();
 	
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
 		if (kinect2Pcd.isUpdated()) {
-			while (timeRecords.size() >= 10) {
-				timeRecords.erase(timeRecords.begin());
-			}
-			timeRecords.push_back(timer.getTime());
+			std::cout << timer.getTime(20) * 1e3f << " ms" << std::endl;
 			timer.reset();
-			float aveTime = 0;
-			for (int i = 0; i < timeRecords.size(); i++) {
-				aveTime += timeRecords[i];
-			}
-			if (timeRecords.size() != 0) {
-				aveTime /= timeRecords.size();
-				std::cout << aveTime * 1000 << " ms" << std::endl;
-			}
 
 			scene = kinect2Pcd.getPointCloud();
 			if (!viewer->updatePointCloud(scene, "cloud")) {
@@ -62,7 +43,9 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	return 0;*/
+	pcl::io::savePCDFileASCII("scene.pcd", *scene);
+
+	return 0;
 }
 
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {

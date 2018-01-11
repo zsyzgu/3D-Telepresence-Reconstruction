@@ -21,7 +21,7 @@ link_directories( ${PCL_LIBRARY_DIRS} )
 link_directories( ${KinectSDK2_LIBRARY_DIRS} )
 
 cuda_add_executable( pc-recog main.cpp
-	Kinect2Grabber.h
+	Kinect2Grabber.h Kinect2Grabber.cpp
 	Kinect2Pcd.cpp Kinect2Pcd.h
 	PointCloudProcess.cpp PointCloudProcess.h
 	Recognition.cpp Recognition.h
