@@ -1,6 +1,10 @@
 #include "Kinect2Grabber.h"
 #include "Timer.h"
 #include <pcl/filters/fast_bilateral_omp.h>
+#include <omp.h>
+
+extern "C"
+void cudaBilateralFiltering(UINT16* depth);
 
 namespace pcl
 {
@@ -18,9 +22,6 @@ namespace pcl
 		, W(512)
 		, H(424)
 		, depthBuffer()
-		, running(false)
-		, quit(false)
-		, signal_PointXYZRGB(nullptr)
 	{
 		// Create Sensor Instance
 		result = GetDefaultKinectSensor(&sensor);
@@ -95,19 +96,10 @@ namespace pcl
 
 		// To Reserve Depth Frame Buffer
 		depthBuffer.resize(W * H);
-
-		signal_PointXYZRGB = createSignal<signal_Kinect2_PointXYZRGB>();
 	}
 
 	pcl::Kinect2Grabber::~Kinect2Grabber() throw()
 	{
-		stop();
-
-		disconnect_all_slots<signal_Kinect2_PointXYZRGB>();
-
-		thread.join();
-
-		// End Processing
 		if (sensor) {
 			sensor->Close();
 		}
@@ -132,83 +124,43 @@ namespace pcl
 		if (FAILED(result)) {
 			throw std::exception("Exception : IDepthFrameSource::OpenReader()");
 		}
-
-		running = true;
-
-		thread = boost::thread(&Kinect2Grabber::threadFunction, this);
 	}
 
-	void pcl::Kinect2Grabber::stop()
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr Kinect2Grabber::getPointCloud()
 	{
-		boost::unique_lock<boost::mutex> lock(mutex);
-
-		quit = true;
-		running = false;
-
-		lock.unlock();
-	}
-
-	bool pcl::Kinect2Grabber::isRunning() const
-	{
-		boost::unique_lock<boost::mutex> lock(mutex);
-
-		return running;
-
-		lock.unlock();
-	}
-
-	std::string pcl::Kinect2Grabber::getName() const
-	{
-		return std::string("Kinect2Grabber");
-	}
-
-	float pcl::Kinect2Grabber::getFramesPerSecond() const
-	{
-		return 30.0f;
-	}
-
-	void pcl::Kinect2Grabber::threadFunction()
-	{
-		while (!quit) {
-			boost::unique_lock<boost::mutex> lock(mutex);
-
-			// Acquire Latest Color Frame
-			IColorFrame* colorFrame = nullptr;
-			result = colorReader->AcquireLatestFrame(&colorFrame);
-			if (SUCCEEDED(result)) {
-				// Retrieved Color Data
-				result = colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
-				if (FAILED(result)) {
-					throw std::exception("Exception : IColorFrame::CopyConvertedFrameDataToArray()");
-				}
-			}
-			SafeRelease(colorFrame);
-
-			// Acquire Latest Depth Frame
-			IDepthFrame* depthFrame = nullptr;
-			result = depthReader->AcquireLatestFrame(&depthFrame);
-			if (SUCCEEDED(result)) {
-				// Retrieved Depth Data
-				result = depthFrame->CopyFrameDataToArray(depthBuffer.size(), &depthBuffer[0]);
-				if (FAILED(result)) {
-					throw std::exception("Exception : IDepthFrame::CopyFrameDataToArray()");
-				}
-			}
-			SafeRelease(depthFrame);
-
-			lock.unlock();
-
-			if (signal_PointXYZRGB->num_slots() > 0) {
-				signal_PointXYZRGB->operator()(convertRGBDepthToPointXYZRGB(&colorBuffer[0], &depthBuffer[0]));
+		IColorFrame* colorFrame = nullptr;
+		result = colorReader->AcquireLatestFrame(&colorFrame);
+		if (SUCCEEDED(result)) {
+			// Retrieved Color Data
+			result = colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
+			if (FAILED(result)) {
+				throw std::exception("Exception : IColorFrame::CopyConvertedFrameDataToArray()");
 			}
 		}
+		SafeRelease(colorFrame);
+
+		// Acquire Latest Depth Frame
+		IDepthFrame* depthFrame = nullptr;
+		result = depthReader->AcquireLatestFrame(&depthFrame);
+		if (SUCCEEDED(result)) {
+			// Retrieved Depth Data
+			result = depthFrame->CopyFrameDataToArray(depthBuffer.size(), &depthBuffer[0]);
+			if (FAILED(result)) {
+				throw std::exception("Exception : IDepthFrame::CopyFrameDataToArray()");
+			}
+		}
+		SafeRelease(depthFrame);
+
+		return convertRGBDepthToPointXYZRGB(&colorBuffer[0], &depthBuffer[0]);
 	}
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthBuffer)
 	{
-		//These two filters for depth image are added by zsyzgu.
+		// 7.7 ms
+
 		spatialFiltering(depthBuffer);
 		temporalFiltering(depthBuffer);
+		bilateralFiltering(depthBuffer);
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 
@@ -216,55 +168,44 @@ namespace pcl
 		cloud->height = static_cast<uint32_t>(H);
 		cloud->is_dense = false;
 
-		cloud->points.resize(H * W);// cloud->height * cloud->width);
+		cloud->points.resize(H * W);
+
+		UINT32 tableCount;
+		PointF* depthToCameraSpaceTable = nullptr;
+		mapper->GetDepthFrameToCameraSpaceTable(&tableCount, &depthToCameraSpaceTable);
+
+		ColorSpacePoint* depthToColorSpaceTable = new ColorSpacePoint[W * H];
+		mapper->MapDepthFrameToColorSpace(W * H, depthBuffer, W * H, depthToColorSpaceTable);
 
 		#pragma omp parallel for
 		for (int y = 0; y < H; y++) {
-			pcl::PointXYZRGB* pt = &cloud->points[y * W];
-			for (int x = 0; x < W; x++, pt++) {
-				pcl::PointXYZRGB point;
-
+			int id = y * W;
+			pcl::PointXYZRGB* pt = &cloud->points[id];
+			for (int x = 0; x < W; x++, pt++, id++) {
 				DepthSpacePoint depthSpacePoint = { static_cast<float>(x), static_cast<float>(y) };
-				UINT16 depth = depthBuffer[y * W + x];
+				UINT16 depth = depthBuffer[id];
 				if (depth != 0) {
-					// Coordinate Mapping Depth to Color Space, and Setting PointCloud RGB
-					ColorSpacePoint colorSpacePoint = { 0.0f, 0.0f };
-					mapper->MapDepthPointToColorSpace(depthSpacePoint, depth, &colorSpacePoint);
+					ColorSpacePoint colorSpacePoint = depthToColorSpaceTable[id];
 					int colorX = static_cast<int>(std::floor(colorSpacePoint.X + 0.5f));
 					int colorY = static_cast<int>(std::floor(colorSpacePoint.Y + 0.5f));
 					if ((0 <= colorX) && (colorX < colorWidth) && (0 <= colorY) && (colorY < colorHeight)) {
+						// Coordinate Mapping Depth to Color Space, and Setting PointCloud RGB
 						RGBQUAD color = colorBuffer[colorY * colorWidth + colorX];
-						point.b = color.rgbBlue;
-						point.g = color.rgbGreen;
-						point.r = color.rgbRed;
+						pt->b = color.rgbBlue;
+						pt->g = color.rgbGreen;
+						pt->r = color.rgbRed;
+						// Coordinate Mapping Depth to Camera Space, and Setting PointCloud XYZs
+						PointF spacePoint = depthToCameraSpaceTable[id];
+						pt->x = spacePoint.X * depth * 0.001f;
+						pt->y = spacePoint.Y * depth * 0.001f;
+						pt->z = depth * 0.001f;
 					}
-
-					// Coordinate Mapping Depth to Camera Space, and Setting PointCloud XYZ
-					CameraSpacePoint cameraSpacePoint = { 0.0f, 0.0f, 0.0f };
-					mapper->MapDepthPointToCameraSpace(depthSpacePoint, depth, &cameraSpacePoint);
-					if ((0 <= colorX) && (colorX < colorWidth) && (0 <= colorY) && (colorY < colorHeight)) {
-						point.x = cameraSpacePoint.X;
-						point.y = cameraSpacePoint.Y;
-						point.z = cameraSpacePoint.Z;
-					}
-					*pt = point;
 				}
 			}
 		}
 
-		//The BilateralFileter is added by zsyzgu.
-		/*pcl::FastBilateralFilterOMP<pcl::PointXYZRGB> bFilter;
-		bFilter.setNumberOfThreads(8);
-		bFilter.setInputCloud(cloud);
-		bFilter.filter(*cloud);*/
-
-		int j = 0;
-		for (int i = 0; i < cloud->size(); i++) {
-			if (depthBuffer[i] != 0) {
-				cloud->points[j++] = cloud->points[i];
-			}
-		}
-		cloud->resize(j);
+		delete[] depthToCameraSpaceTable;
+		delete[] depthToColorSpaceTable;
 
 		return cloud;
 	}
@@ -307,7 +248,7 @@ namespace pcl
 		}
 	}
 
-	void pcl::Kinect2Grabber::temporalFiltering(UINT16* depthData) {
+	void pcl::Kinect2Grabber::temporalFiltering(UINT16* depth) {
 		// 360 us
 
 		// Abstract: The system error of a pixel from the depth image is nearly white noise. We use several frames to smooth it.
@@ -319,7 +260,7 @@ namespace pcl
 		static UINT16 depthQueue[QUEUE_LENGTH][n];
 		static int t = 0;
 
-		memcpy(depthQueue[t], depthData, n * sizeof(UINT16));
+		memcpy(depthQueue[t], depth, n * sizeof(UINT16));
 
 		#pragma omp parallel for
 		for (int y = 0; y < H; y++) {
@@ -334,12 +275,12 @@ namespace pcl
 					}
 				}
 				if (num == 0) {
-					depthData[index] = 0;
+					depth[index] = 0;
 				}
 				else {
-					depthData[index] = (UINT16)(sum / num);
-					if (abs(depthQueue[t][index] - depthData[index]) > THRESHOLD) {
-						depthData[index] = depthQueue[t][index];
+					depth[index] = (UINT16)(sum / num);
+					if (abs(depthQueue[t][index] - depth[index]) > THRESHOLD) {
+						depth[index] = depthQueue[t][index];
 						for (int i = 0; i < QUEUE_LENGTH; i++) {
 							depthQueue[t][index] = 0;
 						}
@@ -349,6 +290,12 @@ namespace pcl
 		}
 
 		t = (t + 1) % QUEUE_LENGTH;
+	}
+
+	void Kinect2Grabber::bilateralFiltering(UINT16* depth)
+	{
+		// 2.7 ms
+		cudaBilateralFiltering(depth);
 	}
 }
 

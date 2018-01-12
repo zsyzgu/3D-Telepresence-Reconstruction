@@ -20,7 +20,7 @@
 
 void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
-	// 370 ms
+	// 370 ms (for unorganized point cloud)
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::PointXYZRGBNormal> mlsPoints;
 	pcl::MovingLeastSquaresOMP<pcl::PointXYZRGB, pcl::PointXYZRGBNormal> mls;

@@ -12,14 +12,14 @@ Kinect2Pcd::Kinect2Pcd() {
 	};
 
 	grabber = boost::make_shared<pcl::Kinect2Grabber>();
-	connection = grabber->registerCallback(function);
+//	connection = grabber->registerCallback(function);
 
 	grabber->start();
 	updated = false;
 }
 
 Kinect2Pcd::~Kinect2Pcd() {
-	grabber->stop();
+//	grabber->stop();
 
 	if (connection.connected()) {
 		connection.disconnect();

@@ -13,4 +13,5 @@ public:
 	~Timer();
 	void reset();
 	float getTime(int window = 1);
+	void outputTime(int window = 1);
 };

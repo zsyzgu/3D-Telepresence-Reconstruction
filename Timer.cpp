@@ -1,5 +1,6 @@
 #include "Timer.h"
 #include <Windows.h>
+#include <iostream>
 
 Timer::Timer()
 {
@@ -38,4 +39,9 @@ float Timer::getTime(int window) {
 		return sum / window;
 	}
 	return -1;
+}
+
+void Timer::outputTime(int window)
+{
+	std::cout << getTime(window) * 1000 << " ms" << std::endl;
 }

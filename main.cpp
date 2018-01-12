@@ -2,6 +2,7 @@
 #include "Recognition.h"
 #include "Kinect2Pcd.h"
 #include "PointCloudProcess.h"
+#include "Kinect2Grabber.h"
 
 // ===== Recognize Model from Scene =====
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName);
@@ -21,25 +22,20 @@ int main(int argc, char *argv[]) {
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
-	Kinect2Pcd kinect2Pcd;
+	//Kinect2Pcd kinect2Pcd;
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene;
+	pcl::Kinect2Grabber grabber;
+	grabber.start();
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
-
-	Timer timer;
 	
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		if (kinect2Pcd.isUpdated()) {
-			std::cout << timer.getTime(20) * 1e3f << " ms" << std::endl;
-			timer.reset();
-
-			scene = kinect2Pcd.getPointCloud();
-			if (!viewer->updatePointCloud(scene, "cloud")) {
-				viewer->addPointCloud(scene, "cloud");
-			}
+		scene = grabber.getPointCloud();
+		if (!viewer->updatePointCloud(scene, "cloud")) {
+			viewer->addPointCloud(scene, "cloud");
 		}
 	}
 

@@ -24,33 +24,20 @@ namespace pcl
 		}
 	}
 
-	class Kinect2Grabber : public pcl::Grabber
+	class Kinect2Grabber
 	{
 	public:
 		Kinect2Grabber();
-		virtual ~Kinect2Grabber() throw ();
-		virtual void start();
-		virtual void stop();
-		virtual bool isRunning() const;
-		virtual std::string getName() const;
-		virtual float getFramesPerSecond() const;
+		~Kinect2Grabber() throw ();
+		void start();
 
-		typedef void (signal_Kinect2_PointXYZRGB)(const boost::shared_ptr<const pcl::PointCloud<pcl::PointXYZRGB>>&);
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
 
 	protected:
-		boost::signals2::signal<signal_Kinect2_PointXYZRGB>* signal_PointXYZRGB;
-
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthBuffer);
 		void spatialFiltering(UINT16* depthData);
 		void temporalFiltering(UINT16* depthData);
-
-		boost::thread thread;
-		mutable boost::mutex mutex;
-
-		void threadFunction();
-
-		bool quit;
-		bool running;
+		void bilateralFiltering(UINT16* depthData);
 
 		HRESULT result;
 		IKinectSensor* sensor;

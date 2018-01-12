@@ -3,11 +3,12 @@
 
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/io/grabber.h>
+#include "Kinect2Grabber.h"
 
 class Kinect2Pcd {
 private:
 	boost::mutex mutex;
-	boost::shared_ptr<pcl::Grabber> grabber;
+	boost::shared_ptr<pcl::Kinect2Grabber> grabber;
 	boost::signals2::connection connection;
 
 	//Result
