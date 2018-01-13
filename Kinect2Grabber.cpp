@@ -157,7 +157,6 @@ namespace pcl
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthBuffer)
 	{
 		// 7.7 ms
-
 		spatialFiltering(depthBuffer);
 		temporalFiltering(depthBuffer);
 		bilateralFiltering(depthBuffer);

@@ -25,7 +25,8 @@ cuda_add_executable( pc-recog main.cpp
 	Kinect2Pcd.cpp Kinect2Pcd.h
 	PointCloudProcess.cpp PointCloudProcess.h
 	Recognition.cpp Recognition.h
-	Timer.cpp Timer.h )
+	Timer.cpp Timer.h
+	BilateralFilter.cu )
 
 # Additional Dependencies
 target_link_libraries( pc-recog ${PCL_LIBRARIES} )

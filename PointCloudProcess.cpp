@@ -15,7 +15,8 @@
 #include <pcl/kdtree/impl/kdtree_flann.hpp>
 #include <pcl/common/transforms.h>
 #include <pcl/console/parse.h>
-#include "pcl/surface/gp3.h"
+#include <pcl/gpu/features/features.hpp>
+#include <pcl/surface/gp3.h>
 #include "Timer.h"
 
 void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
@@ -132,17 +133,46 @@ void PointCloudProcess::pointCloud2Mesh(pcl::PolygonMesh::Ptr mesh, pcl::PointCl
 
 void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr pcNormal, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
-	mlsFiltering(cloud);
+	// 15.5 ms
+	pcNormal = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>(cloud->size(), 1));
+	pcl::PointXYZRGB* pt = &cloud->points[0];
+	pcl::PointXYZRGBNormal* pt2 = &pcNormal->points[0];
+	for (int i = 0; i < cloud->size(); i++, pt++) {
+		if (pt->x != 0 && pcl_isfinite(pt->x)) {
+			pt2->x = pt->x;
+			pt2->y = pt->y;
+			pt2->z = pt->z;
+			pt2->r = pt->r;
+			pt2->g = pt->g;
+			pt2->b = pt->b;
+			pt2++;
+		}
+	}
+	pcNormal->resize(pt2 - &pcNormal->points[0]);
 
-	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normalEstimation;
+	if (pcNormal->size() == 0) {
+		return;
+	}
 
-	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdTree(new pcl::search::KdTree<pcl::PointXYZRGB>);
-	kdTree->setInputCloud(cloud);
-	normalEstimation.setInputCloud(cloud);
-	normalEstimation.setSearchMethod(kdTree);
-	normalEstimation.setKSearch(20);
-	normalEstimation.compute(*normals);
+	pcl::gpu::NormalEstimation::PointCloud cloud_device;
+	pcl::PointCloud<pcl::PointXYZ> points;
+	pcl::copyPointCloud(*pcNormal, points);
+	cloud_device.upload(points.points);
 
-	pcl::concatenateFields(*cloud, *normals, *pcNormal);
+	pcl::gpu::NormalEstimation::Normals normals_device;
+
+	pcl::gpu::NormalEstimation ne_device;
+	ne_device.setInputCloud(cloud_device);
+	ne_device.setRadiusSearch(0.005, 20);
+	ne_device.compute(normals_device);
+
+	std::vector<pcl::PointXYZ> downloaded;
+	normals_device.download(downloaded);
+
+	#pragma omp parallel for
+	for (int i = 0; i < downloaded.size(); i++) {
+		pcNormal->points[i].normal_x = downloaded[i].x;
+		pcNormal->points[i].normal_y = downloaded[i].y;
+		pcNormal->points[i].normal_z = downloaded[i].z;
+	}
 }

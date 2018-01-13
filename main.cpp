@@ -29,11 +29,13 @@ int main(int argc, char *argv[]) {
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
-	
+
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
 		scene = grabber.getPointCloud();
+		pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneNormal;
+		PointCloudProcess::pointCloud2PCNormal(sceneNormal, scene);
 		if (!viewer->updatePointCloud(scene, "cloud")) {
 			viewer->addPointCloud(scene, "cloud");
 		}
