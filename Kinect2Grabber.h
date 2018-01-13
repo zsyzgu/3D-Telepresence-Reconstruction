@@ -29,11 +29,11 @@ namespace pcl
 	public:
 		Kinect2Grabber();
 		~Kinect2Grabber() throw ();
-		void start();
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
 
 	protected:
+		void start();
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthBuffer);
 		void spatialFiltering(UINT16* depthData);
 		void temporalFiltering(UINT16* depthData);

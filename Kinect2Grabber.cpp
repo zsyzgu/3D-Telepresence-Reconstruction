@@ -96,6 +96,8 @@ namespace pcl
 
 		// To Reserve Depth Frame Buffer
 		depthBuffer.resize(W * H);
+
+		start();
 	}
 
 	pcl::Kinect2Grabber::~Kinect2Grabber() throw()

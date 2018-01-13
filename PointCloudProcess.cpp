@@ -149,6 +149,8 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 		}
 	}
 	pcNormal->resize(pt2 - &pcNormal->points[0]);
+	pcNormal->width = pcNormal->size();
+	pcNormal->height = 1;
 
 	if (pcNormal->size() == 0) {
 		return;
@@ -168,7 +170,7 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 
 	std::vector<pcl::PointXYZ> downloaded;
 	normals_device.download(downloaded);
-
+	
 	#pragma omp parallel for
 	for (int i = 0; i < downloaded.size(); i++) {
 		pcNormal->points[i].normal_x = downloaded[i].x;

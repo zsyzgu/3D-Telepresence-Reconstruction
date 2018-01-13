@@ -1,6 +1,5 @@
 #include "Timer.h"
 #include "Recognition.h"
-#include "Kinect2Pcd.h"
 #include "PointCloudProcess.h"
 #include "Kinect2Grabber.h"
 
@@ -22,10 +21,8 @@ int main(int argc, char *argv[]) {
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
-	//Kinect2Pcd kinect2Pcd;
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 	pcl::Kinect2Grabber grabber;
-	grabber.start();
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
@@ -33,15 +30,14 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		scene = grabber.getPointCloud();
-		pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneNormal;
-		PointCloudProcess::pointCloud2PCNormal(sceneNormal, scene);
-		if (!viewer->updatePointCloud(scene, "cloud")) {
-			viewer->addPointCloud(scene, "cloud");
+		cloud = grabber.getPointCloud();
+
+		if (!viewer->updatePointCloud(cloud, "cloud")) {
+			viewer->addPointCloud(cloud, "cloud");
 		}
 	}
 
-	pcl::io::savePCDFileASCII("scene.pcd", *scene);
+	pcl::io::savePCDFileASCII("scene.pcd", *cloud);
 
 	return 0;
 }
@@ -119,7 +115,7 @@ void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName) {
 	const int screenWidth = 1280;
 	const int screenHeight = 720;
 
-	Kinect2Pcd kinect2Pcd;
+	pcl::Kinect2Grabber grabber;
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
@@ -130,11 +126,9 @@ void captureModelAndSceneByKinect(char* modelFileName, char* sceneFileName) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		if (kinect2Pcd.isUpdated()) {
-			scene = kinect2Pcd.getPointCloud();
-			if (!viewer->updatePointCloud(scene, "cloud")) {
-				viewer->addPointCloud(scene, "cloud");
-			}
+		scene = grabber.getPointCloud();
+		if (!viewer->updatePointCloud(scene, "cloud")) {
+			viewer->addPointCloud(scene, "cloud");
 		}
 	}
 
@@ -192,9 +186,6 @@ void merge2PointClouds(char* model1FileName, char* model2FileName)
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 	PointCloudProcess::merge2PointClouds(cloud, cloud1, cloud2);
 	PointCloudProcess::mlsFiltering(cloud);
-	/*pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh());
-	PointCloudProcess::pointCloud2Mesh(mesh, cloud);
-	viewer.addPolygonMesh(*mesh, "model");*/
 
 	pcl::visualization::PCLVisualizer viewer("Camera");
 	viewer.addPointCloud(cloud, "model");
