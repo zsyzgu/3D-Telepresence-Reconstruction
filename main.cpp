@@ -27,6 +27,8 @@ int main(int argc, char *argv[]) {
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
 
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloudNormals(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
@@ -35,9 +37,16 @@ int main(int argc, char *argv[]) {
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
+
+		PointCloudProcess::pointCloud2PCNormal(cloudNormals, cloud);
+		viewer->removePointCloud("normal", 0);
+		if (cloudNormals->size() > 0) {
+			viewer->addPointCloudNormals<pcl::PointXYZRGBNormal>(cloudNormals, 20, 0.03, "normal");
+		}
 	}
 
-	pcl::io::savePCDFileASCII("scene.pcd", *cloud);
+
+	pcl::io::savePCDFileASCII("scene.pcd", *cloudNormals);
 
 	return 0;
 }

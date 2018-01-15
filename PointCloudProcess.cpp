@@ -134,7 +134,7 @@ void PointCloudProcess::pointCloud2Mesh(pcl::PolygonMesh::Ptr mesh, pcl::PointCl
 void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr pcNormal, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
 	// 15.5 ms
-	pcNormal = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>(cloud->size(), 1));
+	pcNormal->resize(cloud->size());
 	pcl::PointXYZRGB* pt = &cloud->points[0];
 	pcl::PointXYZRGBNormal* pt2 = &pcNormal->points[0];
 	for (int i = 0; i < cloud->size(); i++, pt++) {
@@ -165,7 +165,7 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 
 	pcl::gpu::NormalEstimation ne_device;
 	ne_device.setInputCloud(cloud_device);
-	ne_device.setRadiusSearch(0.005, 20);
+	ne_device.setRadiusSearch(0.02, 20);
 	ne_device.compute(normals_device);
 
 	std::vector<pcl::PointXYZ> downloaded;
