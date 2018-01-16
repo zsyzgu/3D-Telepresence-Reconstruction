@@ -6,7 +6,7 @@
 
 #define BLOCK_SIZE 16
 
-__global__ void kernelBilateralFiltering(UINT16* depth, UINT16* output, int H, int W) {
+__global__ void kernelBilateralFiltering(UINT16* depth, float* output, int H, int W) {
 	const int RADIUS = 9;
 	const float SIGMA_D = 3;
 	const float SIGMA_I = 10;
@@ -37,21 +37,21 @@ __global__ void kernelBilateralFiltering(UINT16* depth, UINT16* output, int H, i
 		}
 
 		if (val > 0) {
-			output[y * W + x] = UINT16(sum / val);
+			output[y * W + x] = sum / val;
 		}
 	}
 }
 
 extern "C"
-void cudaBilateralFiltering(UINT16* depth) {
+void cudaBilateralFiltering(UINT16* depth, float* output) {
 	static const int H = 424;
 	static const int W = 512;
 	static const int n = H * W;
 
 	UINT16* d_depth;
-	UINT16* d_output;
+	float* d_output;
 	cudaMalloc(&d_depth, n * sizeof(UINT16));
-	cudaMalloc(&d_output, n * sizeof(UINT16));
+	cudaMalloc(&d_output, n * sizeof(float));
 
 	cudaMemcpy(d_depth, depth, n * sizeof(UINT16), cudaMemcpyHostToDevice);
 
@@ -59,7 +59,7 @@ void cudaBilateralFiltering(UINT16* depth) {
 	dim3 blockNum((W + BLOCK_SIZE - 1) / BLOCK_SIZE, (H + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernelBilateralFiltering << <blockNum, blockSize >> > (d_depth, d_output, H, W);
 
-	cudaMemcpy(depth, d_output, n * sizeof(UINT16), cudaMemcpyDeviceToHost);
+	cudaMemcpy(output, d_output, n * sizeof(float), cudaMemcpyDeviceToHost);
 
 	cudaFree(d_depth);
 	cudaFree(d_output);

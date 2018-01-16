@@ -37,7 +37,7 @@ namespace pcl
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthBuffer);
 		void spatialFiltering(UINT16* depthData);
 		void temporalFiltering(UINT16* depthData);
-		void bilateralFiltering(UINT16* depthData);
+		void bilateralFiltering(UINT16* depthData, float* depth);
 
 		HRESULT result;
 		IKinectSensor* sensor;

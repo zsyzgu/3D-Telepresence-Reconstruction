@@ -51,49 +51,61 @@ void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
 	cloud->height = 1;
 }
 
-void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGB>::Ptr model, pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr model1, pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr model2)
+void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud1, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud2)
 {
-	float resolution = 0.0025; //(Recognition::computeCloudResolution(model1) + Recognition::computeCloudResolution(model2)) / 2;
+	if (cloud1->size() == 0 || cloud2->size() == 0) {
+		return;
+	}
 
-	pcl::search::KdTree<pcl::PointXYZRGB> tree;
-	tree.setInputCloud(model2);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr points1(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr points2(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::copyPointCloud(*cloud1, *points1);
+	pcl::copyPointCloud(*cloud2, *points2);
 
-	std::vector<int> indices(1);
-	std::vector<float> sqrDistances(2);
-	std::vector<bool> usedModel2Point(model2->size());
-	for (int i = 0; i < model1->size(); i++) {
-		pcl::PointXYZRGB point = model1->at(i);
-		if (!pcl_isfinite(point.x)) {
-			continue;
-		}
+	pcl::gpu::Octree::PointCloud points1_device;
+	points1_device.upload(points1->points);
+	pcl::gpu::Octree::PointCloud points2_device;
+	points2_device.upload(points2->points);
 
-		int nres = tree.nearestKSearch(point, 1, indices, sqrDistances);
+	pcl::gpu::Octree octree;
+	pcl::gpu::NeighborIndices indices_device;
+	octree.setCloud(points2_device);
+	octree.build();
+	octree.approxNearestSearch(points1_device, indices_device);
+	std::vector<int> indices1;
+	indices_device.data.download(indices1);
 
-		if (nres == 1) {
-			int index = indices[0];
-			float distance = sqrt(sqrDistances[0]);
 
-			if (distance < resolution) {
-				pcl::PointXYZRGB point2 = model2->at(index);
-				pcl::PointXYZRGB avePoint(((UINT16)point.r + point2.r) / 2, ((UINT16)point.g + point2.g) / 2, ((UINT16)point.g + point2.g) / 2);
-				avePoint.x = (point.x + point2.x) / 2;
-				avePoint.y = (point.y + point2.y) / 2;
-				avePoint.z = (point.z + point2.z) / 2;
-				model->push_back(avePoint);
-				usedModel2Point[index] = true;
-			}
-			else {
-				model->push_back(point);
-			}
+	octree.setCloud(points1_device);
+	octree.build();
+	octree.approxNearestSearch(points2_device, indices_device);
+	std::vector<int> indices2;
+	indices_device.data.download(indices2);
+
+	cloud->resize(cloud1->size());
+#pragma omp parallel for
+	for (int i = 0; i < cloud1->size(); i++) {
+		int j = indices1[i];
+		if (indices2[j] == i) {
+			pcl::PointXYZRGBNormal point;
+			point.x = (cloud1->points[i].x + cloud2->points[j].x) / 2;
+			point.y = (cloud1->points[i].y + cloud2->points[j].y) / 2;
+			point.z = (cloud1->points[i].z + cloud2->points[j].z) / 2;
+			point.r = ((UINT16)cloud1->points[i].r + cloud2->points[j].r) / 2;
+			point.g = ((UINT16)cloud1->points[i].g + cloud2->points[j].g) / 2;
+			point.b = ((UINT16)cloud1->points[i].b + cloud2->points[j].b) / 2;
+			point.normal_x = (cloud1->points[i].normal_x + cloud2->points[j].normal_x) / 2;
+			point.normal_y = (cloud1->points[i].normal_y + cloud2->points[j].normal_y) / 2;
+			point.normal_z = (cloud1->points[i].normal_z + cloud2->points[j].normal_z) / 2;
+			cloud->points[i] = point;
+		} else {
+			cloud->points[i] = cloud1->points[i];
 		}
 	}
-	for (int i = 0; i < model2->size(); i++) {
-		pcl::PointXYZRGB point = model2->at(i);
-		if (!pcl_isfinite(point.x)) {
-			continue;
-		}
-		if (!usedModel2Point[i]) {
-			model->push_back(point);
+	for (int j = 0; j < cloud2->size(); j++) {
+		int i = indices2[j];
+		if (indices1[i] != j) {
+			cloud->push_back(cloud2->points[j]);
 		}
 	}
 }
@@ -171,7 +183,7 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 	std::vector<pcl::PointXYZ> downloaded;
 	normals_device.download(downloaded);
 	
-	#pragma omp parallel for
+#pragma omp parallel for
 	for (int i = 0; i < downloaded.size(); i++) {
 		pcNormal->points[i].normal_x = downloaded[i].x;
 		pcNormal->points[i].normal_y = downloaded[i].y;

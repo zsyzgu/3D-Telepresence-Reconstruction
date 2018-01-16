@@ -4,7 +4,7 @@
 #include <omp.h>
 
 extern "C"
-void cudaBilateralFiltering(UINT16* depth);
+void cudaBilateralFiltering(UINT16* depthData, float* depth);
 
 namespace pcl
 {
@@ -156,12 +156,14 @@ namespace pcl
 		return convertRGBDepthToPointXYZRGB(&colorBuffer[0], &depthBuffer[0]);
 	}
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthBuffer)
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorData, UINT16* depthData)
 	{
-		// 7.7 ms
-		spatialFiltering(depthBuffer);
-		temporalFiltering(depthBuffer);
-		bilateralFiltering(depthBuffer);
+		// 7.3 ms
+
+		spatialFiltering(depthData);
+		temporalFiltering(depthData);
+		float* depthFloat = new float[H * W];
+		bilateralFiltering(depthData, depthFloat);
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 
@@ -176,22 +178,22 @@ namespace pcl
 		mapper->GetDepthFrameToCameraSpaceTable(&tableCount, &depthToCameraSpaceTable);
 
 		ColorSpacePoint* depthToColorSpaceTable = new ColorSpacePoint[W * H];
-		mapper->MapDepthFrameToColorSpace(W * H, depthBuffer, W * H, depthToColorSpaceTable);
+		mapper->MapDepthFrameToColorSpace(W * H, depthData, W * H, depthToColorSpaceTable);
 
-		#pragma omp parallel for
+#pragma omp parallel for
 		for (int y = 0; y < H; y++) {
 			int id = y * W;
 			pcl::PointXYZRGB* pt = &cloud->points[id];
 			for (int x = 0; x < W; x++, pt++, id++) {
 				DepthSpacePoint depthSpacePoint = { static_cast<float>(x), static_cast<float>(y) };
-				UINT16 depth = depthBuffer[id];
+				float depth = depthFloat[id];
 				if (depth != 0) {
 					ColorSpacePoint colorSpacePoint = depthToColorSpaceTable[id];
 					int colorX = static_cast<int>(std::floor(colorSpacePoint.X + 0.5f));
 					int colorY = static_cast<int>(std::floor(colorSpacePoint.Y + 0.5f));
 					if ((0 <= colorX) && (colorX < colorWidth) && (0 <= colorY) && (colorY < colorHeight)) {
 						// Coordinate Mapping Depth to Color Space, and Setting PointCloud RGB
-						RGBQUAD color = colorBuffer[colorY * colorWidth + colorX];
+						RGBQUAD color = colorData[colorY * colorWidth + colorX];
 						pt->b = color.rgbBlue;
 						pt->g = color.rgbGreen;
 						pt->r = color.rgbRed;
@@ -207,18 +209,18 @@ namespace pcl
 
 		delete[] depthToCameraSpaceTable;
 		delete[] depthToColorSpaceTable;
-
+		delete[] depthFloat;
+		
 		return cloud;
 	}
 
 	void pcl::Kinect2Grabber::spatialFiltering(UINT16* depth) {
-		// 170 us
 		static const int n = 512 * 424;
 		static UINT16 rawDepth[n];
 
 		memcpy(rawDepth, depth, n * sizeof(UINT16));
 
-		#pragma omp parallel for
+#pragma omp parallel for
 		for (int y = 0; y < H; y++) {
 			for (int x = 0; x < W; x++) {
 				int index = y * W + x;
@@ -242,7 +244,7 @@ namespace pcl
 						}
 					}
 					if (num != 0) {
-						depth[index] = sum / num;
+						depth[index] = (sum + (num >> 1)) / num;
 					}
 				}
 			}
@@ -250,8 +252,6 @@ namespace pcl
 	}
 
 	void pcl::Kinect2Grabber::temporalFiltering(UINT16* depth) {
-		// 360 us
-
 		// Abstract: The system error of a pixel from the depth image is nearly white noise. We use several frames to smooth it.
 		// Implementation: If a pixel not change a lot in this frame, we would smooth it by averaging the pixels in several frames.
 
@@ -263,7 +263,7 @@ namespace pcl
 
 		memcpy(depthQueue[t], depth, n * sizeof(UINT16));
 
-		#pragma omp parallel for
+#pragma omp parallel for
 		for (int y = 0; y < H; y++) {
 			for (int x = 0; x < W; x++) {
 				int index = y * W + x;
@@ -293,10 +293,13 @@ namespace pcl
 		t = (t + 1) % QUEUE_LENGTH;
 	}
 
-	void Kinect2Grabber::bilateralFiltering(UINT16* depth)
+	void Kinect2Grabber::bilateralFiltering(UINT16* depthData, float* depth)
 	{
-		// 2.7 ms
-		cudaBilateralFiltering(depth);
+		cudaBilateralFiltering(depthData, depth);
+#pragma omp parallel for
+		for (int i = 0; i < H * W; i++) {
+			depthData[i] = (UINT16)depth[i];
+		}
 	}
 }
 

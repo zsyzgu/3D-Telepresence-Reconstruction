@@ -2,6 +2,7 @@
 #include "Recognition.h"
 #include "PointCloudProcess.h"
 #include "Kinect2Grabber.h"
+#include "pcl/gpu/features/features.hpp"
 
 // ===== Recognize Model from Scene =====
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName);
@@ -13,15 +14,17 @@ Eigen::Vector2f captureWindowMin;
 Eigen::Vector2f captureWindowMax;
 void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewerVoid);
 
-// ===== Merge Two Point Cloud =====
-void merge2PointClouds(char* model1FileName, char* model2FileName);
-
-int main(int argc, char *argv[]) {
+int main(int argc,				 char *argv[]) {
 	//recognizeModelFromScene("chair.pcd", "scene.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
+
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
+	pcl::io::loadPCDFile("scene_remote.pcd", *sceneRemote);
+
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr result(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
 	pcl::Kinect2Grabber grabber;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
@@ -32,21 +35,30 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
+		Timer timer;
+		timer.reset();
+
 		cloud = grabber.getPointCloud();
 
+		PointCloudProcess::pointCloud2PCNormal(cloudNormals, cloud);
+		PointCloudProcess::merge2PointClouds(result, cloudNormals, sceneRemote);
+		
+		timer.outputTime();
+
+		pcl::copyPointCloud(*result, *cloud);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
 
-		PointCloudProcess::pointCloud2PCNormal(cloudNormals, cloud);
+#if false
 		viewer->removePointCloud("normal", 0);
 		if (cloudNormals->size() > 0) {
-			viewer->addPointCloudNormals<pcl::PointXYZRGBNormal>(cloudNormals, 20, 0.03, "normal");
+			viewer->addPointCloudNormals<pcl::PointXYZRGBNormal>(result, 20, 0.03, "normal");
 		}
+#endif
 	}
 
-
-	pcl::io::savePCDFileASCII("scene.pcd", *cloudNormals);
+	pcl::io::savePCDFileASCII("scene.pcd", *result);
 
 	return 0;
 }
@@ -178,7 +190,7 @@ void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewe
 	}
 }
 
-void merge2PointClouds(char* model1FileName, char* model2FileName)
+/*void merge2PointClouds(char* model1FileName, char* model2FileName)
 {
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZRGB>());
 	if (pcl::io::loadPCDFile(model1FileName, *cloud1) < 0) {
@@ -203,4 +215,4 @@ void merge2PointClouds(char* model1FileName, char* model2FileName)
 	while (viewer.wasStopped() == false) {
 		viewer.spinOnce();
 	}
-}
+}*/
