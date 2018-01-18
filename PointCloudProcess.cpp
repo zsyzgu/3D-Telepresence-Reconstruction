@@ -53,19 +53,23 @@ void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
 
 void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud1, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud2)
 {
+	// 30 ms for closed point clouds; 200 ms for others
+
+	const float NEIGHBOR_THRESHOLD_2 = 0.005 * 0.005;
+
 	if (cloud1->size() == 0 || cloud2->size() == 0) {
 		return;
 	}
 
-	pcl::PointCloud<pcl::PointXYZ>::Ptr points1(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr points2(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::copyPointCloud(*cloud1, *points1);
-	pcl::copyPointCloud(*cloud2, *points2);
+	pcl::PointCloud<pcl::PointXYZ> points1;
+	pcl::PointCloud<pcl::PointXYZ> points2;
+	pcl::copyPointCloud(*cloud1, points1);
+	pcl::copyPointCloud(*cloud2, points2);
 
 	pcl::gpu::Octree::PointCloud points1_device;
-	points1_device.upload(points1->points);
+	points1_device.upload(points1.points);
 	pcl::gpu::Octree::PointCloud points2_device;
-	points2_device.upload(points2->points);
+	points2_device.upload(points2.points);
 
 	pcl::gpu::Octree octree;
 	pcl::gpu::NeighborIndices indices_device;
@@ -75,25 +79,47 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 	std::vector<int> indices1;
 	indices_device.data.download(indices1);
 
-
 	octree.setCloud(points1_device);
 	octree.build();
 	octree.approxNearestSearch(points2_device, indices_device);
 	std::vector<int> indices2;
 	indices_device.data.download(indices2);
 
-	cloud->resize(cloud1->size());
+	// correct approx indices
 #pragma omp parallel for
 	for (int i = 0; i < cloud1->size(); i++) {
 		int j = indices1[i];
-		if (indices2[j] == i) {
+		if (indices2[j] != i) {
+			if (squaredDistance(points1[i], points2[j]) < squaredDistance(points1[indices2[j]], points2[j])) {
+				indices2[j] = i;
+			}
+		}
+	}
+#pragma omp parallel for
+	for (int j = 0; j < cloud2->size(); j++) {
+		int i = indices2[j];
+		if (indices1[i] != j) {
+			if (squaredDistance(points1[i], points2[j]) < squaredDistance(points1[i], points2[indices1[i]])) {
+				indices1[i] = j;
+			}
+		}
+	}
+
+	cloud->resize(cloud1->size() + cloud2->size());
+#pragma omp parallel for
+	for (int i = 0; i < cloud1->size(); i++) {
+		int j = indices1[i];
+		if (indices2[j] == i && squaredDistance(points1[i], points2[j]) < NEIGHBOR_THRESHOLD_2) {
 			pcl::PointXYZRGBNormal point;
-			point.x = (cloud1->points[i].x + cloud2->points[j].x) / 2;
-			point.y = (cloud1->points[i].y + cloud2->points[j].y) / 2;
-			point.z = (cloud1->points[i].z + cloud2->points[j].z) / 2;
-			point.r = ((UINT16)cloud1->points[i].r + cloud2->points[j].r) / 2;
-			point.g = ((UINT16)cloud1->points[i].g + cloud2->points[j].g) / 2;
-			point.b = ((UINT16)cloud1->points[i].b + cloud2->points[j].b) / 2;
+			point.x = (points1[i].x + points2[j].x) / 2;
+			point.y = (points1[i].y + points2[j].y) / 2;
+			point.z = (points1[i].z + points2[j].z) / 2;
+			//point.r = ((UINT16)cloud1->points[i].r + cloud2->points[j].r) / 2;
+			//point.g = ((UINT16)cloud1->points[i].g + cloud2->points[j].g) / 2;
+			//point.b = ((UINT16)cloud1->points[i].b + cloud2->points[j].b) / 2;
+			point.r = 255;
+			point.g = 255;
+			point.b = 0;
 			point.normal_x = (cloud1->points[i].normal_x + cloud2->points[j].normal_x) / 2;
 			point.normal_y = (cloud1->points[i].normal_y + cloud2->points[j].normal_y) / 2;
 			point.normal_z = (cloud1->points[i].normal_z + cloud2->points[j].normal_z) / 2;
@@ -102,12 +128,15 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			cloud->points[i] = cloud1->points[i];
 		}
 	}
+	pcl::PointXYZRGBNormal* pt = &cloud->points[cloud1->size()];
 	for (int j = 0; j < cloud2->size(); j++) {
 		int i = indices2[j];
 		if (indices1[i] != j) {
-			cloud->push_back(cloud2->points[j]);
+			*pt = cloud2->points[j];
+			pt++;
 		}
 	}
+	cloud->resize(pt - &cloud->points[0]);
 }
 
 void PointCloudProcess::pointCloud2Mesh(pcl::PolygonMesh::Ptr mesh, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
@@ -189,4 +218,9 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 		pcNormal->points[i].normal_y = downloaded[i].y;
 		pcNormal->points[i].normal_z = downloaded[i].z;
 	}
+}
+
+float PointCloudProcess::squaredDistance(pcl::PointXYZ & pt1, pcl::PointXYZ & pt2)
+{
+	return (pt1.x - pt2.x) * (pt1.x - pt2.x) + (pt1.y - pt2.y) * (pt1.y - pt2.y) + (pt1.z - pt2.z) * (pt1.z - pt2.z);
 }

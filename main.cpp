@@ -15,35 +15,31 @@ Eigen::Vector2f captureWindowMax;
 void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewerVoid);
 
 int main(int argc,				 char *argv[]) {
-	//recognizeModelFromScene("chair.pcd", "scene.pcd");
+	recognizeModelFromScene("view1.pcd", "view2.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
-
+	/*
 	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
 	pcl::io::loadPCDFile("scene_remote.pcd", *sceneRemote);
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneLocal(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
+	pcl::io::loadPCDFile("scene_local.pcd", *sceneLocal);
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr result(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
 	pcl::Kinect2Grabber grabber;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
-
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloudNormals(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "cloud");
 
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		Timer timer;
-		timer.reset();
-
 		cloud = grabber.getPointCloud();
 
-		PointCloudProcess::pointCloud2PCNormal(cloudNormals, cloud);
-		PointCloudProcess::merge2PointClouds(result, cloudNormals, sceneRemote);
-		
-		timer.outputTime();
+		PointCloudProcess::pointCloud2PCNormal(result, cloud);
+		//PointCloudProcess::merge2PointClouds(result, cloudNormals, sceneRemote);
 
 		pcl::copyPointCloud(*result, *cloud);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
@@ -58,7 +54,7 @@ int main(int argc,				 char *argv[]) {
 #endif
 	}
 
-	pcl::io::savePCDFileASCII("scene.pcd", *result);
+	pcl::io::savePCDFileASCII("scene.pcd", *result);*/
 
 	return 0;
 }
@@ -67,14 +63,6 @@ void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {
 	Recognition recognition;
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr model(new pcl::PointCloud<pcl::PointXYZRGB>());
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene(new pcl::PointCloud<pcl::PointXYZRGB>());
-	if (pcl::io::loadPCDFile(modelFileName, *model) < 0) {
-		std::cout << "Error loading model cloud" << std::endl;
-		return;
-	}
-	if (pcl::io::loadPCDFile(sceneFileName, *scene) < 0) {
-		std::cout << "Error loading scene cloud" << std::endl;
-		return;
-	}
 	recognition.recognize(model, scene);
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr modelKeypoints = recognition.getModelKeypoints();
@@ -189,30 +177,3 @@ void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewe
 		}
 	}
 }
-
-/*void merge2PointClouds(char* model1FileName, char* model2FileName)
-{
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZRGB>());
-	if (pcl::io::loadPCDFile(model1FileName, *cloud1) < 0) {
-		std::cout << "Error loading model 1" << std::endl;
-	}
-	PointCloudProcess::mlsFiltering(cloud1);
-
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
-	if (pcl::io::loadPCDFile(model2FileName, *cloud2) < 0) {
-		std::cout << "Error loading model 2" << std::endl;
-	}
-	PointCloudProcess::mlsFiltering(cloud2);
-
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-	PointCloudProcess::merge2PointClouds(cloud, cloud1, cloud2);
-	PointCloudProcess::mlsFiltering(cloud);
-
-	pcl::visualization::PCLVisualizer viewer("Camera");
-	viewer.addPointCloud(cloud, "model");
-	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "model");
-
-	while (viewer.wasStopped() == false) {
-		viewer.spinOnce();
-	}
-}*/

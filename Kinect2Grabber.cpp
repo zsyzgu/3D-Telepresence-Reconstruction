@@ -189,14 +189,19 @@ namespace pcl
 				float depth = depthFloat[id];
 				if (depth != 0) {
 					ColorSpacePoint colorSpacePoint = depthToColorSpaceTable[id];
-					int colorX = static_cast<int>(std::floor(colorSpacePoint.X + 0.5f));
-					int colorY = static_cast<int>(std::floor(colorSpacePoint.Y + 0.5f));
-					if ((0 <= colorX) && (colorX < colorWidth) && (0 <= colorY) && (colorY < colorHeight)) {
+					int colorX = static_cast<int>(std::floor(colorSpacePoint.X));
+					int colorY = static_cast<int>(std::floor(colorSpacePoint.Y));
+					if ((0 <= colorX) && (colorX + 1 < colorWidth) && (0 <= colorY) && (colorY + 1 < colorHeight)) {
 						// Coordinate Mapping Depth to Color Space, and Setting PointCloud RGB
-						RGBQUAD color = colorData[colorY * colorWidth + colorX];
-						pt->b = color.rgbBlue;
-						pt->g = color.rgbGreen;
-						pt->r = color.rgbRed;
+						RGBQUAD colorLU = colorData[colorY * colorWidth + colorX];
+						RGBQUAD colorRU = colorData[colorY * colorWidth + (colorX + 1)];
+						RGBQUAD colorLB = colorData[(colorY + 1) * colorWidth + colorX];
+						RGBQUAD colorRB = colorData[(colorY + 1) * colorWidth + (colorX + 1)];
+						float u = colorSpacePoint.X - colorX;
+						float v = colorSpacePoint.Y - colorY;
+						pt->b = colorLU.rgbBlue * (1 - u) * (1 - v) + colorRU.rgbBlue * u * (1 - v) + colorLB.rgbBlue * (1 - u) * v + colorRB.rgbBlue * u * v;
+						pt->g = colorLU.rgbGreen * (1 - u) * (1 - v) + colorRU.rgbGreen * u * (1 - v) + colorLB.rgbGreen * (1 - u) * v + colorRB.rgbGreen * u * v;
+						pt->r = colorLU.rgbRed * (1 - u) * (1 - v) + colorRU.rgbRed * u * (1 - v) + colorLB.rgbRed * (1 - u) * v + colorRB.rgbRed * u * v;
 						// Coordinate Mapping Depth to Camera Space, and Setting PointCloud XYZs
 						PointF spacePoint = depthToCameraSpaceTable[id];
 						pt->x = spacePoint.X * depth * 0.001f;
