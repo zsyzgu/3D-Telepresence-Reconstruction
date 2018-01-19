@@ -3,6 +3,7 @@
 #include "PointCloudProcess.h"
 #include "Kinect2Grabber.h"
 #include "pcl/gpu/features/features.hpp"
+#include "SceneRegistration.h"
 
 // ===== Recognize Model from Scene =====
 void recognizeModelFromScene(char* modelFileName, char* sceneFileName);
@@ -14,34 +15,51 @@ Eigen::Vector2f captureWindowMin;
 Eigen::Vector2f captureWindowMax;
 void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewerVoid);
 
-int main(int argc,				 char *argv[]) {
-	recognizeModelFromScene("view1.pcd", "view2.pcd");
+int main(int argc, char *argv[]) {
+	//recognizeModelFromScene("view1.pcd", "view2.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
-	/*
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
-	pcl::io::loadPCDFile("scene_remote.pcd", *sceneRemote);
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneLocal(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
-	pcl::io::loadPCDFile("scene_local.pcd", *sceneLocal);
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneLocal(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	pcl::io::loadPCDFile("view1.pcd", *sceneLocal);
+	pcl::io::loadPCDFile("view2.pcd", *sceneRemote);
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr result(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+	SceneRegistration regis;
+	Eigen::Matrix4f transformation = regis.align(sceneLocal, sceneRemote);
+	pcl::transformPointCloud(*sceneLocal, *result, transformation);
+
+	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
+	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
+
+	while (!viewer->wasStopped()) {
+		viewer->spinOnce();
+
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+
+		pcl::copyPointCloud(*sceneRemote, *cloud);
+		if (!viewer->updatePointCloud(cloud, "remote")) {
+			viewer->addPointCloud(cloud, "remote");
+		}
+		pcl::copyPointCloud(*result, *cloud);
+		if (!viewer->updatePointCloud(cloud, "result")) {
+			viewer->addPointCloud(cloud, "result");
+		}
+	}
+
+	/*pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr result(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
 	pcl::Kinect2Grabber grabber;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "cloud");
 
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
 		cloud = grabber.getPointCloud();
 
-		PointCloudProcess::pointCloud2PCNormal(result, cloud);
-		//PointCloudProcess::merge2PointClouds(result, cloudNormals, sceneRemote);
-
-		pcl::copyPointCloud(*result, *cloud);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
@@ -54,6 +72,8 @@ int main(int argc,				 char *argv[]) {
 #endif
 	}
 
+	PointCloudProcess::pointCloud2PCNormal(result, cloud);
+
 	pcl::io::savePCDFileASCII("scene.pcd", *result);*/
 
 	return 0;
@@ -63,6 +83,14 @@ void recognizeModelFromScene(char* modelFileName, char* sceneFileName) {
 	Recognition recognition;
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr model(new pcl::PointCloud<pcl::PointXYZRGB>());
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr scene(new pcl::PointCloud<pcl::PointXYZRGB>());
+	if (pcl::io::loadPCDFile(modelFileName, *model) < 0) {
+		std::cout << "Error loading model cloud" << std::endl;
+		return;
+	}
+	if (pcl::io::loadPCDFile(sceneFileName, *scene) < 0) {
+		std::cout << "Error loading scene cloud" << std::endl;
+		return;
+	}
 	recognition.recognize(model, scene);
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr modelKeypoints = recognition.getModelKeypoints();
