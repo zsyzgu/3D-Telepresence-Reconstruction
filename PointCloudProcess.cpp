@@ -116,9 +116,6 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			point.r = ((UINT16)cloud1->points[i].r + cloud2->points[j].r) / 2;
 			point.g = ((UINT16)cloud1->points[i].g + cloud2->points[j].g) / 2;
 			point.b = ((UINT16)cloud1->points[i].b + cloud2->points[j].b) / 2;
-			//point.r = 255;
-			//point.g = 255;
-			//point.b = 0;
 			point.normal_x = (cloud1->points[i].normal_x + cloud2->points[j].normal_x) / 2;
 			point.normal_y = (cloud1->points[i].normal_y + cloud2->points[j].normal_y) / 2;
 			point.normal_z = (cloud1->points[i].normal_z + cloud2->points[j].normal_z) / 2;

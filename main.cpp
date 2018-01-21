@@ -28,9 +28,9 @@ int main(int argc, char *argv[]) {
 	//recognizeModelFromScene("view1.pcd", "view2.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
+	omp_set_num_threads(4);
 
 	transformation.setIdentity();
-
 	pcl::io::loadPCDFile("view_remote.pcd", *sceneRemote);
 	pcl::io::loadPCDFile("view_local.pcd", *sceneLocal);
 
@@ -43,6 +43,8 @@ int main(int argc, char *argv[]) {
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
 	viewer->registerKeyboardCallback(keyboardEventOccurred);
 
+	Timer timer;
+	timer.reset();
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
@@ -57,6 +59,9 @@ int main(int argc, char *argv[]) {
 		if (!viewer->updatePointCloud(cloud, "result")) {
 			viewer->addPointCloud(cloud, "result");
 		}
+
+		timer.outputTime(10);
+		timer.reset();
 	}
 
 	/*pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
