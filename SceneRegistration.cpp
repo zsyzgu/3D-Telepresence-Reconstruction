@@ -105,16 +105,12 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	pcl::copyPointCloud(*targetKeypoints, *targetKeypointNormals);
 
 
-	/*pcl::registration::CorrespondenceRejectorSurfaceNormal rejector;
-	rejector.initializeDataContainer<pcl::PointXYZ, pcl::Normal>();
-	rejector.setInputSource<pcl::PointXYZ>(sourceKeypointPoints);
-	rejector.setInputTarget<pcl::PointXYZ>(targetKeypointPoints);
-	rejector.setInputNormals<pcl::PointXYZ, pcl::Normal>(sourceKeypointNormals);
-	rejector.setTargetNormals<pcl::PointXYZ, pcl::Normal>(targetKeypointNormals);
+	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZ> rejector;
+	rejector.setInputSource(sourceKeypointPoints);
+	rejector.setInputTarget(targetKeypointPoints);
+	rejector.setInlierThreshold(0.01);
 	rejector.setInputCorrespondences(corrs);
-	rejector.setThreshold(M_PI * 90 / 180);
-	rejector.getCorrespondences(*corrs);*/
-
+	rejector.getCorrespondences(*corrs);
 	std::cout << corrs->size() << std::endl;
 
 	estimateRigidTransformation(*sourceKeypointPoints, *targetKeypointPoints, *corrs, transformation);
@@ -131,10 +127,6 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	for (int i = 0; i < targetKeypoints->size(); i++) {
 		targetKeypoints->points[i].r = targetKeypoints->points[i].g = targetKeypoints->points[i].b = 0;
 		targetKeypoints->points[i].g = 255;
-		//targetKeypoints->points[i].x += 1;
-	}
-	for (int i = 0; i < target->size(); i++) {
-		//target->points[i].x += 1;
 	}
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
