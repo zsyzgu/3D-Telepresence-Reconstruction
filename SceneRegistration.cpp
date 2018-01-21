@@ -3,6 +3,7 @@
 #include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
+#include <pcl/gpu/features/features.hpp>
 
 SceneRegistration::SceneRegistration() {
 
@@ -12,17 +13,12 @@ SceneRegistration::~SceneRegistration() {
 
 }
 
-void SceneRegistration::transform(const Eigen::Matrix4f & mat, const pcl::PointXYZ & p, pcl::PointXYZ & out) {
-	out.x = mat(0, 0)*p.x + mat(0, 1)*p.y + mat(0, 2)*p.z + mat(0, 3);
-	out.y = mat(1, 0)*p.x + mat(1, 1)*p.y + mat(1, 2)*p.z + mat(1, 3);
-	out.z = mat(2, 0)*p.x + mat(2, 1)*p.y + mat(2, 2)*p.z + mat(2, 3);
-}
-
 Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr target)
 {
 	Timer timer;
 	timer.reset();
 
+	std::cout << "Starting Alignment" << std::endl;
 	Eigen::Matrix4f transformation;
 	transformation.setIdentity();
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr sourcePoints(new pcl::PointCloud<pcl::PointXYZRGB>());
@@ -38,7 +34,7 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	pcl::PointCloud<pcl::PointWithScale>::Ptr sourceKeypointsScale(new pcl::PointCloud<pcl::PointWithScale>());
 	pcl::PointCloud<pcl::PointWithScale>::Ptr targetKeypointsScale(new pcl::PointCloud<pcl::PointWithScale>());
 	pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointWithScale> siftDetect;
-	siftDetect.setScales(0.0025, 5, 5);
+	siftDetect.setScales(0.002, 5, 6);
 	siftDetect.setMinimumContrast(0.8);
 	siftDetect.setInputCloud(sourcePoints);
 	siftDetect.compute(*sourceKeypointsScale);
@@ -53,7 +49,7 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	pcl::PointCloud<pcl::SHOT1344>::Ptr sourceDescr(new pcl::PointCloud<pcl::SHOT1344>());
 	pcl::PointCloud<pcl::SHOT1344>::Ptr targetDescr(new pcl::PointCloud<pcl::SHOT1344>());
 	pcl::SHOTColorEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::SHOT1344> descrEst;
-	descrEst.setRadiusSearch(0.05);
+	descrEst.setRadiusSearch(0.08);
 	descrEst.setInputCloud(sourceKeypoints);
 	descrEst.setSearchSurface(sourcePoints);
 	descrEst.setInputNormals(sourceNormals);
@@ -73,12 +69,16 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 		if (pcl_isnan(sourceDescr->at(i).descriptor[0])) {
 			continue;
 		}
-		std::vector<int> targetIndex(2);
-		std::vector<float> sqrDist(2);
-		int found = kdTree.nearestKSearch(sourceDescr->points[i], 2, targetIndex, sqrDist);
+		try {
+			std::vector<int> targetIndex(2);
+			std::vector<float> sqrDist(2);
+			int found = kdTree.nearestKSearch(sourceDescr->points[i], 2, targetIndex, sqrDist);
 
-		if (found == 2 && sqrDist[0] / sqrDist[1] < 0.64 && sqrDist[0] < 0.25) {
-			corrs->push_back(pcl::Correspondence(i, targetIndex[0], sqrDist[0]));
+			if (found == 2 && sqrDist[0] / sqrDist[1] < 0.64 && sqrDist[0] < 0.25) {
+				corrs->push_back(pcl::Correspondence(i, targetIndex[0], sqrDist[0]));
+			}
+		} catch (bool) {
+
 		}
 	}
 	std::cout << " = " << corrs->size() << std::endl;
@@ -90,11 +90,12 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	rejector.setInlierThreshold(0.01);
 	rejector.setInputCorrespondences(corrs);
 	rejector.getCorrespondences(*corrs);
+	transformation = rejector.getBestTransformation();
 	std::cout << ", Remain = " << corrs->size() << std::endl;
 
-	std::cout << "Estimating Transformation" << std::endl;
-	estimateRigidTransformation(*sourceKeypoints, *targetKeypoints, *corrs, transformation);
-
+	timer.outputTime();
+	
+	/*
 	// Analaysis
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformedKeypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
 	pcl::transformPointCloud(*sourceKeypoints, *transformedKeypoints, transformation);
@@ -102,11 +103,9 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	for (int k = 0; k < corrs->size(); k++) {
 		pcl::PointXYZRGB* pt1 = &transformedKeypoints->at(corrs->at(k).index_query);
 		pcl::PointXYZRGB* pt2 = &targetKeypoints->at(corrs->at(k).index_match);
-		sum  += sqrt((pt1->x - pt2->x) * (pt1->x - pt2->x) + (pt1->y - pt2->y) * (pt1->y - pt2->y) + (pt1->z - pt2->z) * (pt1->z - pt2->z));
+		sum += sqrt((pt1->x - pt2->x) * (pt1->x - pt2->x) + (pt1->y - pt2->y) * (pt1->y - pt2->y) + (pt1->z - pt2->z) * (pt1->z - pt2->z));
 	}
-	std::cout << "Average Distance = " << sum / corrs->size() << std::endl;
-
-	timer.outputTime();
+	std::cout << "Average Distance = " << sum / corrs->size() << std::endl;*/
 
 	/*
 	// Visualization

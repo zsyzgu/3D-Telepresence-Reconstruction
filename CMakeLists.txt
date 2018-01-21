@@ -23,7 +23,7 @@ link_directories( ${KinectSDK2_LIBRARY_DIRS} )
 cuda_add_executable( pc-recog main.cpp
 	Kinect2Grabber.h Kinect2Grabber.cpp
 	PointCloudProcess.cpp PointCloudProcess.h
-	Recognition.cpp Recognition.h
+	SceneRegistration.cpp SceneRegistration.h
 	Timer.cpp Timer.h
 	BilateralFilter.cu )
 
