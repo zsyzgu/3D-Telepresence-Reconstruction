@@ -12,7 +12,7 @@ public:
 	~SceneRegistration();
 
 public:
-	Eigen::Matrix4f align(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr target);
+	Eigen::Matrix4f align(pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr target);
 };
 
 #endif

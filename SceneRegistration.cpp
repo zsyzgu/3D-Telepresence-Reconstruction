@@ -13,12 +13,12 @@ SceneRegistration::~SceneRegistration() {
 
 }
 
-Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr target)
+Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr target)
 {
 	Timer timer;
 	timer.reset();
 
-	std::cout << "Starting Alignment" << std::endl;
+	std::cout << "=== Registration ===" << std::endl;
 	Eigen::Matrix4f transformation;
 	transformation.setIdentity();
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr sourcePoints(new pcl::PointCloud<pcl::PointXYZRGB>());
@@ -49,7 +49,7 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	pcl::PointCloud<pcl::SHOT1344>::Ptr sourceDescr(new pcl::PointCloud<pcl::SHOT1344>());
 	pcl::PointCloud<pcl::SHOT1344>::Ptr targetDescr(new pcl::PointCloud<pcl::SHOT1344>());
 	pcl::SHOTColorEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::SHOT1344> descrEst;
-	descrEst.setRadiusSearch(0.08);
+	descrEst.setRadiusSearch(0.05);
 	descrEst.setInputCloud(sourceKeypoints);
 	descrEst.setSearchSurface(sourcePoints);
 	descrEst.setInputNormals(sourceNormals);
@@ -95,7 +95,6 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 
 	timer.outputTime();
 	
-	/*
 	// Analaysis
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformedKeypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
 	pcl::transformPointCloud(*sourceKeypoints, *transformedKeypoints, transformation);
@@ -105,12 +104,14 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 		pcl::PointXYZRGB* pt2 = &targetKeypoints->at(corrs->at(k).index_match);
 		sum += sqrt((pt1->x - pt2->x) * (pt1->x - pt2->x) + (pt1->y - pt2->y) * (pt1->y - pt2->y) + (pt1->z - pt2->z) * (pt1->z - pt2->z));
 	}
-	std::cout << "Average Distance = " << sum / corrs->size() << std::endl;*/
+	std::cout << "Average Distance = " << sum / corrs->size() << std::endl;
+
+	return transformation;
 
 	/*
 	// Visualization
-
-	pcl::transformPointCloud(*source, *source, transformation);
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedSource(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	pcl::transformPointCloud(*source, *transformedSource, transformation);
 	pcl::transformPointCloud(*sourceKeypoints, *sourceKeypoints, transformation);
 
 	for (int i = 0; i < sourceKeypoints->size(); i++) {
@@ -138,7 +139,7 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 		if (!viewer->updatePointCloud(cloud, "2")) {
 			viewer->addPointCloud(cloud, "2");
 		}
-		pcl::copyPointCloud(*source, *cloud);
+		pcl::copyPointCloud(*transformedSource, *cloud);
 		if (!viewer->updatePointCloud(cloud, "3")) {
 			viewer->addPointCloud(cloud, "3");
 		}
@@ -151,6 +152,35 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 			viewer->addLine<pcl::PointXYZRGB, pcl::PointXYZRGB>(sourceKeypoints->points[(*corrs)[i].index_query], targetKeypoints->points[(*corrs)[i].index_match], 200, 200, 0, "line" + i);
 		}
 	}*/
-
-	return transformation;
 }
+
+/*
+// test for this Class
+
+pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneLocal(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+pcl::io::loadPCDFile("view1.pcd", *sceneLocal);
+pcl::io::loadPCDFile("view2.pcd", *sceneRemote);
+pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr result(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+
+SceneRegistration regis;
+Eigen::Matrix4f transformation = regis.align(sceneLocal, sceneRemote);
+pcl::transformPointCloud(*sceneLocal, *result, transformation);
+
+boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
+viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
+
+while (!viewer->wasStopped()) {
+viewer->spinOnce();
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+
+pcl::copyPointCloud(*sceneRemote, *cloud);
+if (!viewer->updatePointCloud(cloud, "remote")) {
+viewer->addPointCloud(cloud, "remote");
+}
+pcl::copyPointCloud(*result, *cloud);
+if (!viewer->updatePointCloud(cloud, "result")) {
+viewer->addPointCloud(cloud, "result");
+}
+}*/

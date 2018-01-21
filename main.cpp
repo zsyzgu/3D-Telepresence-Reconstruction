@@ -13,34 +13,47 @@ Eigen::Vector2f captureWindowMin;
 Eigen::Vector2f captureWindowMax;
 void mouseEventOccurred(const pcl::visualization::MouseEvent &event, void* viewerVoid);
 
+Eigen::Matrix4f transformation;
+pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneLocal(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+
+void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
+	if (event.getKeySym() == "r" && event.keyDown()) {
+		SceneRegistration registration;
+		transformation = registration.align(sceneRemote, sceneLocal);
+	}
+}
+
 int main(int argc, char *argv[]) {
 	//recognizeModelFromScene("view1.pcd", "view2.pcd");
 	//captureModelAndSceneByKinect("model.pcd", "scene.pcd");
 	//merge2PointClouds("model1.pcd", "model2.pcd");
 
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneLocal(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
-	pcl::io::loadPCDFile("view1.pcd", *sceneLocal);
-	pcl::io::loadPCDFile("view2.pcd", *sceneRemote);
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr result(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	transformation.setIdentity();
 
-	SceneRegistration regis;
-	Eigen::Matrix4f transformation = regis.align(sceneLocal, sceneRemote);
-	pcl::transformPointCloud(*sceneLocal, *result, transformation);
+	pcl::io::loadPCDFile("view_remote.pcd", *sceneRemote);
+	pcl::io::loadPCDFile("view_local.pcd", *sceneLocal);
+
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr mergeScene(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+
+	pcl::Kinect2Grabber grabber;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
+	viewer->registerKeyboardCallback(keyboardEventOccurred);
 
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 
-		pcl::copyPointCloud(*sceneRemote, *cloud);
-		if (!viewer->updatePointCloud(cloud, "remote")) {
-			viewer->addPointCloud(cloud, "remote");
-		}
-		pcl::copyPointCloud(*result, *cloud);
+		cloud = grabber.getPointCloud();
+		PointCloudProcess::pointCloud2PCNormal(sceneLocal, cloud);
+		pcl::transformPointCloud(*sceneRemote, *transformedRemote, transformation);
+		PointCloudProcess::merge2PointClouds(mergeScene, sceneLocal, transformedRemote);
+
+		pcl::copyPointCloud(*mergeScene, *cloud);
 		if (!viewer->updatePointCloud(cloud, "result")) {
 			viewer->addPointCloud(cloud, "result");
 		}
