@@ -6,7 +6,7 @@
 #include "pcl/registration/ia_ransac.h"
 #include "pcl/features/shot_omp.h"
 
-class SceneRegistration : public pcl::registration::TransformationEstimationSVD<pcl::PointXYZ, pcl::PointXYZ, float> {
+class SceneRegistration : public pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB, float> {
 public:
 	SceneRegistration();
 	~SceneRegistration();
