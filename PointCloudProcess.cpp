@@ -52,8 +52,6 @@ void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
 
 void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud1, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud2)
 {
-	// 30 ms for closed point clouds; 200 ms for others
-
 	const float NEIGHBOR_THRESHOLD_2 = 0.005 * 0.005;
 
 	if (cloud1->size() == 0 || cloud2->size() == 0) {
@@ -69,6 +67,7 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 	points1_device.upload(points1.points);
 	pcl::gpu::Octree::PointCloud points2_device;
 	points2_device.upload(points2.points);
+
 
 	pcl::gpu::Octree octree;
 	pcl::gpu::NeighborIndices indices_device;
@@ -113,9 +112,9 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			point.x = (points1[i].x + points2[j].x) / 2;
 			point.y = (points1[i].y + points2[j].y) / 2;
 			point.z = (points1[i].z + points2[j].z) / 2;
-			point.r = ((UINT16)cloud1->points[i].r + cloud2->points[j].r) / 2;
-			point.g = ((UINT16)cloud1->points[i].g + cloud2->points[j].g) / 2;
-			point.b = ((UINT16)cloud1->points[i].b + cloud2->points[j].b) / 2;
+			point.r = ((UINT16)cloud1->points[i].r + cloud2->points[j].r) >> 1;
+			point.g = ((UINT16)cloud1->points[i].g + cloud2->points[j].g) >> 1;
+			point.b = ((UINT16)cloud1->points[i].b + cloud2->points[j].b) >> 1;
 			point.normal_x = (cloud1->points[i].normal_x + cloud2->points[j].normal_x) / 2;
 			point.normal_y = (cloud1->points[i].normal_y + cloud2->points[j].normal_y) / 2;
 			point.normal_z = (cloud1->points[i].normal_z + cloud2->points[j].normal_z) / 2;
@@ -216,7 +215,7 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 	}
 }
 
-float PointCloudProcess::squaredDistance(pcl::PointXYZ & pt1, pcl::PointXYZ & pt2)
+inline float PointCloudProcess::squaredDistance(const pcl::PointXYZ& pt1, const pcl::PointXYZ& pt2)
 {
 	return (pt1.x - pt2.x) * (pt1.x - pt2.x) + (pt1.y - pt2.y) * (pt1.y - pt2.y) + (pt1.z - pt2.z) * (pt1.z - pt2.z);
 }

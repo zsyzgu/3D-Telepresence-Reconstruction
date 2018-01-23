@@ -7,7 +7,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/compression/octree_pointcloud_compression.h>
 
-//#define CREATE_EXE
+#define CREATE_EXE
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 pcl::Kinect2Grabber* grabber;
@@ -42,11 +42,22 @@ void update() {
 	viewer->spinOnce();
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-	cloud = grabber->getPointCloud();
-	PointCloudProcess::pointCloud2PCNormal(sceneLocal, cloud);
 	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
-	pcl::transformPointCloud(*sceneRemote, *transformedRemote, transformation);
 	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr mergeScene(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+
+	#pragma omp parallel sections
+	{
+		#pragma	omp section
+		{
+			cloud = grabber->getPointCloud();
+			PointCloudProcess::pointCloud2PCNormal(sceneLocal, cloud);
+		}
+		#pragma	omp section
+		{
+			pcl::transformPointCloud(*sceneRemote, *transformedRemote, transformation);
+		}
+	}
+
 	PointCloudProcess::merge2PointClouds(mergeScene, sceneLocal, transformedRemote);
 
 	pcl::copyPointCloud(*mergeScene, *cloud);	
@@ -61,11 +72,7 @@ int main(int argc, char *argv[]) {
 	start();
 
 	while (!viewer->wasStopped()) {
-		Timer timer;
-
 		update();
-
-		timer.outputTime();
 	}
 
 	return 0;
