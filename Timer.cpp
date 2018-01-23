@@ -7,6 +7,7 @@ Timer::Timer()
 	LARGE_INTEGER freq;
 	QueryPerformanceFrequency(&freq);
 	this->nFreq = freq.QuadPart;
+	reset();
 }
 
 Timer::~Timer()

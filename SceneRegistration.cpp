@@ -16,7 +16,6 @@ SceneRegistration::~SceneRegistration() {
 Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr target)
 {
 	Timer timer;
-	timer.reset();
 
 	std::cout << "=== Registration ===" << std::endl;
 	Eigen::Matrix4f transformation;
