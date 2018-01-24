@@ -12,6 +12,7 @@ public:
 	static void pointCloud2Mesh(pcl::PolygonMesh::Ptr mesh, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud);
 	static void pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr pcNormal, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud);
 	static inline float squaredDistance(const pcl::PointXYZ& pt1, const pcl::PointXYZ& pt2);
+	static inline bool checkMerge(const pcl::PointXYZRGBNormal& pt1, const pcl::PointXYZRGBNormal& pt2);
 };
 
 #endif

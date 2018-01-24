@@ -16,6 +16,7 @@
 #include <pcl/console/parse.h>
 #include <pcl/gpu/features/features.hpp>
 #include <pcl/surface/gp3.h>
+#include <pcl/gpu/utils/safe_call.hpp>ss
 #include "Timer.h"
 
 void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
@@ -52,38 +53,61 @@ void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
 
 void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud1, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud2)
 {
-	const float NEIGHBOR_THRESHOLD_2 = 0.005 * 0.005;
-
 	if (cloud1->size() == 0 || cloud2->size() == 0) {
 		return;
 	}
 
 	pcl::PointCloud<pcl::PointXYZ> points1;
 	pcl::PointCloud<pcl::PointXYZ> points2;
-	pcl::copyPointCloud(*cloud1, points1);
-	pcl::copyPointCloud(*cloud2, points2);
+	#pragma omp parallel sections
+	{
+		#pragma omp section
+		{
+			pcl::copyPointCloud(*cloud1, points1);
+		}
+		#pragma omp section
+		{
+			pcl::copyPointCloud(*cloud2, points2);
+		}
+	}
 
-	pcl::gpu::Octree::PointCloud points1_device;
-	points1_device.upload(points1.points);
-	pcl::gpu::Octree::PointCloud points2_device;
-	points2_device.upload(points2.points);
-
-
-	pcl::gpu::Octree octree;
-	pcl::gpu::NeighborIndices indices_device;
-	octree.setCloud(points2_device);
-	octree.build();
-	octree.approxNearestSearch(points1_device, indices_device);
 	std::vector<int> indices1;
-	indices_device.data.download(indices1);
-
-	octree.setCloud(points1_device);
-	octree.build();
-	octree.approxNearestSearch(points2_device, indices_device);
 	std::vector<int> indices2;
-	indices_device.data.download(indices2);
+	#pragma omp parallel sections
+	{
+		#pragma omp section
+		{
+			cudaSetDevice(0);
+			pcl::gpu::Octree::PointCloud points1_device;
+			pcl::gpu::Octree::PointCloud points2_device;
+			points1_device.upload(points1.points);
+			points2_device.upload(points2.points);
 
-	// correct approx indices
+			pcl::gpu::Octree octree;
+			pcl::gpu::NeighborIndices indices_device;
+			octree.setCloud(points2_device);
+			octree.build();
+			octree.approxNearestSearch(points1_device, indices_device);
+			indices_device.data.download(indices1);
+		}
+		#pragma omp section
+		{
+			cudaSetDevice(1);
+			pcl::gpu::Octree::PointCloud points1_device;
+			pcl::gpu::Octree::PointCloud points2_device;
+			points1_device.upload(points1.points);
+			points2_device.upload(points2.points);
+
+			pcl::gpu::Octree octree;
+			pcl::gpu::NeighborIndices indices_device;
+			octree.setCloud(points1_device);
+			octree.build();
+			octree.approxNearestSearch(points2_device, indices_device);
+			indices_device.data.download(indices2);
+		}
+	}
+	cudaSetDevice(1);
+
 #pragma omp parallel for
 	for (int i = 0; i < cloud1->size(); i++) {
 		int j = indices1[i];
@@ -93,6 +117,7 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			}
 		}
 	}
+
 #pragma omp parallel for
 	for (int j = 0; j < cloud2->size(); j++) {
 		int i = indices2[j];
@@ -107,18 +132,17 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 #pragma omp parallel for
 	for (int i = 0; i < cloud1->size(); i++) {
 		int j = indices1[i];
-		if (indices2[j] == i && squaredDistance(points1[i], points2[j]) < NEIGHBOR_THRESHOLD_2) {
-			pcl::PointXYZRGBNormal point;
-			point.x = (points1[i].x + points2[j].x) / 2;
-			point.y = (points1[i].y + points2[j].y) / 2;
-			point.z = (points1[i].z + points2[j].z) / 2;
-			point.r = ((UINT16)cloud1->points[i].r + cloud2->points[j].r) >> 1;
-			point.g = ((UINT16)cloud1->points[i].g + cloud2->points[j].g) >> 1;
-			point.b = ((UINT16)cloud1->points[i].b + cloud2->points[j].b) >> 1;
-			point.normal_x = (cloud1->points[i].normal_x + cloud2->points[j].normal_x) / 2;
-			point.normal_y = (cloud1->points[i].normal_y + cloud2->points[j].normal_y) / 2;
-			point.normal_z = (cloud1->points[i].normal_z + cloud2->points[j].normal_z) / 2;
-			cloud->points[i] = point;
+		if (indices2[j] == i && checkMerge(cloud1->points[i], cloud2->points[j])) {
+			pcl::PointXYZRGBNormal* pt = &cloud->points[i];
+			pt->x = (points1[i].x + points2[j].x) / 2;
+			pt->y = (points1[i].y + points2[j].y) / 2;
+			pt->z = (points1[i].z + points2[j].z) / 2;
+			pt->r = ((UINT16)cloud1->points[i].r + cloud2->points[j].r) >> 1;
+			pt->g = ((UINT16)cloud1->points[i].g + cloud2->points[j].g) >> 1;
+			pt->b = ((UINT16)cloud1->points[i].b + cloud2->points[j].b) >> 1;
+			pt->normal_x = (cloud1->points[i].normal_x + cloud2->points[j].normal_x) / 2;
+			pt->normal_y = (cloud1->points[i].normal_y + cloud2->points[j].normal_y) / 2;
+			pt->normal_z = (cloud1->points[i].normal_z + cloud2->points[j].normal_z) / 2;
 		} else {
 			cloud->points[i] = cloud1->points[i];
 		}
@@ -126,7 +150,9 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 	pcl::PointXYZRGBNormal* pt = &cloud->points[cloud1->size()];
 	for (int j = 0; j < cloud2->size(); j++) {
 		int i = indices2[j];
-		if (indices1[i] != j) {
+		if (indices1[i] == j && checkMerge(cloud1->points[i], cloud2->points[j])) {
+			
+		} else {
 			*pt = cloud2->points[j];
 			pt++;
 		}
@@ -218,4 +244,23 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 inline float PointCloudProcess::squaredDistance(const pcl::PointXYZ& pt1, const pcl::PointXYZ& pt2)
 {
 	return (pt1.x - pt2.x) * (pt1.x - pt2.x) + (pt1.y - pt2.y) * (pt1.y - pt2.y) + (pt1.z - pt2.z) * (pt1.z - pt2.z);
+}
+
+inline bool PointCloudProcess::checkMerge(const pcl::PointXYZRGBNormal & pt1, const pcl::PointXYZRGBNormal & pt2)
+{
+	const float MERGE_DIST = 0.005;
+	const float MERGE_DOT = 0.8;
+
+	float dot = pt1.normal_x * pt2.normal_x + pt1.normal_y * pt2.normal_y + pt1.normal_z * pt2.normal_z;
+	if (dot < MERGE_DOT) {
+		return false;
+	}
+
+	float normal_x = (pt1.normal_x + pt2.normal_x) / 2;
+	float normal_y = (pt1.normal_y + pt2.normal_y) / 2;
+	float normal_z = (pt1.normal_z + pt2.normal_z) / 2;
+
+	float d = (pt1.x - pt2.x) * normal_x + (pt1.y - pt2.y) * normal_y + (pt1.z - pt2.z) * normal_z;
+
+	return -MERGE_DIST <= d && d <= MERGE_DIST;
 }
