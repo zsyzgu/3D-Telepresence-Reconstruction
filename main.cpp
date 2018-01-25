@@ -8,7 +8,7 @@
 #include <pcl/compression/octree_pointcloud_compression.h>
 #include <pcl/gpu/utils/safe_call.hpp>
 
-//#define CREATE_EXE
+#define CREATE_EXE
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 pcl::Kinect2Grabber* grabber;
@@ -61,9 +61,7 @@ void update() {
 		}
 	}
 
-	Timer timer;
 	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
-	timer.outputTime();
 }
 
 #ifdef CREATE_EXE
@@ -74,7 +72,9 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
+		Timer timer;
 		update();
+		timer.outputTime();
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 		pcl::copyPointCloud(*sceneMerged, *viewCloud);

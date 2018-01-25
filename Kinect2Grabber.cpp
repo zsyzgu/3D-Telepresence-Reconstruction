@@ -130,35 +130,26 @@ namespace pcl
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr Kinect2Grabber::getPointCloud()
 	{
-		UINT16* depthData = &depthBuffer[0];
-		float* depthFloat = new float[H * W];
+		IDepthFrame* depthFrame = nullptr;
+		depthReader->AcquireLatestFrame(&depthFrame);
+		depthFrame->CopyFrameDataToArray(depthBuffer.size(), &depthBuffer[0]);
+		SafeRelease(depthFrame);
 
-		//#pragma omp parallel sections
-		{
-			//#pragma omp section
-			{
-				IDepthFrame* depthFrame = nullptr;
-				depthReader->AcquireLatestFrame(&depthFrame);
-				depthFrame->CopyFrameDataToArray(depthBuffer.size(), &depthBuffer[0]);
-				SafeRelease(depthFrame);
-				spatialFiltering(depthData);
-				temporalFiltering(depthData);
-				bilateralFiltering(depthData, depthFloat);
-			}
-			//#pragma omp section
-			{
-				IColorFrame* colorFrame = nullptr;
-				colorReader->AcquireLatestFrame(&colorFrame);
-				colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
-				SafeRelease(colorFrame);
-			}
-		}
+		IColorFrame* colorFrame = nullptr;
+		colorReader->AcquireLatestFrame(&colorFrame);
+		colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
+		SafeRelease(colorFrame);
 
-		return convertRGBDepthToPointXYZRGB(&colorBuffer[0], depthData, depthFloat);
+		return convertRGBDepthToPointXYZRGB(&colorBuffer[0], &depthBuffer[0]);
 	}
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorData, UINT16* depthData, float* depthFloat)
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorData, UINT16* depthData)
 	{
+		spatialFiltering(depthData);
+		temporalFiltering(depthData);
+		float* depthFloat = new float[H * W];
+		bilateralFiltering(depthData, depthFloat);
+
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 
 		cloud->width = static_cast<uint32_t>(W);

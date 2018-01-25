@@ -53,6 +53,8 @@ void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
 
 void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud1, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr cloud2)
 {
+	const int RADIUS_NEIGHBOR = 20;
+
 	if (cloud1->size() == 0 || cloud2->size() == 0) {
 		return;
 	}
@@ -71,8 +73,8 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 		}
 	}
 
-	std::vector<int> indices1;
-	std::vector<int> indices2;
+	std::vector<int> neighbors1;
+	std::vector<int> neighbors2;
 	#pragma omp parallel sections
 	{
 		#pragma omp section
@@ -84,11 +86,15 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			points2_device.upload(points2.points);
 
 			pcl::gpu::Octree octree;
-			pcl::gpu::NeighborIndices indices_device;
 			octree.setCloud(points2_device);
 			octree.build();
-			octree.approxNearestSearch(points1_device, indices_device);
-			indices_device.data.download(indices1);
+
+			pcl::gpu::NeighborIndices neighbors_device;
+			octree.radiusSearch(points1_device, 0.005f, RADIUS_NEIGHBOR, neighbors_device);
+			neighbors_device.data.download(neighbors1);
+
+
+
 		}
 		#pragma omp section
 		{
@@ -99,37 +105,50 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			points2_device.upload(points2.points);
 
 			pcl::gpu::Octree octree;
-			pcl::gpu::NeighborIndices indices_device;
 			octree.setCloud(points1_device);
 			octree.build();
-			octree.approxNearestSearch(points2_device, indices_device);
-			indices_device.data.download(indices2);
+
+			pcl::gpu::NeighborIndices neighbors_device;
+			octree.radiusSearch(points2_device, 0.005f, RADIUS_NEIGHBOR, neighbors_device);
+			neighbors_device.data.download(neighbors2);
 		}
 	}
 	cudaSetDevice(1);
 
-#pragma omp parallel for schedule(static, 500)
-	for (int i = 0; i < cloud1->size(); i++) {
-		int j = indices1[i];
-		if (indices2[j] != i) {
-			if (squaredDistance(points1[i], points2[j]) < squaredDistance(points1[indices2[j]], points2[j])) {
+	std::vector<int> indices1(points1.size());
+	std::vector<int> indices2(points2.size());
+#pragma omp parallel for schedule(dynamic, 500)
+	for (int i = 0; i < points1.size(); i++) {
+		float minDist2 = 1e10;
+		for (int k = 0; k < RADIUS_NEIGHBOR; k++) {
+			int j = neighbors1[i * RADIUS_NEIGHBOR + k];
+			if (j == 0) {
+				break;
+			}
+			float dist2 = squaredDistance(points1[i], points2[j]);
+			if (dist2 < minDist2) {
+				minDist2 = dist2;
+				indices1[i] = j;
+			}
+		}
+	}
+#pragma omp parallel for schedule(dynamic, 500)
+	for (int j = 0; j < points2.size(); j++) {
+		float minDist2 = 1e10;
+		for (int k = 0; k < RADIUS_NEIGHBOR; k++) {
+			int i = neighbors2[j * RADIUS_NEIGHBOR + k];
+			if (i == 0) {
+				break;
+			}
+			float dist2 = squaredDistance(points1[i], points2[j]);
+			if (dist2 < minDist2) {
+				minDist2 = dist2;
 				indices2[j] = i;
 			}
 		}
 	}
 
-#pragma omp parallel for schedule(static, 500)
-	for (int j = 0; j < cloud2->size(); j++) {
-		int i = indices2[j];
-		if (indices1[i] != j) {
-			if (squaredDistance(points1[i], points2[j]) < squaredDistance(points1[i], points2[indices1[i]])) {
-				indices1[i] = j;
-			}
-		}
-	}
-
 	cloud->resize(cloud1->size() + cloud2->size());
-
 #pragma omp parallel for
 	for (int i = 0; i < cloud1->size(); i++) {
 		int j = indices1[i];
