@@ -108,7 +108,7 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 	}
 	cudaSetDevice(1);
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(static, 500)
 	for (int i = 0; i < cloud1->size(); i++) {
 		int j = indices1[i];
 		if (indices2[j] != i) {
@@ -118,7 +118,7 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 		}
 	}
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(static, 500)
 	for (int j = 0; j < cloud2->size(); j++) {
 		int i = indices2[j];
 		if (indices1[i] != j) {
@@ -129,6 +129,7 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 	}
 
 	cloud->resize(cloud1->size() + cloud2->size());
+
 #pragma omp parallel for
 	for (int i = 0; i < cloud1->size(); i++) {
 		int j = indices1[i];
@@ -233,7 +234,6 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 	std::vector<pcl::PointXYZ> downloaded;
 	normals_device.download(downloaded);
 	
-#pragma omp parallel for
 	for (int i = 0; i < downloaded.size(); i++) {
 		pcNormal->points[i].normal_x = downloaded[i].x;
 		pcNormal->points[i].normal_y = downloaded[i].y;

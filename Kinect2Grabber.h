@@ -34,7 +34,7 @@ namespace pcl
 
 	protected:
 		void start();
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthBuffer);
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthData, float* depthFloat);
 		void spatialFiltering(UINT16* depthData);
 		void temporalFiltering(UINT16* depthData);
 		void bilateralFiltering(UINT16* depthData, float* depth);
@@ -54,6 +54,7 @@ namespace pcl
 		int W; //Width & Height of depth image
 		int H;
 		std::vector<UINT16> depthBuffer;
+		std::vector<float> depthBufferFloat;
 	};
 }
 

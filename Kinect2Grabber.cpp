@@ -130,41 +130,35 @@ namespace pcl
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr Kinect2Grabber::getPointCloud()
 	{
-		IColorFrame* colorFrame = nullptr;
-		result = colorReader->AcquireLatestFrame(&colorFrame);
-		if (SUCCEEDED(result)) {
-			// Retrieved Color Data
-			result = colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
-			if (FAILED(result)) {
-				throw std::exception("Exception : IColorFrame::CopyConvertedFrameDataToArray()");
+		UINT16* depthData = &depthBuffer[0];
+		float* depthFloat = new float[H * W];
+
+		//#pragma omp parallel sections
+		{
+			//#pragma omp section
+			{
+				IDepthFrame* depthFrame = nullptr;
+				depthReader->AcquireLatestFrame(&depthFrame);
+				depthFrame->CopyFrameDataToArray(depthBuffer.size(), &depthBuffer[0]);
+				SafeRelease(depthFrame);
+				spatialFiltering(depthData);
+				temporalFiltering(depthData);
+				bilateralFiltering(depthData, depthFloat);
+			}
+			//#pragma omp section
+			{
+				IColorFrame* colorFrame = nullptr;
+				colorReader->AcquireLatestFrame(&colorFrame);
+				colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
+				SafeRelease(colorFrame);
 			}
 		}
-		SafeRelease(colorFrame);
 
-		// Acquire Latest Depth Frame
-		IDepthFrame* depthFrame = nullptr;
-		result = depthReader->AcquireLatestFrame(&depthFrame);
-		if (SUCCEEDED(result)) {
-			// Retrieved Depth Data
-			result = depthFrame->CopyFrameDataToArray(depthBuffer.size(), &depthBuffer[0]);
-			if (FAILED(result)) {
-				throw std::exception("Exception : IDepthFrame::CopyFrameDataToArray()");
-			}
-		}
-		SafeRelease(depthFrame);
-
-		return convertRGBDepthToPointXYZRGB(&colorBuffer[0], &depthBuffer[0]);
+		return convertRGBDepthToPointXYZRGB(&colorBuffer[0], depthData, depthFloat);
 	}
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorData, UINT16* depthData)
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorData, UINT16* depthData, float* depthFloat)
 	{
-		// 7.3 ms
-
-		spatialFiltering(depthData);
-		temporalFiltering(depthData);
-		float* depthFloat = new float[H * W];
-		bilateralFiltering(depthData, depthFloat);
-
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 
 		cloud->width = static_cast<uint32_t>(W);
@@ -180,7 +174,7 @@ namespace pcl
 		ColorSpacePoint* depthToColorSpaceTable = new ColorSpacePoint[W * H];
 		mapper->MapDepthFrameToColorSpace(W * H, depthData, W * H, depthToColorSpaceTable);
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic, 1)
 		for (int y = 0; y < H; y++) {
 			int id = y * W;
 			pcl::PointXYZRGB* pt = &cloud->points[id];
@@ -224,8 +218,8 @@ namespace pcl
 		static UINT16 rawDepth[n];
 
 		memcpy(rawDepth, depth, n * sizeof(UINT16));
-
-#pragma omp parallel for
+		
+#pragma omp parallel for schedule(dynamic, 1)
 		for (int y = 0; y < H; y++) {
 			for (int x = 0; x < W; x++) {
 				int index = y * W + x;
@@ -268,7 +262,7 @@ namespace pcl
 
 		memcpy(depthQueue[t], depth, n * sizeof(UINT16));
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic, 1)
 		for (int y = 0; y < H; y++) {
 			for (int x = 0; x < W; x++) {
 				int index = y * W + x;

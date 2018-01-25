@@ -23,12 +23,6 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	}
 }
 
-void startViewer() {
-	viewer = boost::shared_ptr<pcl::visualization::PCLVisualizer>(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
-	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
-	viewer->registerKeyboardCallback(keyboardEventOccurred);
-}
-
 void start() {
 	cudaSetDevice(1);
 	omp_set_num_threads(4);
@@ -43,24 +37,33 @@ void start() {
 	pcl::io::loadPCDFile("view_local.pcd", *sceneLocal);
 }
 
+void startViewer() {
+	viewer = boost::shared_ptr<pcl::visualization::PCLVisualizer>(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
+	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
+	viewer->registerKeyboardCallback(keyboardEventOccurred);
+}
+
 void update() {
 	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
 
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr kinectCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+	kinectCloud = grabber->getPointCloud();
+
 	#pragma omp parallel sections
 	{
-		#pragma	omp section
+		#pragma omp section
 		{
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr kinectCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-			kinectCloud = grabber->getPointCloud();
 			PointCloudProcess::pointCloud2PCNormal(sceneLocal, kinectCloud);
 		}
-		#pragma	omp section
+		#pragma omp section
 		{
 			pcl::transformPointCloud(*sceneRemote, *transformedRemote, transformation);
 		}
 	}
 
+	Timer timer;
 	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
+	timer.outputTime();
 }
 
 #ifdef CREATE_EXE
