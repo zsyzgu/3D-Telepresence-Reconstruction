@@ -31,8 +31,11 @@ namespace pcl
 		~Kinect2Grabber() throw ();
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
+		void updateBackground();
 
 	protected:
+		void loadBackground();
+		void calnForegroundMask(UINT16* depthData);
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthData);
 		void spatialFiltering(UINT16* depthData);
 		void temporalFiltering(UINT16* depthData);
@@ -53,7 +56,9 @@ namespace pcl
 		int W; //Width & Height of depth image
 		int H;
 		std::vector<UINT16> depthBuffer;
-		std::vector<float> depthBufferFloat;
+
+		UINT16* background;
+		bool* foregroundMask;
 	};
 }
 

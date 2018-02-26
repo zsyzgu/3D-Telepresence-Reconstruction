@@ -108,6 +108,10 @@ namespace pcl
 		if (FAILED(result)) {
 			throw std::exception("Exception : IDepthFrameSource::OpenReader()");
 		}
+
+		background = new UINT16[H * W];
+		foregroundMask = new bool[H * W];
+		loadBackground();
 	}
 
 	pcl::Kinect2Grabber::~Kinect2Grabber() throw()
@@ -121,6 +125,41 @@ namespace pcl
 		SafeRelease(colorReader);
 		SafeRelease(depthSource);
 		SafeRelease(depthReader);
+		delete[] background;
+		delete[] foregroundMask;
+	}
+
+	void pcl::Kinect2Grabber::loadBackground() {
+		FILE* fin = fopen("background.depth", "r");
+		if (fin != NULL) {
+			int i = 0;
+			while (!feof(fin) && i < H * W) {
+				fscanf(fin, "%d", &background[i++]);
+			}
+
+		}
+	}
+
+	void pcl::Kinect2Grabber::updateBackground() {
+		FILE* fout = fopen("background.depth", "w");
+		if (fout != NULL) {
+			for (int i = 0; i < H * W; i++) {
+				background[i] = depthBuffer[i];
+				fprintf(fout, "%d\n", background[i]);
+			}
+		}
+	}
+
+	void pcl::Kinect2Grabber::calnForegroundMask(UINT16* depthData) {
+		static const int THRESHOLD = 5; // unit = mm
+#pragma omp parallel for schedule(static, 500)
+		for (int i = 0; i < H * W; i++) {
+			if (background[i] != 0 && abs(depthData[i] - background[i]) < THRESHOLD * 10) {
+				foregroundMask[i] = false;
+			} else {
+				foregroundMask[i] = true;
+			}
+		}
 	}
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr Kinect2Grabber::getPointCloud()
@@ -143,6 +182,7 @@ namespace pcl
 		spatialFiltering(depthData);
 		temporalFiltering(depthData);
 		bilateralFiltering(depthData); //We change the unit from 1mm to 0.1mm here
+		calnForegroundMask(depthData);
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 
@@ -172,7 +212,7 @@ namespace pcl
 			for (int x = 0; x < W; x++, pt++, id++) {
 				DepthSpacePoint depthSpacePoint = { static_cast<float>(x), static_cast<float>(y) };
 				float depth = depthData[id] * 0.1f;
-				if (depth != 0) {
+				if (depth != 0 && foregroundMask[id]) {
 					ColorSpacePoint colorSpacePoint = depthToColorSpaceTable[id];
 					int colorX = static_cast<int>(std::floor(colorSpacePoint.X));
 					int colorY = static_cast<int>(std::floor(colorSpacePoint.Y));

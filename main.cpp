@@ -22,6 +22,9 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 		transformation = SceneRegistration::align(sceneRemote, sceneLocal);
 	}
 	if (event.getKeySym() == "b" && event.keyDown()) {
+		grabber->updateBackground();
+	}
+	if (event.getKeySym() == "l" && event.keyDown()) {
 		pcl::io::savePCDFileASCII("view_remote.pcd", *sceneLocal);
 	}
 }
@@ -85,7 +88,7 @@ int main(int argc, char *argv[]) {
 				timer.outputTime(10);
 
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-				pcl::copyPointCloud(*sceneMerged, *viewCloud);
+				pcl::copyPointCloud(*sceneLocal, *viewCloud);
 				if (!viewer->updatePointCloud(viewCloud, "result")) {
 					viewer->addPointCloud(viewCloud, "result");
 				}

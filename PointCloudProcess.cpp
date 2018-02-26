@@ -112,6 +112,7 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 	}
 	cudaSetDevice(1);
 
+
 	std::vector<int> indices1(points1.size());
 	std::vector<int> indices2(points2.size());
 #pragma omp parallel for schedule(dynamic, 500)
@@ -119,7 +120,7 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 		float minDist2 = 1e10;
 		for (int k = 0; k < RADIUS_NEIGHBOR; k++) {
 			int j = neighbors1[i * RADIUS_NEIGHBOR + k];
-			if (j == 0) {
+			if (j == 0 || j >= points2.size()) {
 				break;
 			}
 			float dist2 = squaredDistance(points1[i], points2[j]);
@@ -129,12 +130,13 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			}
 		}
 	}
+
 #pragma omp parallel for schedule(dynamic, 500)
 	for (int j = 0; j < points2.size(); j++) {
 		float minDist2 = 1e10;
 		for (int k = 0; k < RADIUS_NEIGHBOR; k++) {
 			int i = neighbors2[j * RADIUS_NEIGHBOR + k];
-			if (i == 0) {
+			if (i == 0 || i >= points1.size()) {
 				break;
 			}
 			float dist2 = squaredDistance(points1[i], points2[j]);
@@ -144,6 +146,7 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			}
 		}
 	}
+
 
 	cloud->resize(cloud1->size() + cloud2->size());
 #pragma omp parallel for
