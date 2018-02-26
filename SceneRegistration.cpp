@@ -33,7 +33,7 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	pcl::PointCloud<pcl::PointWithScale>::Ptr sourceKeypointsScale(new pcl::PointCloud<pcl::PointWithScale>());
 	pcl::PointCloud<pcl::PointWithScale>::Ptr targetKeypointsScale(new pcl::PointCloud<pcl::PointWithScale>());
 	pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointWithScale> siftDetect;
-	siftDetect.setScales(0.002, 5, 6);
+	siftDetect.setScales(0.002, 6, 6);
 	siftDetect.setMinimumContrast(0.8);
 	siftDetect.setInputCloud(sourcePoints);
 	siftDetect.compute(*sourceKeypointsScale);
@@ -48,7 +48,7 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 	pcl::PointCloud<pcl::SHOT1344>::Ptr sourceDescr(new pcl::PointCloud<pcl::SHOT1344>());
 	pcl::PointCloud<pcl::SHOT1344>::Ptr targetDescr(new pcl::PointCloud<pcl::SHOT1344>());
 	pcl::SHOTColorEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::SHOT1344> descrEst;
-	descrEst.setRadiusSearch(0.05);
+	descrEst.setRadiusSearch(0.04);
 	descrEst.setInputCloud(sourceKeypoints);
 	descrEst.setSearchSurface(sourcePoints);
 	descrEst.setInputNormals(sourceNormals);
@@ -73,7 +73,7 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 			std::vector<float> sqrDist(2);
 			int found = kdTree.nearestKSearch(sourceDescr->points[i], 2, targetIndex, sqrDist);
 
-			if (found == 2 && sqrDist[0] / sqrDist[1] < 0.64 && sqrDist[0] < 0.25) {
+			if (found == 2 && sqrDist[0] / sqrDist[1] < 0.8 && sqrDist[0] < 0.25) {
 				corrs->push_back(pcl::Correspondence(i, targetIndex[0], sqrDist[0]));
 			}
 		} catch (bool) {
@@ -104,12 +104,9 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 		sum += sqrt((pt1->x - pt2->x) * (pt1->x - pt2->x) + (pt1->y - pt2->y) * (pt1->y - pt2->y) + (pt1->z - pt2->z) * (pt1->z - pt2->z));
 	}
 	std::cout << "Average Distance = " << sum / corrs->size() << std::endl;
-
-	return transformation;
-
-	/*
+	
 	// Visualization
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedSource(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	/*pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedSource(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
 	pcl::transformPointCloud(*source, *transformedSource, transformation);
 	pcl::transformPointCloud(*sourceKeypoints, *sourceKeypoints, transformation);
 
@@ -151,6 +148,8 @@ Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>
 			viewer->addLine<pcl::PointXYZRGB, pcl::PointXYZRGB>(sourceKeypoints->points[(*corrs)[i].index_query], targetKeypoints->points[(*corrs)[i].index_match], 200, 200, 0, "line" + i);
 		}
 	}*/
+
+	return transformation;
 }
 
 /*

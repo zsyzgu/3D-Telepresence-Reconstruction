@@ -21,11 +21,15 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "r" && event.keyDown()) {
 		transformation = SceneRegistration::align(sceneRemote, sceneLocal);
 	}
+	if (event.getKeySym() == "b" && event.keyDown()) {
+		pcl::io::savePCDFileASCII("view_remote.pcd", *sceneLocal);
+	}
 }
 
 void start() {
 	cudaSetDevice(1);
 	omp_set_num_threads(4);
+	omp_set_nested(6);
 
 	grabber = new pcl::Kinect2Grabber();
 	sceneLocal = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
@@ -44,11 +48,10 @@ void startViewer() {
 }
 
 void update() {
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
-
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr kinectCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 	kinectCloud = grabber->getPointCloud();
 
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
 	#pragma omp parallel sections
 	{
 		#pragma omp section
@@ -69,17 +72,28 @@ int main(int argc, char *argv[]) {
 	start();
 	startViewer();
 
-	while (!viewer->wasStopped()) {
-		viewer->spinOnce();
+	#pragma omp parallel sections
+	{
+		#pragma omp section
+		{
+			Timer timer;
+			while (!viewer->wasStopped()) {
+				viewer->spinOnce();
 
-		Timer timer;
-		update();
-		timer.outputTime();
+				timer.reset();
+				update();
+				timer.outputTime(10);
 
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-		pcl::copyPointCloud(*sceneMerged, *viewCloud);
-		if (!viewer->updatePointCloud(viewCloud, "result")) {
-			viewer->addPointCloud(viewCloud, "result");
+				pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+				pcl::copyPointCloud(*sceneMerged, *viewCloud);
+				if (!viewer->updatePointCloud(viewCloud, "result")) {
+					viewer->addPointCloud(viewCloud, "result");
+				}
+			}
+		}
+		#pragma omp section
+		{
+			//Grabbing sceneRemote
 		}
 	}
 

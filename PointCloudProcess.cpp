@@ -92,9 +92,6 @@ void PointCloudProcess::merge2PointClouds(pcl::PointCloud<pcl::PointXYZRGBNormal
 			pcl::gpu::NeighborIndices neighbors_device;
 			octree.radiusSearch(points1_device, 0.005f, RADIUS_NEIGHBOR, neighbors_device);
 			neighbors_device.data.download(neighbors1);
-
-
-
 		}
 		#pragma omp section
 		{

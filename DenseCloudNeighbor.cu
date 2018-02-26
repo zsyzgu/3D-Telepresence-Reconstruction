@@ -3,11 +3,12 @@
 #include "device_functions.h"
 #include <Windows.h>
 #include <math.h>
+#include <vector>
 
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 256
 
-__global__ void kernelBilateralFiltering(UINT16* depth, UINT16* output, int H, int W) {
-	const int RADIUS = 9;
+__global__ void kernelDenseCloudNeighbor(UINT16* depth, float* output, int H, int W) {
+	/*const int RADIUS = 9;
 	const float SIGMA_D = 3;
 	const float SIGMA_I = 10;
 	const float SIGMA_D_C = 2 * SIGMA_D * SIGMA_D;
@@ -37,21 +38,39 @@ __global__ void kernelBilateralFiltering(UINT16* depth, UINT16* output, int H, i
 		}
 
 		if (val > 0) {
-			output[y * W + x] = (UINT16)(sum / val * 10);
+			output[y * W + x] = sum / val;
 		}
-	}
+	}*/
 }
 
 extern "C"
-void cudaBilateralFiltering(UINT16* depth) {
-	static const int H = 424;
+void cudaDenseCloudNeighbor(float* points1, float*  points2, std::vector<int>& output, float radius, int radiusNeighbor) {
+
+	
+	output.resize(points1.size());
+#pragma omp parallel for schedule(dynamic, 500)
+	for (int i = 0; i < points1.size(); i++) {
+		float minDist2 = 1e10;
+		for (int k = 0; k < radiusNeighbor; k++) {
+			int j = neighbors1[i * radiusNeighbor + k];
+			if (j == 0) {
+				break;
+			}
+			float dist2 = squaredDistance(points1[i], points2[j]);
+			if (dist2 < minDist2) {
+				minDist2 = dist2;
+				output[i] = j;
+			}
+		}
+	}
+	/*static const int H = 424;
 	static const int W = 512;
 	static const int n = H * W;
 
 	UINT16* d_depth;
-	UINT16* d_output;
+	float* d_output;
 	cudaMalloc(&d_depth, n * sizeof(UINT16));
-	cudaMalloc(&d_output, n * sizeof(UINT16));
+	cudaMalloc(&d_output, n * sizeof(float));
 
 	cudaMemcpy(d_depth, depth, n * sizeof(UINT16), cudaMemcpyHostToDevice);
 
@@ -59,8 +78,8 @@ void cudaBilateralFiltering(UINT16* depth) {
 	dim3 blockNum((W + BLOCK_SIZE - 1) / BLOCK_SIZE, (H + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernelBilateralFiltering << <blockNum, blockSize >> > (d_depth, d_output, H, W);
 
-	cudaMemcpy(depth, d_output, n * sizeof(UINT16), cudaMemcpyDeviceToHost);
+	cudaMemcpy(output, d_output, n * sizeof(float), cudaMemcpyDeviceToHost);
 
 	cudaFree(d_depth);
 	cudaFree(d_output);
-}
+}*/
