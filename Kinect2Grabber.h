@@ -35,11 +35,11 @@ namespace pcl
 
 	protected:
 		void loadBackground();
-		void calnForegroundMask(UINT16* depthData);
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer, UINT16* depthData);
-		void spatialFiltering(UINT16* depthData);
-		void temporalFiltering(UINT16* depthData);
-		void bilateralFiltering(UINT16* depthData);
+		void calnForegroundMask();
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer);
+		void spatialFiltering();
+		void temporalFiltering();
+		void bilateralFiltering();
 
 		HRESULT result;
 		IKinectSensor* sensor;
@@ -52,13 +52,14 @@ namespace pcl
 		int colorWidth;
 		int colorHeight;
 		std::vector<RGBQUAD> colorBuffer;
+		std::vector<UINT16> depthBuffer;
 
 		int W; //Width & Height of depth image
 		int H;
-		std::vector<UINT16> depthBuffer;
-
 		UINT16* background;
 		bool* foregroundMask;
+		UINT16* depthData;
+		RGBQUAD* colorData;
 	};
 }
 
