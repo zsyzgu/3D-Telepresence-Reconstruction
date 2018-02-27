@@ -166,13 +166,18 @@ namespace pcl
 	{
 		IDepthFrame* depthFrame = nullptr;
 		depthReader->AcquireLatestFrame(&depthFrame);
-		depthFrame->CopyFrameDataToArray(depthBuffer.size(), &depthBuffer[0]);
-		SafeRelease(depthFrame);
+		if (depthFrame != NULL) {
+			depthFrame->CopyFrameDataToArray(depthBuffer.size(), &depthBuffer[0]);
+			depthFrame->Release();
+		}
 
 		IColorFrame* colorFrame = nullptr;
 		colorReader->AcquireLatestFrame(&colorFrame);
-		colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
-		SafeRelease(colorFrame);
+
+		if (colorFrame != NULL) {
+			colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
+			colorFrame->Release();
+		}
 
 		return convertRGBDepthToPointXYZRGB(&colorBuffer[0], &depthBuffer[0]);
 	}

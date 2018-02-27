@@ -17,15 +17,27 @@ pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneLocal;
 pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote;
 pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneMerged;
 
+void registration() {
+	transformation = SceneRegistration::align(sceneRemote, sceneLocal);
+}
+
+void setBackground() {
+	grabber->updateBackground();
+}
+
+void saveSceneAsRemote() {
+	pcl::io::savePCDFileASCII("view_remote.pcd", *sceneLocal);
+}
+
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "r" && event.keyDown()) {
-		transformation = SceneRegistration::align(sceneRemote, sceneLocal);
+		registration();
 	}
 	if (event.getKeySym() == "b" && event.keyDown()) {
-		grabber->updateBackground();
+		setBackground();
 	}
-	if (event.getKeySym() == "l" && event.keyDown()) {
-		pcl::io::savePCDFileASCII("view_remote.pcd", *sceneLocal);
+	if (event.getKeySym() == "s" && event.keyDown()) {
+		saveSceneAsRemote();
 	}
 }
 
@@ -52,6 +64,7 @@ void startViewer() {
 
 void update() {
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr kinectCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+
 	kinectCloud = grabber->getPointCloud();
 
 	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
@@ -88,7 +101,7 @@ int main(int argc, char *argv[]) {
 				timer.outputTime(10);
 
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-				pcl::copyPointCloud(*sceneLocal, *viewCloud);
+				pcl::copyPointCloud(*sceneMerged, *viewCloud);
 				if (!viewer->updatePointCloud(viewCloud, "result")) {
 					viewer->addPointCloud(viewCloud, "result");
 				}
@@ -143,7 +156,11 @@ extern "C" {
 	}
 
 	__declspec(dllexport) void callRegistration() {
-		transformation = SceneRegistration::align(sceneRemote, sceneLocal);
+		registration();
+	}
+
+	__declspec(dllexport) void callSetBackground() {
+		setBackground();
 	}
 
 	__declspec(dllexport) void callStop() {
