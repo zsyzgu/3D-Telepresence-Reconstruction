@@ -215,8 +215,45 @@ void PointCloudProcess::pointCloud2Mesh(pcl::PolygonMesh::Ptr mesh, pcl::PointCl
 
 void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr pcNormal, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
-	// 15.5 ms
-	pcNormal->resize(cloud->size());
+	int N = 0;
+	int* index = new int[cloud->size()];
+	for (int i = 0, id = 0; i < cloud->size(); i++) {
+		if (cloud->points[i].x != 0 && pcl_isfinite(cloud->points[i].x)) {
+			index[i] = ++N;
+		} else {
+			index[i] = 0;
+		}
+	}
+
+	std::vector<int> neighbors(N * 25);
+	std::vector<int> sizes(N);
+	int H = cloud->height;
+	int W = cloud->width;
+#pragma omp parallel for schedule(dynamic, 1)
+	for (int y = 0; y < H; y++) {
+		for (int x = 0; x < W; x++) {
+			int id = y * W + x;
+			if (index[id] != 0) {
+				int cnt = 0;
+				for (int dx = -2; dx <= 2; dx++) {
+					for (int dy = -2; dy <= 2; dy++) {
+						int xSearch = x + dx;
+						int ySearch = y + dy;
+
+						if (0 <= xSearch && xSearch < W && 0 <= ySearch && ySearch < H) {
+							int searchIndex = ySearch * W + xSearch;
+							if (index[searchIndex] != 0) {
+								neighbors[(index[id] - 1) * 25 + (cnt++)] = index[searchIndex] - 1;
+							}
+						}
+					}
+				}
+				sizes[index[id] - 1] = cnt;
+			}
+		}
+	}
+
+	pcNormal->resize(N);
 	pcl::PointXYZRGB* pt = &cloud->points[0];
 	pcl::PointXYZRGBNormal* pt2 = &pcNormal->points[0];
 	for (int i = 0; i < cloud->size(); i++, pt++) {
@@ -230,7 +267,6 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 			pt2++;
 		}
 	}
-	pcNormal->resize(pt2 - &pcNormal->points[0]);
 	pcNormal->width = pcNormal->size();
 	pcNormal->height = 1;
 
@@ -243,22 +279,81 @@ void PointCloudProcess::pointCloud2PCNormal(pcl::PointCloud<pcl::PointXYZRGBNorm
 	pcl::copyPointCloud(*pcNormal, points);
 	cloud_device.upload(points.points);
 
-	pcl::gpu::NormalEstimation::Normals normals_device;
+	pcl::gpu::NeighborIndices neighbors_device;
+	neighbors_device.upload(neighbors, sizes, 25);
 
 	pcl::gpu::NormalEstimation ne_device;
-	ne_device.setInputCloud(cloud_device);
-	ne_device.setRadiusSearch(0.02, 20);
-	ne_device.compute(normals_device);
+	pcl::gpu::NormalEstimation::Normals normals_device;
+	ne_device.computeNormals(cloud_device, neighbors_device, normals_device);
 
 	std::vector<pcl::PointXYZ> downloaded;
 	normals_device.download(downloaded);
 	
 	for (int i = 0; i < downloaded.size(); i++) {
-		pcNormal->points[i].normal_x = downloaded[i].x;
-		pcNormal->points[i].normal_y = downloaded[i].y;
-		pcNormal->points[i].normal_z = downloaded[i].z;
+		//Make normals face to the camera (z < 0)
+		if (downloaded[i].z < 0) {
+			pcNormal->points[i].normal_x = downloaded[i].x;
+			pcNormal->points[i].normal_y = downloaded[i].y;
+			pcNormal->points[i].normal_z = downloaded[i].z;
+		} else {
+			pcNormal->points[i].normal_x = -downloaded[i].x;
+			pcNormal->points[i].normal_y = -downloaded[i].y;
+			pcNormal->points[i].normal_z = -downloaded[i].z;
+		}
 	}
+
+	delete[] index;
 }
+
+/* // Old Normal Estimation
+
+pcNormal->resize(cloud->size());
+pcl::PointXYZRGB* pt = &cloud->points[0];
+pcl::PointXYZRGBNormal* pt2 = &pcNormal->points[0];
+for (int i = 0; i < cloud->size(); i++, pt++) {
+if (pt->x != 0 && pcl_isfinite(pt->x)) {
+pt2->x = pt->x;
+pt2->y = pt->y;
+pt2->z = pt->z;
+pt2->r = pt->r;
+pt2->g = pt->g;
+pt2->b = pt->b;
+pt2++;
+}
+}
+pcNormal->resize(pt2 - &pcNormal->points[0]);
+pcNormal->width = pcNormal->size();
+pcNormal->height = 1;
+
+if (pcNormal->size() == 0) {
+return;
+}
+
+pcl::gpu::NormalEstimation::PointCloud cloud_device;
+pcl::PointCloud<pcl::PointXYZ> points;
+pcl::copyPointCloud(*pcNormal, points);
+cloud_device.upload(points.points);
+
+pcl::gpu::Octree octree;
+octree.setCloud(cloud_device);
+octree.build();
+pcl::gpu::NeighborIndices neighbors_device;
+octree.radiusSearch(cloud_device, 0.02f, 20, neighbors_device);
+
+pcl::gpu::NormalEstimation ne_device;
+pcl::gpu::NormalEstimation::Normals normals_device;
+ne_device.computeNormals(cloud_device, neighbors_device, normals_device);
+
+std::vector<pcl::PointXYZ> downloaded;
+normals_device.download(downloaded);
+
+for (int i = 0; i < downloaded.size(); i++) {
+pcNormal->points[i].normal_x = downloaded[i].x;
+pcNormal->points[i].normal_y = downloaded[i].y;
+pcNormal->points[i].normal_z = downloaded[i].z;
+}
+
+*/
 
 inline float PointCloudProcess::squaredDistance(const pcl::PointXYZ& pt1, const pcl::PointXYZ& pt2)
 {
@@ -271,13 +366,20 @@ inline bool PointCloudProcess::checkMerge(const pcl::PointXYZRGBNormal & pt1, co
 	const float MERGE_DOT = 0.8;
 
 	float dot = pt1.normal_x * pt2.normal_x + pt1.normal_y * pt2.normal_y + pt1.normal_z * pt2.normal_z;
-	if (dot < MERGE_DOT) {
+	float normal_x;
+	float normal_y;
+	float normal_z;
+	if (dot > MERGE_DOT) {
+		normal_x = (pt1.normal_x + pt2.normal_x) / 2;
+		normal_y = (pt1.normal_y + pt2.normal_y) / 2;
+		normal_z = (pt1.normal_z + pt2.normal_z) / 2;
+	} else if (dot < -MERGE_DOT) {
+		normal_x = (pt1.normal_x - pt2.normal_x) / 2;
+		normal_y = (pt1.normal_y - pt2.normal_y) / 2;
+		normal_z = (pt1.normal_z - pt2.normal_z) / 2;
+	} else {
 		return false;
 	}
-
-	float normal_x = (pt1.normal_x + pt2.normal_x) / 2;
-	float normal_y = (pt1.normal_y + pt2.normal_y) / 2;
-	float normal_z = (pt1.normal_z + pt2.normal_z) / 2;
 
 	float d = (pt1.x - pt2.x) * normal_x + (pt1.y - pt2.y) * normal_y + (pt1.z - pt2.z) * normal_z;
 
