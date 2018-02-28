@@ -105,11 +105,6 @@ int main(int argc, char *argv[]) {
 				if (!viewer->updatePointCloud(viewCloud, "result")) {
 					viewer->addPointCloud(viewCloud, "result");
 				}
-
-				/*viewer->removePointCloud("normal", 0);
-				if (sceneMerged->size() > 0) {
-					viewer->addPointCloudNormals<pcl::PointXYZRGBNormal>(sceneMerged, 20, 0.03, "normal");
-				}*/
 			}
 		}
 		#pragma omp section
@@ -166,6 +161,10 @@ extern "C" {
 
 	__declspec(dllexport) void callSetBackground() {
 		setBackground();
+	}
+
+	__declspec(dllexport) void callSaveSceneAsRemote() {
+		saveSceneAsRemote();
 	}
 
 	__declspec(dllexport) void callStop() {
