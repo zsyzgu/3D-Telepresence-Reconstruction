@@ -2,6 +2,8 @@
 #include "Timer.h"
 #include <pcl/filters/fast_bilateral_omp.h>
 #include <omp.h>
+#include<sstream>
+#include<string>
 
 extern "C"
 void cudaBilateralFiltering(UINT16* depthData);
@@ -139,7 +141,6 @@ namespace pcl
 			while (!feof(fin) && i < H * W) {
 				fscanf(fin, "%hd", &background[i++]);
 			}
-
 		}
 	}
 
@@ -150,6 +151,19 @@ namespace pcl
 				background[i] = depthBuffer[i];
 				fprintf(fout, "%hd\n", background[i]);
 			}
+		}
+	}
+
+	void Kinect2Grabber::outputRGBD()
+	{
+		static int id = 1000;
+		id++;
+		std::stringstream ss;
+		ss << id;
+		FILE* fout = fopen(("RGBD/" + ss.str() + ".txt").c_str(), "w");
+		fprintf(fout, "%d %d\n", H, W);
+		for (int i = 0; i < H * W; i++) {
+			fprintf(fout, "%hd %hd %hd %hd\n", depthData[i], colorData[i].rgbRed, colorData[i].rgbGreen, colorData[i].rgbBlue);
 		}
 	}
 
@@ -234,6 +248,7 @@ namespace pcl
 					colorData[id].rgbBlue = 0;
 					colorData[id].rgbGreen = 0;
 					colorData[id].rgbRed = 0;
+					depthData[id] = 0;
 				}
 			}
 		}

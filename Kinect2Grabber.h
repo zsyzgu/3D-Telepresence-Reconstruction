@@ -32,6 +32,7 @@ namespace pcl
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
 		void updateBackground();
+		void outputRGBD();
 
 	protected:
 		void loadBackground();

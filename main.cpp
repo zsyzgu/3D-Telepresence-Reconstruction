@@ -80,62 +80,12 @@ void update() {
 		}
 	}
 
-	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
+	//PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
 }
-
-
-#include <pcl/gpu/kinfu/tsdf_volume.h>
-#include <pcl/gpu/kinfu/marching_cubes.h>
-#include <pcl/gpu/kinfu/raycaster.h>
-#include <pcl/gpu/kinfu/kinfu.h>
-#include <pcl/gpu/kinfu_large_scale/device.h>
 
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
-	pcl::gpu::TsdfVolume volume(Eigen::Vector3i(512, 512, 512));
-
-	Timer timer;
-
-	volume.setSize(Eigen::Vector3f(1.0, 1.0, 1.0));
-	volume.setTsdfTruncDist(0.01);
-
-	/*
-	//raycasting depth image
-	pcl::gpu::RayCaster::Ptr rayCaster(new pcl::gpu::RayCaster(424, 512));
-	Eigen::Affine3f cameraPose;
-	cameraPose.setIdentity();
-	rayCaster->run(volume, cameraPose);*/
-
-	pcl::gpu::MarchingCubes marchingCubes;
-	pcl::gpu::DeviceArray<pcl::PointXYZ> tris_buffer_device;
-	pcl::gpu::DeviceArray<pcl::PointXYZ> tris_device = marchingCubes.run(volume, tris_buffer_device);
-
-	if (tris_device.empty()) {
-		//pcl::PolygonMesh();
-		return 0;
-	}
-
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-	cloud->width = tris_device.size();
-	cloud->height = 1;
-	cloud->header.frame_id = "zsyzgu?";
-	tris_device.download(cloud->points);
-
-	pcl::PolygonMesh mesh;
-	pcl::toPCLPointCloud2(*cloud, mesh.cloud);
-	mesh.polygons.resize(tris_device.size() / 3);
-	for (int i = 0; i < mesh.polygons.size(); i++) {
-		pcl::Vertices v;
-		v.vertices.push_back(i * 3 + 0);
-		v.vertices.push_back(i * 3 + 2);
-		v.vertices.push_back(i * 3 + 1);
-		mesh.polygons[i] = v;
-	}
-
-	timer.outputTime();
-
-	return 0;
-	/*start();
+	start();
 	startViewer();
 
 	#pragma omp parallel sections
@@ -151,7 +101,7 @@ int main(int argc, char *argv[]) {
 				timer.outputTime(10);
 
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-				pcl::copyPointCloud(*sceneMerged, *viewCloud);
+				pcl::copyPointCloud(*sceneLocal, *viewCloud);
 				if (!viewer->updatePointCloud(viewCloud, "result")) {
 					viewer->addPointCloud(viewCloud, "result");
 				}
@@ -163,7 +113,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	return 0;*/
+	return 0;
 }
 
 #else

@@ -5,8 +5,9 @@ project( pc-recog )
 set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "pc-recog" )
 
 # Find Packages
-find_package( KinectSDK2 REQUIRED )
 find_package( PCL 1.8 REQUIRED )
+set( KinectSDK2_FUSION TRUE )
+find_package( KinectSDK2 REQUIRED )
 find_package( CUDA REQUIRED )
 
 # Additional Include Directories
