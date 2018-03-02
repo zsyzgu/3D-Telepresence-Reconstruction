@@ -8,6 +8,7 @@
 #include <pcl/compression/octree_pointcloud_compression.h>
 #include <pcl/gpu/utils/safe_call.hpp>
 
+
 #define CREATE_EXE
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
@@ -80,7 +81,7 @@ void update() {
 		}
 	}
 
-	//PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
+	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
 }
 
 #ifdef CREATE_EXE

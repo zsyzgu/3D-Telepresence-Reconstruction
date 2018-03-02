@@ -111,7 +111,8 @@ namespace pcl
 			throw std::exception("Exception : IDepthFrameSource::OpenReader()");
 		}
 
-		background = new UINT16[H * W];
+		backgroundDepth = new UINT16[H * W];
+		backgroundColor = new RGBQUAD[H * W];
 		foregroundMask = new bool[H * W];
 		loadBackground();
 		depthData = &depthBuffer[0];
@@ -129,52 +130,49 @@ namespace pcl
 		SafeRelease(colorReader);
 		SafeRelease(depthSource);
 		SafeRelease(depthReader);
-		delete[] background;
+		delete[] backgroundDepth;
+		delete[] backgroundColor;
 		delete[] foregroundMask;
 		delete[] colorData;
 	}
 
 	void pcl::Kinect2Grabber::loadBackground() {
-		FILE* fin = fopen("background.depth", "r");
+		FILE* fin = fopen("background", "r");
 		if (fin != NULL) {
 			int i = 0;
 			while (!feof(fin) && i < H * W) {
-				fscanf(fin, "%hd", &background[i++]);
+				fscanf(fin, "%hd %hd %hd %hd", &backgroundDepth[i], &backgroundColor[i].rgbRed, &backgroundColor[i].rgbGreen, &backgroundColor[i].rgbBlue);
+				i++;
 			}
 		}
 	}
 
 	void pcl::Kinect2Grabber::updateBackground() {
-		FILE* fout = fopen("background.depth", "w");
+		FILE* fout = fopen("background", "w");
 		if (fout != NULL) {
 			for (int i = 0; i < H * W; i++) {
-				background[i] = depthBuffer[i];
-				fprintf(fout, "%hd\n", background[i]);
+				backgroundDepth[i] = depthData[i];
+				backgroundColor[i] = colorData[i];
+				fprintf(fout, "%hd %hd %hd %hd\n", backgroundDepth[i], backgroundColor[i].rgbRed, backgroundColor[i].rgbGreen, backgroundColor[i].rgbBlue);
 			}
 		}
 	}
 
-	void Kinect2Grabber::outputRGBD()
-	{
-		static int id = 1000;
-		id++;
-		std::stringstream ss;
-		ss << id;
-		FILE* fout = fopen(("RGBD/" + ss.str() + ".txt").c_str(), "w");
-		fprintf(fout, "%d %d\n", H, W);
-		for (int i = 0; i < H * W; i++) {
-			fprintf(fout, "%hd %hd %hd %hd\n", depthData[i], colorData[i].rgbRed, colorData[i].rgbGreen, colorData[i].rgbBlue);
-		}
-	}
-
 	void pcl::Kinect2Grabber::calnForegroundMask() {
-		static const int THRESHOLD = 5; // unit = mm
 #pragma omp parallel for schedule(static, 500)
 		for (int i = 0; i < H * W; i++) {
-			if (background[i] != 0 && abs(depthData[i] - background[i]) < THRESHOLD * 10) {
-				foregroundMask[i] = false;
-			} else {
+			if (backgroundDepth[i] == 0) {
 				foregroundMask[i] = true;
+			}
+			else {
+				int depthDiff = abs(depthData[i] - backgroundDepth[i]);
+				int colorDiff = abs(colorData[i].rgbRed - backgroundColor[i].rgbRed) + abs(colorData[i].rgbGreen - backgroundColor[i].rgbGreen) + abs(colorData[i].rgbBlue - backgroundColor[i].rgbBlue);
+				if (depthDiff + 5.0 * colorDiff / (3 * 255) >= 10) {
+					foregroundMask[i] = true;
+				}
+				else {
+					foregroundMask[i] = false;
+				}
 			}
 		}
 	}
@@ -203,7 +201,7 @@ namespace pcl
 	{
 		spatialFiltering();
 		temporalFiltering();
-		bilateralFiltering(); //We change the unit from 1mm to 0.1mm here
+		bilateralFiltering();
 		calnForegroundMask();
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
@@ -218,14 +216,8 @@ namespace pcl
 		PointF* depthToCameraSpaceTable = nullptr;
 		mapper->GetDepthFrameToCameraSpaceTable(&tableCount, &depthToCameraSpaceTable);
 
-		UINT16* depthInMM = new UINT16[H * W];
-#pragma omp parallel for schedule(static, 500)
-		for (int id = 0; id < H * W; id++) {
-			depthInMM[id] = (UINT16)(depthData[id] * 0.1f);
-		}
 		ColorSpacePoint* depthToColorSpaceTable = new ColorSpacePoint[W * H];
-		mapper->MapDepthFrameToColorSpace(W * H, depthInMM, W * H, depthToColorSpaceTable);
-		delete[] depthInMM;
+		mapper->MapDepthFrameToColorSpace(W * H, depthData, W * H, depthToColorSpaceTable);
 
 #pragma omp parallel for schedule(dynamic, 1)
 		for (int y = 0; y < H; y++) {
@@ -249,6 +241,7 @@ namespace pcl
 					colorData[id].rgbGreen = 0;
 					colorData[id].rgbRed = 0;
 					depthData[id] = 0;
+					foregroundMask[id] = false;
 				}
 			}
 		}
@@ -258,8 +251,8 @@ namespace pcl
 			int id = y * W;
 			pcl::PointXYZRGB* pt = &cloud->points[id];
 			for (int x = 0; x < W; x++, pt++, id++) {
-				if (foregroundMask[id] && depthData[id] != 0 && foregroundMask[id] && (colorData[id].rgbBlue != 0 || colorData[id].rgbGreen != 0 || colorData[id].rgbRed != 0)) {
-					float depth = depthData[id] * 0.1f;
+				if (foregroundMask[id]) {
+					float depth = depthData[id];
 					pt->b = colorData[id].rgbBlue;
 					pt->g = colorData[id].rgbGreen;
 					pt->r = colorData[id].rgbRed;

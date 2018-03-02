@@ -57,7 +57,8 @@ namespace pcl
 
 		int W; //Width & Height of depth image
 		int H;
-		UINT16* background;
+		UINT16* backgroundDepth;
+		RGBQUAD* backgroundColor;
 		bool* foregroundMask;
 		UINT16* depthData;
 		RGBQUAD* colorData;

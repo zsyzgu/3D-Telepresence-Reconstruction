@@ -37,7 +37,7 @@ __global__ void kernelBilateralFiltering(UINT16* depth, UINT16* output, int H, i
 		}
 
 		if (val > 0) {
-			output[y * W + x] = (UINT16)(sum / val * 10);
+			output[y * W + x] = (UINT16)(sum / val);
 		}
 	}
 }
