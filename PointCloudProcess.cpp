@@ -19,9 +19,6 @@
 #include <pcl/gpu/utils/safe_call.hpp>
 #include "Timer.h"
 
-//extern "C"
-//void cudaNormalEstimation(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr pcNormal, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud);
-
 void PointCloudProcess::mlsFiltering(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
 	// 370 ms (for unorganized point cloud)

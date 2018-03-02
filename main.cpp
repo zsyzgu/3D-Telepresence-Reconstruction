@@ -8,7 +8,6 @@
 #include <pcl/compression/octree_pointcloud_compression.h>
 #include <pcl/gpu/utils/safe_call.hpp>
 
-
 #define CREATE_EXE
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
@@ -84,9 +83,26 @@ void update() {
 	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
 }
 
+
+extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ);
+extern "C" void cudaReleaseVolume();
+extern "C" void cudaClearVolume();
+extern "C" void cudaIntegrateDepth(UINT16* depth, float* transformation);
+extern "C" void cudaCalculateMesh(std::vector<float>& result);
+
+
+
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
-	start();
+	cudaInitVolume(512, 512, 512, 1, 1, 1);
+	cudaClearVolume();
+
+	transformation.data[0][1][1];
+
+	cudaReleaseVolume();
+
+
+	/*start();
 	startViewer();
 
 	#pragma omp parallel sections
@@ -112,7 +128,7 @@ int main(int argc, char *argv[]) {
 		{
 			//Grabbing sceneRemote
 		}
-	}
+	}*/
 
 	return 0;
 }
