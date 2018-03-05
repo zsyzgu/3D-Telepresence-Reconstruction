@@ -83,24 +83,37 @@ void update() {
 	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
 }
 
-
-extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ);
+extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
 extern "C" void cudaClearVolume();
 extern "C" void cudaIntegrateDepth(UINT16* depth, float* transformation);
-extern "C" void cudaCalculateMesh(std::vector<float>& result);
-
-
+extern "C" void cudaCalculateMesh(float* result, int& size);
 
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
-	cudaInitVolume(512, 512, 512, 1, 1, 1);
+	cudaInitVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
 	cudaClearVolume();
 
-	transformation.data[0][1][1];
+	int H = 424;
+	int W = 512;
+	UINT16* depth = new UINT16[H * W];
+	for (int i = 0; i < H * W; i++) {
+		depth[i] = 800;
+	}
+	delete[] depth;
+
+	float* transformation = new float[16];
+	for (int i = 0; i < 16; i++) {
+		transformation[i] = 0;
+	}
+	transformation[0 + 0] = 1;
+	transformation[4 + 1] = 1;
+	transformation[8 + 2] = 1;
+	transformation[12 + 3] = 1;
+	delete[] transformation;
+	cudaIntegrateDepth(depth, transformation);
 
 	cudaReleaseVolume();
-
 
 	/*start();
 	startViewer();
@@ -115,7 +128,7 @@ int main(int argc, char *argv[]) {
 
 				timer.reset();
 				update();
-				timer.outputTime(10);
+				timer.outputTime();
 
 				pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 				pcl::copyPointCloud(*sceneLocal, *viewCloud);

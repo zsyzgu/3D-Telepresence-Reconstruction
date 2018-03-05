@@ -58,6 +58,7 @@ void cudaBilateralFiltering(UINT16* depth) {
 	dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
 	dim3 blockNum((W + BLOCK_SIZE - 1) / BLOCK_SIZE, (H + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernelBilateralFiltering << <blockNum, blockSize >> > (d_depth, d_output, H, W);
+	cudaDeviceSynchronize();
 
 	cudaMemcpy(depth, d_output, n * sizeof(UINT16), cudaMemcpyDeviceToHost);
 
