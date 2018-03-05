@@ -87,7 +87,7 @@ extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ
 extern "C" void cudaReleaseVolume();
 extern "C" void cudaClearVolume();
 extern "C" void cudaIntegrateDepth(UINT16* depth, float* transformation);
-extern "C" void cudaCalculateMesh(float* result, int& size);
+extern "C" void cudaCalculateMesh(float* tris, int& size);
 
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
@@ -112,6 +112,10 @@ int main(int argc, char *argv[]) {
 	transformation[12 + 3] = 1;
 	delete[] transformation;
 	cudaIntegrateDepth(depth, transformation);
+
+	float* result;
+	int size;
+	cudaCalculateMesh(result, size);
 
 	cudaReleaseVolume();
 
