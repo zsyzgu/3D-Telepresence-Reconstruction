@@ -42,6 +42,8 @@ __global__ void kernelBilateralFiltering(UINT16* depth, UINT16* output, int H, i
 	}
 }
 
+#include <iostream>
+
 extern "C"
 void cudaBilateralFiltering(UINT16* depth) {
 	static const int H = 424;
@@ -60,7 +62,9 @@ void cudaBilateralFiltering(UINT16* depth) {
 	kernelBilateralFiltering << <blockNum, blockSize >> > (d_depth, d_output, H, W);
 	cudaDeviceSynchronize();
 
-	cudaMemcpy(depth, d_output, n * sizeof(UINT16), cudaMemcpyDeviceToHost);
+	cudaError_t error = cudaMemcpy(depth, d_output, n * sizeof(UINT16), cudaMemcpyDeviceToHost);
+
+	std::cout << error << std::endl;
 
 	cudaFree(d_depth);
 	cudaFree(d_output);

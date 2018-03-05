@@ -126,6 +126,9 @@ __global__ void kernelIntegrateDepth(
 
 extern "C"
 void cudaIntegrateDepth(UINT16* depth, float* transformation) {
+	const int W = 512;
+	const int H = 424;
+
 	float volumeSizeX = sizeX / resolutionX;
 	float volumeSizeY = sizeY / resolutionY;
 	float volumeSizeZ = sizeZ / resolutionZ;
@@ -133,8 +136,20 @@ void cudaIntegrateDepth(UINT16* depth, float* transformation) {
 	dim3 block(BLOCK_SIZE, BLOCK_SIZE);
 	dim3 grid((resolutionX + BLOCK_SIZE - 1) / BLOCK_SIZE, (resolutionY + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
-	kernelIntegrateDepth << <grid, block >> > (volume_device, weight_device, resolutionX, resolutionY, resolutionZ, volumeSizeX, volumeSizeY, volumeSizeZ, centerX, centerY, centerZ, depth, transformation);
+	UINT16* depth_device;
+	cudaMalloc(&depth_device, H * W * sizeof(UINT16));
+	cudaMemcpy(depth_device, depth, H * W * sizeof(UINT16), cudaMemcpyHostToDevice);
+
+	float* transformation_device;
+	cudaMalloc(&transformation_device, 16 * sizeof(float));
+	cudaMemcpy(transformation_device, transformation, 16 * sizeof(float), cudaMemcpyHostToDevice);
+
+	kernelIntegrateDepth << <grid, block >> > (volume_device, weight_device, resolutionX, resolutionY, resolutionZ, volumeSizeX, volumeSizeY, volumeSizeZ, centerX, centerY, centerZ, depth_device, transformation_device);
+
 	cudaDeviceSynchronize();
+
+	cudaFree(depth_device);
+	cudaFree(transformation_device);
 }
 
 __device__ __forceinline__ UINT16 deviceGetCubeIndex(float* volume, int resolutionX, int resolutionY, int resolutionZ, int x, int y, int z) {
@@ -414,7 +429,7 @@ __device__ int triTable_device[256][16] =
 { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
 
 
-__global__ void kernelMarchingCubesCount(float* volume, UINT16* count, int resolutionX, int resolutionY, int resolutionZ) {
+__global__ void kernelMarchingCubesCount(float* volume, int* count, int resolutionX, int resolutionY, int resolutionZ) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -425,13 +440,29 @@ __global__ void kernelMarchingCubesCount(float* volume, UINT16* count, int resol
 	int cnt = 0;
 	for (int z = 0; z + 1 < resolutionZ; z++) {
 		int index = deviceGetCubeIndex(volume, resolutionX, resolutionY, resolutionZ, x, y, z);
-		cnt += triTable_device[index][0];
+		if (triTable_device[index][0] == -1) {
+
+		} else
+		if (triTable_device[index][3] == -1) {
+			cnt += 1;
+		} else
+		if (triTable_device[index][6] == -1) {
+			cnt += 2;
+		} else
+		if (triTable_device[index][9] == -1) {
+			cnt += 3;
+		} else
+		if (triTable_device[index][12] == -1) {
+			cnt += 4;
+		} else {
+			cnt += 5;
+		}
 	}
 
 	count[x + y * resolutionX] = cnt;
 }
 
-__global__ void kernelMarchingCubes(float* volume, UINT16* count, int resolutionX, int resolutionY, int resolutionZ) {
+__global__ void kernelMarchingCubes(float* volume, int* count, int resolutionX, int resolutionY, int resolutionZ) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -452,20 +483,22 @@ void cudaCalculateMesh(float* tris, int& size) {
 	dim3 block(BLOCK_SIZE, BLOCK_SIZE);
 	dim3 grid((resolutionX + BLOCK_SIZE - 1) / BLOCK_SIZE, (resolutionY + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
-	UINT16* count_device;
-	cudaMalloc(&count_device, resolutionX * resolutionY * sizeof(UINT16));
+	int* count_device;
+	cudaMalloc(&count_device, resolutionX * resolutionY * sizeof(int));
 
 	kernelMarchingCubesCount << <grid, block >> > (volume_device, count_device, resolutionX, resolutionY, resolutionZ);
 	cudaDeviceSynchronize();
 
-	UINT16* count = new UINT16[resolutionX * resolutionY];
-	cudaMemcpy(count, count_device, resolutionX * resolutionY * sizeof(UINT16), cudaMemcpyDeviceToHost);
+	int* count = new int[resolutionX * resolutionY];
+
+	cudaMemcpy(count, count_device, resolutionX * resolutionY * sizeof(int), cudaMemcpyDeviceToHost);
+
 	for (int i = 1; i < resolutionX * resolutionY; i++) {
 		count[i] += count[i - 1];
 	}
-	cudaMemcpy(count_device, count, resolutionX * resolutionY * sizeof(UINT16), cudaMemcpyHostToDevice);
+	cudaMemcpy(count_device, count, resolutionX * resolutionY * sizeof(int), cudaMemcpyHostToDevice);
 	size = count[resolutionX * resolutionY - 1];
-	std::cout << count[0] << std::endl;
+	std::cout << size << std::endl;
 	delete[] count;
 
 	float* tris_device;
