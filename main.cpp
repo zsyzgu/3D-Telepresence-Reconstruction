@@ -83,43 +83,28 @@ void update() {
 	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
 }
 
-extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
-extern "C" void cudaReleaseVolume();
-extern "C" void cudaClearVolume();
-extern "C" void cudaIntegrateDepth(UINT16* depth, float* transformation);
-extern "C" void cudaCalculateMesh(float* tris, int& size);
+#include "TsdfVolume.h"
 
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
-	cudaInitVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
-
-	cudaClearVolume();
-
 	int H = 424;
 	int W = 512;
 	UINT16* depth = new UINT16[H * W];
 	for (int i = 0; i < H * W; i++) {
 		depth[i] = 800;
 	}
+
+	transformation.setIdentity();
+
+	TsdfVolume volume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
+
+	Timer timer;
+
+	volume.clear();
+	volume.integrate(depth, transformation);
+	pcl::PolygonMesh mesh = volume.calnMesh();
+
 	delete[] depth;
-
-	float* transformation = new float[16];
-	for (int i = 0; i < 16; i++) {
-		transformation[i] = 0;
-	}
-	transformation[0 + 0] = 1;
-	transformation[4 + 1] = 1;
-	transformation[8 + 2] = 1;
-	transformation[12 + 3] = 1;
-	delete[] transformation;
-
-	cudaIntegrateDepth(depth, transformation);
-
-	float* result;
-	int size;
-	cudaCalculateMesh(result, size);
-
-	cudaReleaseVolume();
 
 	/*start();
 	startViewer();
