@@ -441,7 +441,6 @@ __device__ int triTable_device[256][16] =
 { 0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
 { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
 
-
 __global__ void kernelMarchingCubesCount(float* volume, int* count) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -556,12 +555,12 @@ void cudaCalculateMesh(float* tris, int& size) {
 	cudaDeviceSynchronize();
 
 	size = cudaCountAccumulation();
-	std::cout << size << std::endl;
 
 	float* tris_device;
 	cudaMalloc(&tris_device, size * 9 * sizeof(float));
 	kernelMarchingCubes << <grid, block >> > (volume_device, count_device, tris_device);
 	cudaDeviceSynchronize();
+	tris = new float[size * 9];
 	cudaMemcpy(tris, tris_device, size * 9 * sizeof(float), cudaMemcpyDeviceToHost);
 	
 	cudaFree(tris_device);

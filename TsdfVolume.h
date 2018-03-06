@@ -11,7 +11,7 @@ public:
 	~TsdfVolume();
 	void clear();
 	void integrate(UINT16* depth, Eigen::Matrix4f transformation);
-	pcl::PolygonMesh calnMesh();
+	pcl::PolygonMesh::Ptr calnMesh();
 };
 
 #endif

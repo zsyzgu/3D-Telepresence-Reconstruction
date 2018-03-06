@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
 
 	volume.clear();
 	volume.integrate(depth, transformation);
-	pcl::PolygonMesh mesh = volume.calnMesh();
+	pcl::PolygonMesh::Ptr mesh = volume.calnMesh();
 
 	delete[] depth;
 
