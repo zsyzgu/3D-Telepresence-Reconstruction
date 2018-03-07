@@ -131,14 +131,14 @@ __global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT16* dept
 		float posY = transformation[4 + 0] * oriX + transformation[4 + 1] * oriY + transformation[4 + 2] * oriZ + transformation[12 + 1];
 		float posZ = transformation[8 + 0] * oriX + transformation[8 + 1] * oriY + transformation[8 + 2] * oriZ + transformation[12 + 2];
 
-		int cooX = int(posX / posZ * FX + CX);
-		int cooY = int(posY / posZ * FY + CY);
+		int cooX = (int)(posX / posZ * FX + CX);
+		int cooY = (int)(posY / posZ * FY + CY);
 
 		if (posZ > 0 && 0 <= cooX && cooX < W && 0 <= cooY && cooY < H) {
 			int depth = depthData[cooY * W + cooX];
 
 			if (depth != 0) {
-				float sdf = posZ - depth * 0.001;
+				float sdf = depth * 0.001 - posZ;
 
 				if (sdf >= -TRANC_DIST_MM) {
 					float tsdf = min(1.0, sdf / TRANC_DIST_MM);
@@ -482,7 +482,7 @@ __device__ void deviceCalnEdgePoint(float* volume, int x1, int y1, int z1, int x
 	float v1 = volume[x1 + y1 * resolutionX + z1 * resolutionX * resolutionY];
 	float v2 = volume[x2 + y2 * resolutionX + z2 * resolutionX * resolutionY];
 	if ((v1 < 0) ^ (v2 < 0)) {
-		float k = v1 / (v1 - v2);
+		float k =  v1 / (v1 - v2);
 		edgePointX = ((1 - k) * x1 + k * x2 - 0.5) * volumeSizeX + offsetX;
 		edgePointY = ((1 - k) * y1 + k * y2 - 0.5) * volumeSizeY + offsetY;
 		edgePointZ = ((1 - k) * z1 + k * z2 - 0.5) * volumeSizeZ + offsetZ;
