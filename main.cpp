@@ -87,24 +87,32 @@ void update() {
 
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
-	int H = 424;
-	int W = 512;
-	UINT16* depth = new UINT16[H * W];
-	for (int i = 0; i < H * W; i++) {
-		depth[i] = 800;
+	start();
+	startViewer();
+
+	TsdfVolume volume(128, 128, 128, 1, 1, 1, 0, 0, 0.5);
+
+	while (!viewer->wasStopped()) {
+		viewer->spinOnce();
+
+		Timer timer;
+
+		grabber->getPointCloud();
+
+		volume.clear();
+
+		UINT16* depthData = grabber->getDepthData();
+
+		volume.integrate(depthData, transformation);
+
+		pcl::PolygonMesh::Ptr mesh = volume.calnMesh();
+		
+		timer.outputTime();
+
+		if (!viewer->updatePolygonMesh(*mesh, "mesh")) {
+			viewer->addPolygonMesh(*mesh, "mesh");
+		}
 	}
-
-	transformation.setIdentity();
-
-	TsdfVolume volume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
-
-	Timer timer;
-
-	volume.clear();
-	volume.integrate(depth, transformation);
-	pcl::PolygonMesh::Ptr mesh = volume.calnMesh();
-
-	delete[] depth;
 
 	/*start();
 	startViewer();

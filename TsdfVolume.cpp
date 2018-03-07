@@ -6,7 +6,7 @@ extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ
 extern "C" void cudaReleaseVolume();
 extern "C" void cudaClearVolume();
 extern "C" void cudaIntegrateDepth(UINT16* depth, float* transformation);
-extern "C" void cudaCalculateMesh(float* tris, int& size);
+extern "C" void cudaCalculateMesh(float*& tris, int& size);
 
 TsdfVolume::TsdfVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
@@ -43,9 +43,8 @@ pcl::PolygonMesh::Ptr TsdfVolume::calnMesh()
 	int size;
 	cudaCalculateMesh(tris, size);
 
-	std::cout << size << std::endl;
-
 	pcl::PointCloud<pcl::PointXYZ> cloud;
+	cloud.resize(size * 3);
 	cloud.width = size * 3;
 	cloud.height = 1;
 	for (int i = 0; i < size; i++) {
