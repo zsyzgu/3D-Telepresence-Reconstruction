@@ -90,43 +90,7 @@ int main(int argc, char *argv[]) {
 	start();
 	startViewer();
 
-	TsdfVolume volume(128, 128, 128, 1, 1, 1, 0, 0, 0.5);
-
-	volume.clear();
-
-	const int H = 424;
-	const int W = 512;
-
-	UINT16* depthData = new UINT16[H * W];
-
-	for (int y = 0; y < H; y++) {
-		for (int x = 0; x < W; x++) {
-			depthData[y * W + x] = 0;
-
-			if (100 <= x && x <= 400 && 100 <= y && y <= 400) {
-				depthData[y * W + x] = 400 + x;
-			}
-		}
-	}
-
-	volume.integrate(depthData, transformation);
-
-	delete[] depthData;
-
-	pcl::PolygonMesh::Ptr mesh = volume.calnMesh();
-
-	while (!viewer->wasStopped()) {
-		viewer->spinOnce();
-
-		if (!viewer->updatePolygonMesh(*mesh, "mesh")) {
-			viewer->addPolygonMesh(*mesh, "mesh");
-		}
-	}
-
-	/*start();
-	startViewer();
-
-	TsdfVolume volume(128, 128, 128, 1, 1, 1, 0, 0, 0.5);
+	TsdfVolume volume(256, 256, 256, 1, 1, 1, 0, 0, 0.5);
 
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
@@ -135,6 +99,7 @@ int main(int argc, char *argv[]) {
 
 		grabber->getPointCloud();
 
+		volume.clear();
 		volume.clear();
 
 		UINT16* depthData = grabber->getDepthData();
@@ -148,7 +113,7 @@ int main(int argc, char *argv[]) {
 		if (!viewer->updatePolygonMesh(*mesh, "mesh")) {
 			viewer->addPolygonMesh(*mesh, "mesh");
 		}
-	}*/
+	}
 
 	/*start();
 	startViewer();
