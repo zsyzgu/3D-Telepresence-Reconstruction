@@ -85,12 +85,17 @@ void update() {
 
 #include "TsdfVolume.h"
 
+#include <pcl/console/parse.h>
+#include <pcl/io/vtk_lib_io.h>
+#include <pcl/visualization/pcl_visualizer.h>
+
+
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
 	start();
 	startViewer();
 
-	TsdfVolume volume(256, 256, 256, 1, 1, 1, 0, 0, 0.5);
+	TsdfVolume volume(128, 128, 128, 1, 1, 1, 0, 0, 0.5);
 
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
@@ -100,11 +105,11 @@ int main(int argc, char *argv[]) {
 		grabber->getPointCloud();
 
 		volume.clear();
-		volume.clear();
 
 		UINT16* depthData = grabber->getDepthData();
+		RGBQUAD* colorData = grabber->getColorData();
 
-		volume.integrate(depthData, transformation);
+		volume.integrate(depthData, colorData, transformation);
 
 		pcl::PolygonMesh::Ptr mesh = volume.calnMesh();
 		

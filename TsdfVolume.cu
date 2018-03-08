@@ -32,7 +32,9 @@ namespace tsdf {
 
 	float* volume_device;
 	UINT16* weight_device;
+	UINT8* volume_color_device;
 	UINT16* depth_device;
+	UINT8* color_device;
 	float* transformation_device;
 	int* count_device;
 	int* count_host;
@@ -69,7 +71,9 @@ void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float siz
 	cudaDeviceSynchronize();
 	cudaMalloc(&volume_device, resolutionX * resolutionY * resolutionZ * sizeof(float));
 	cudaMalloc(&weight_device, resolutionX * resolutionY * resolutionZ * sizeof(UINT16));
+	cudaMalloc(&volume_color_device, resolutionX * resolutionY * resolutionZ * 4 * sizeof(UINT8));
 	cudaMalloc(&depth_device, H * W * sizeof(float));
+	cudaMalloc(&color_device, H * W * 4 * sizeof(UINT8));
 	cudaMalloc(&transformation_device, 16 * sizeof(float));
 	cudaMalloc(&count_device, resolutionX * resolutionY * sizeof(int));
 	count_host = new int[resolutionX * resolutionY];
@@ -82,12 +86,13 @@ void cudaReleaseVolume() {
 	cudaFree(volume_device);
 	cudaFree(weight_device);
 	cudaFree(depth_device);
+	cudaFree(color_device);
 	cudaFree(transformation_device);
 	cudaFree(count_device);
 	delete[] count_host;
 }
 
-__global__ void kernelClearVolume(float* volume, UINT16* weight) {
+__global__ void kernelClearVolume(float* volume, UINT16* weight, UINT8* volume_color) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -96,17 +101,20 @@ __global__ void kernelClearVolume(float* volume, UINT16* weight) {
 			int id = x + y * resolutionX + z * resolutionX * resolutionY;
 			volume[id] = -1;
 			weight[id] = 0;
+			volume_color[(id << 2) + 0] = 0;
+			volume_color[(id << 2) + 1] = 0;
+			volume_color[(id << 2) + 2] = 0;
 		}
 	}
 }
 
 extern "C"
 void cudaClearVolume() {
-	kernelClearVolume << <grid, block >> > (volume_device, weight_device);
+	kernelClearVolume << <grid, block >> > (volume_device, weight_device, volume_color_device);
 	cudaDeviceSynchronize();
 }
 
-__global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT16* depthData, float* transformation) {
+__global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT8* volume_color, UINT16* depthData, UINT8* colorData, float* transformation) {
 	const int W = 512;
 	const int H = 424;
 	const float FX = 367.347;
@@ -135,7 +143,8 @@ __global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT16* dept
 		int cooY = oriY * FY / oriZ + CY;
 
 		if (posZ > 0 && 0 <= cooX && cooX < W && 0 <= cooY && cooY < H) {
-			UINT16 depth = depthData[cooY * W + cooX];
+			int cooId = cooY * W + cooX;
+			UINT16 depth = depthData[cooId];
 
 			if (depth != 0) {
 				float xl = (cooX - CX) / FX;
@@ -144,8 +153,15 @@ __global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT16* dept
 				float sdf = depth * 0.001 - sqrt(posX * posX + posY * posY + posZ * posZ) / lambda;
 
 				if (sdf >= -TRANC_DIST_M) {
-					float tsdf = min(1.0, sdf / TRANC_DIST_M);
+					float tsdf = sdf / TRANC_DIST_M;
 					int id = x + y * resolutionX + z * resolutionX * resolutionY;
+					if (tsdf < 1.0) {
+						volume_color[(id << 2) + 0] = (volume_color[(id << 2) + 0] * weight[id] + colorData[(cooId << 2) + 0]) / (weight[id] + 1.0);
+						volume_color[(id << 2) + 1] = (volume_color[(id << 2) + 1] * weight[id] + colorData[(cooId << 2) + 1]) / (weight[id] + 1.0);
+						volume_color[(id << 2) + 2] = (volume_color[(id << 2) + 2] * weight[id] + colorData[(cooId << 2) + 2]) / (weight[id] + 1.0);
+					} else {
+						tsdf = 1.0;
+					}
 					volume[id] = (volume[id] * weight[id] + tsdf) / (weight[id] + 1.0);
 					weight[id]++;
 				}
@@ -154,60 +170,15 @@ __global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT16* dept
 	}
 }
 
-#include "Timer.h"
-
 extern "C"
-void cudaIntegrateDepth(UINT16* depth, float* transformation) {
+void cudaIntegrateDepth(UINT16* depth, RGBQUAD* color, float* transformation) {
 	cudaMemcpy(depth_device, depth, H * W * sizeof(UINT16), cudaMemcpyHostToDevice);
+	cudaMemcpy(color_device, color, H * W * 4 * sizeof(UINT8), cudaMemcpyHostToDevice);
 	cudaMemcpy(transformation_device, transformation, 16 * sizeof(float), cudaMemcpyHostToDevice);
 	cudaDeviceSynchronize();
 
-	kernelIntegrateDepth << <grid, block >> > (volume_device, weight_device, depth_device, transformation_device);
+	kernelIntegrateDepth << <grid, block >> > (volume_device, weight_device, volume_color_device, depth_device, color_device, transformation_device);
 	cudaDeviceSynchronize();
-}
-
-__device__ __forceinline__ UINT16 deviceGetCubeIndex(float* volume, int x, int y, int z) {
-	int index = 0;
-
-	int id = x + y * resolutionX + z * resolutionX * resolutionY;
-
-	if (volume[id] == -1) {
-		return 0;
-	}
-	if (volume[id + 1] == -1) {
-		return 0;
-	}
-	if (volume[id + resolutionX] == -1) {
-		return 0;
-	}
-	if (volume[id + 1 + resolutionX] == -1) {
-		return 0;
-	}
-	if (volume[id + resolutionX * resolutionY] == -1) {
-		return 0;
-	}
-	if (volume[id + 1 + resolutionX * resolutionY] == -1) {
-		return 0;
-	}
-	if (volume[id + resolutionX + resolutionX * resolutionY] == -1) {
-		return 0;
-	}
-	if (volume[id + 1 + resolutionX + resolutionX * resolutionY] == -1) {
-		return 0;
-	}
-
-	if (volume[id] < 0) index |= 1;
-	if (volume[id + 1] < 0) index |= 2;
-	if (volume[id + 1 + resolutionX] < 0) index |= 4;
-	if (volume[id + resolutionX] < 0) index |= 8;
-
-	id += resolutionX * resolutionY;
-	if (volume[id] < 0) index |= 16;
-	if (volume[id + 1] < 0) index |= 32;
-	if (volume[id + 1 + resolutionX] < 0) index |= 64;
-	if (volume[id + resolutionX] < 0) index |= 128;
-
-	return index;
 }
 
 __device__ int triTable_device[256][16] =
@@ -468,7 +439,35 @@ __device__ int triTable_device[256][16] =
 { 0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
 { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
 
-__global__ void kernelMarchingCubesCount(float* volume, int* count) {
+__device__ __forceinline__ UINT16 deviceGetCubeIndex(float* volume, UINT16* weight, int x, int y, int z) {
+	int index = 0;
+
+	int id = x + y * resolutionX + z * resolutionX * resolutionY;
+
+	if (weight[id] == 0) return 0;
+	if (weight[id + 1] == 0) return 0;
+	if (weight[id + resolutionX] == 0) return 0;
+	if (weight[id + 1 + resolutionX] == 0) return 0;
+	if (weight[id + resolutionX * resolutionY] == 0) return 0;
+	if (weight[id + 1 + resolutionX * resolutionY] == 0) return 0;
+	if (weight[id + resolutionX + resolutionX * resolutionY] == 0) return 0;
+	if (weight[id + 1 + resolutionX + resolutionX * resolutionY] == 0) return 0;
+
+	if (volume[id] < 0) index |= 1;
+	if (volume[id + 1] < 0) index |= 2;
+	if (volume[id + 1 + resolutionX] < 0) index |= 4;
+	if (volume[id + resolutionX] < 0) index |= 8;
+
+	id += resolutionX * resolutionY;
+	if (volume[id] < 0) index |= 16;
+	if (volume[id + 1] < 0) index |= 32;
+	if (volume[id + 1 + resolutionX] < 0) index |= 64;
+	if (volume[id + resolutionX] < 0) index |= 128;
+
+	return index;
+}
+
+__global__ void kernelMarchingCubesCount(float* volume, UINT16* weight, int* count) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -481,7 +480,7 @@ __global__ void kernelMarchingCubesCount(float* volume, int* count) {
 
 	int cnt = 0;
 	for (int z = 0; z + 1 < resolutionZ; z++) {
-		int index = deviceGetCubeIndex(volume, x, y, z);
+		int index = deviceGetCubeIndex(volume, weight, x, y, z);
 		if (triTable_device[index][0] == -1) {
 
 		} else
@@ -504,30 +503,23 @@ __global__ void kernelMarchingCubesCount(float* volume, int* count) {
 	count[x + y * resolutionX] = cnt;
 }
 
-__device__ void deviceCalnEdgePoint(float* volume, int x1, int y1, int z1, int x2, int y2, int z2, float& edgePointX, float& edgePointY, float& edgePointZ) {
-	float v1 = volume[x1 + y1 * resolutionX + z1 * resolutionX * resolutionY];
-	if (abs(v1) < 0.0001) {
-		edgePointX = (x1 - 0.5) * volumeSizeX + offsetX;
-		edgePointY = (y1 - 0.5) * volumeSizeY + offsetY;
-		edgePointZ = (z1 - 0.5) * volumeSizeZ + offsetZ;
-		return;
-	}
-	float v2 = volume[x2 + y2 * resolutionX + z2 * resolutionX * resolutionY];
-	if (abs(v2) < 0.0001) {
-		edgePointX = (x2 - 0.5) * volumeSizeX + offsetX;
-		edgePointY = (y2 - 0.5) * volumeSizeY + offsetY;
-		edgePointZ = (z2 - 0.5) * volumeSizeZ + offsetZ;
-		return;
-	}
+__device__ void deviceCalnEdgePoint(float* volume, UINT8* volume_color, int x1, int y1, int z1, int x2, int y2, int z2, float& edgePointX, float& edgePointY, float& edgePointZ, UINT8& R, UINT8& G, UINT8& B) {
+	int id1 = x1 + y1 * resolutionX + z1 * resolutionX * resolutionY;
+	int id2 = x2 + y2 * resolutionX + z2 * resolutionX * resolutionY;
+	float v1 = volume[id1];
+	float v2 = volume[id2];
 	if ((v1 < 0) ^ (v2 < 0)) {
 		float k =  v1 / (v1 - v2);
 		edgePointX = ((1 - k) * x1 + k * x2 - 0.5) * volumeSizeX + offsetX;
 		edgePointY = ((1 - k) * y1 + k * y2 - 0.5) * volumeSizeY + offsetY;
 		edgePointZ = ((1 - k) * z1 + k * z2 - 0.5) * volumeSizeZ + offsetZ;
+		R = (UINT8)min((1 - k) * volume_color[(id1 << 2) + 0] + k * volume_color[(id2 << 2) + 0], 255.0);
+		G = (UINT8)min((1 - k) * volume_color[(id1 << 2) + 1] + k * volume_color[(id2 << 2) + 1], 255.0);
+		B = (UINT8)min((1 - k) * volume_color[(id1 << 2) + 2] + k * volume_color[(id2 << 2) + 2], 255.0);
 	}
 }
 
-__global__ void kernelMarchingCubes(float* volume, int* count, float* tris) {
+__global__ void kernelMarchingCubes(float* volume, UINT16* weight, UINT8* volume_color, int* count, float* tris, UINT8* tris_color) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -535,46 +527,46 @@ __global__ void kernelMarchingCubes(float* volume, int* count, float* tris) {
 		return;
 	}
 
-	float edgePointsX[12];
-	float edgePointsY[12];
-	float edgePointsZ[12];
+	float ptsX[12];
+	float ptsY[12];
+	float ptsZ[12];
+	UINT8 ptsR[12];
+	UINT8 ptsG[12];
+	UINT8 ptsB[12];
 
 	int id = 0;
 	if (x > 0 || y > 0) {
 		id = count[y * resolutionX + x - 1];
 	}
 	for (int z = 0; z + 1 < resolutionZ; z++) {
-		int index = deviceGetCubeIndex(volume, x, y, z);
+		int index = deviceGetCubeIndex(volume, weight, x, y, z);
 
-		deviceCalnEdgePoint(volume, x + 0, y + 0, z + 0, x + 1, y + 0, z + 0, edgePointsX[0], edgePointsY[0], edgePointsZ[0]); // 01
-		deviceCalnEdgePoint(volume, x + 1, y + 0, z + 0, x + 1, y + 1, z + 0, edgePointsX[1], edgePointsY[1], edgePointsZ[1]); // 12
-		deviceCalnEdgePoint(volume, x + 1, y + 1, z + 0, x + 0, y + 1, z + 0, edgePointsX[2], edgePointsY[2], edgePointsZ[2]); // 23
-		deviceCalnEdgePoint(volume, x + 0, y + 1, z + 0, x + 0, y + 0, z + 0, edgePointsX[3], edgePointsY[3], edgePointsZ[3]); // 30
+		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 0, z + 0, x + 1, y + 0, z + 0, ptsX[0], ptsY[0], ptsZ[0], ptsR[0], ptsG[0], ptsB[0]); // 01
+		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 0, z + 0, x + 1, y + 1, z + 0, ptsX[1], ptsY[1], ptsZ[1], ptsR[1], ptsG[1], ptsB[1]); // 12
+		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 1, z + 0, x + 0, y + 1, z + 0, ptsX[2], ptsY[2], ptsZ[2], ptsR[2], ptsG[2], ptsB[2]); // 23
+		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 1, z + 0, x + 0, y + 0, z + 0, ptsX[3], ptsY[3], ptsZ[3], ptsR[3], ptsG[3], ptsB[3]); // 30
 		
-		deviceCalnEdgePoint(volume, x + 0, y + 0, z + 1, x + 1, y + 0, z + 1, edgePointsX[4], edgePointsY[4], edgePointsZ[4]); // 45
-		deviceCalnEdgePoint(volume, x + 1, y + 0, z + 1, x + 1, y + 1, z + 1, edgePointsX[5], edgePointsY[5], edgePointsZ[5]); // 56
-		deviceCalnEdgePoint(volume, x + 1, y + 1, z + 1, x + 0, y + 1, z + 1, edgePointsX[6], edgePointsY[6], edgePointsZ[6]); // 67
-		deviceCalnEdgePoint(volume, x + 0, y + 1, z + 1, x + 0, y + 0, z + 1, edgePointsX[7], edgePointsY[7], edgePointsZ[7]); // 74
+		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 0, z + 1, x + 1, y + 0, z + 1, ptsX[4], ptsY[4], ptsZ[4], ptsR[4], ptsG[4], ptsB[4]); // 45
+		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 0, z + 1, x + 1, y + 1, z + 1, ptsX[5], ptsY[5], ptsZ[5], ptsR[5], ptsG[5], ptsB[5]); // 56
+		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 1, z + 1, x + 0, y + 1, z + 1, ptsX[6], ptsY[6], ptsZ[6], ptsR[6], ptsG[6], ptsB[6]); // 67
+		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 1, z + 1, x + 0, y + 0, z + 1, ptsX[7], ptsY[7], ptsZ[7], ptsR[7], ptsG[7], ptsB[7]); // 74
 
-		deviceCalnEdgePoint(volume, x + 0, y + 0, z + 0, x + 0, y + 0, z + 1, edgePointsX[8], edgePointsY[8], edgePointsZ[8]); // 04
-		deviceCalnEdgePoint(volume, x + 1, y + 0, z + 0, x + 1, y + 0, z + 1, edgePointsX[9], edgePointsY[9], edgePointsZ[9]); // 15
-		deviceCalnEdgePoint(volume, x + 1, y + 1, z + 0, x + 1, y + 1, z + 1, edgePointsX[10], edgePointsY[10], edgePointsZ[10]); // 26
-		deviceCalnEdgePoint(volume, x + 0, y + 1, z + 0, x + 0, y + 1, z + 1, edgePointsX[11], edgePointsY[11], edgePointsZ[11]); // 37
+		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 0, z + 0, x + 0, y + 0, z + 1, ptsX[8], ptsY[8], ptsZ[8], ptsR[8], ptsG[8], ptsB[8]); // 04
+		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 0, z + 0, x + 1, y + 0, z + 1, ptsX[9], ptsY[9], ptsZ[9], ptsR[9], ptsG[9], ptsB[9]); // 15
+		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 1, z + 0, x + 1, y + 1, z + 1, ptsX[10], ptsY[10], ptsZ[10], ptsR[10], ptsG[10], ptsB[10]); // 26
+		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 1, z + 0, x + 0, y + 1, z + 1, ptsX[11], ptsY[11], ptsZ[11], ptsR[11], ptsG[11], ptsB[11]); // 37
 
 		for (int i = 0; i < 5; i++) {
 			if (triTable_device[index][i * 3] != -1) {
-				int a = triTable_device[index][i * 3 + 0];
-				int b = triTable_device[index][i * 3 + 1];
-				int c = triTable_device[index][i * 3 + 2];
-				tris[id * 9 + 0] = edgePointsX[a];
-				tris[id * 9 + 1] = edgePointsY[a];
-				tris[id * 9 + 2] = edgePointsZ[a];
-				tris[id * 9 + 3] = edgePointsX[b];
-				tris[id * 9 + 4] = edgePointsY[b];
-				tris[id * 9 + 5] = edgePointsZ[b];
-				tris[id * 9 + 6] = edgePointsX[c];
-				tris[id * 9 + 7] = edgePointsY[c];
-				tris[id * 9 + 8] = edgePointsZ[c];
+				for (int j = 0; j < 3; j++) {
+					int edgeId = triTable_device[index][i * 3 + j];
+					tris[id * 9 + j * 3 + 0] = ptsX[edgeId];
+					tris[id * 9 + j * 3 + 1] = ptsY[edgeId];
+					tris[id * 9 + j * 3 + 2] = ptsZ[edgeId];
+					tris_color[id * 9 + j * 3 + 0] = ptsR[edgeId];
+					tris_color[id * 9 + j * 3 + 1] = ptsG[edgeId];
+					tris_color[id * 9 + j * 3 + 2] = ptsB[edgeId];
+				}
 				id++;
 			} else {
 				break;
@@ -594,18 +586,25 @@ int cudaCountAccumulation() {
 }
 
 extern "C"
-void cudaCalculateMesh(float*& tris, int& size) {
-	kernelMarchingCubesCount << <grid, block >> > (volume_device, count_device);
+void cudaCalculateMesh(float*& tris, UINT8*& tris_color, int& size) {
+	kernelMarchingCubesCount << <grid, block >> > (volume_device, weight_device, count_device);
 	cudaDeviceSynchronize();
 
 	size = cudaCountAccumulation();
 
 	float* tris_device;
+	UINT8* tris_color_device;
 	cudaMalloc(&tris_device, size * 9 * sizeof(float));
-	kernelMarchingCubes << <grid, block >> > (volume_device, count_device, tris_device);
+	cudaMalloc(&tris_color_device, size * 9 * sizeof(UINT8));
+
+	kernelMarchingCubes << <grid, block >> > (volume_device, weight_device, volume_color_device, count_device, tris_device, tris_color_device);
 	cudaDeviceSynchronize();
+
 	tris = new float[size * 9];
+	tris_color = new UINT8[size * 9];
 	cudaMemcpy(tris, tris_device, size * 9 * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(tris_color, tris_color_device, size * 9 * sizeof(UINT8), cudaMemcpyDeviceToHost);
 	
 	cudaFree(tris_device);
+	cudaFree(tris_color_device);
 }

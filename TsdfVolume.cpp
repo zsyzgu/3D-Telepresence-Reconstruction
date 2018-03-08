@@ -5,8 +5,8 @@
 extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
 extern "C" void cudaClearVolume();
-extern "C" void cudaIntegrateDepth(UINT16* depth, float* transformation);
-extern "C" void cudaCalculateMesh(float*& tris, int& size);
+extern "C" void cudaIntegrateDepth(UINT16* depth, RGBQUAD* color, float* transformation);
+extern "C" void cudaCalculateMesh(float*& tris, UINT8*& tris_color, int& size);
 
 TsdfVolume::TsdfVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
@@ -23,7 +23,7 @@ void TsdfVolume::clear()
 	cudaClearVolume();
 }
 
-void TsdfVolume::integrate(UINT16 * depth, Eigen::Matrix4f transformation)
+void TsdfVolume::integrate(UINT16 * depth, RGBQUAD* color, Eigen::Matrix4f transformation)
 {
 	float* trans = new float[16];
 	for (int y = 0; y < 4; y++) {
@@ -31,7 +31,7 @@ void TsdfVolume::integrate(UINT16 * depth, Eigen::Matrix4f transformation)
 			trans[y * 4 + x] = transformation(y, x);
 		}
 	}
-	cudaIntegrateDepth(depth, trans);
+	cudaIntegrateDepth(depth, color, trans);
 	delete[] trans;
 }
 
@@ -40,23 +40,27 @@ pcl::PolygonMesh::Ptr TsdfVolume::calnMesh()
 	pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh());
 
 	float* tris;
+	UINT8* tris_color;
 	int size;
-	cudaCalculateMesh(tris, size);
+	cudaCalculateMesh(tris, tris_color, size);
 
-	pcl::PointCloud<pcl::PointXYZ> cloud;
+	pcl::PointCloud<pcl::PointXYZRGB> cloud;
 	cloud.resize(size * 3);
 	cloud.width = size * 3;
 	cloud.height = 1;
+
 	for (int i = 0; i < size; i++) {
-		cloud.points[i * 3 + 0].x = tris[i * 9 + 0];
-		cloud.points[i * 3 + 0].y = tris[i * 9 + 1];
-		cloud.points[i * 3 + 0].z = tris[i * 9 + 2];
-		cloud.points[i * 3 + 1].x = tris[i * 9 + 3];
-		cloud.points[i * 3 + 1].y = tris[i * 9 + 4];
-		cloud.points[i * 3 + 1].z = tris[i * 9 + 5];
-		cloud.points[i * 3 + 2].x = tris[i * 9 + 6];
-		cloud.points[i * 3 + 2].y = tris[i * 9 + 7];
-		cloud.points[i * 3 + 2].z = tris[i * 9 + 8];
+		for (int j = 0; j < 3; j++) {
+			cloud.points[i * 3 + j].x = tris[i * 9 + j * 3 + 0];
+			cloud.points[i * 3 + j].y = tris[i * 9 + j * 3 + 1];
+			cloud.points[i * 3 + j].z = tris[i * 9 + j * 3 + 2];
+			//cloud.points[i * 3 + j].r = tris_color[i * 9 + j * 3 + 0];
+			//cloud.points[i * 3 + j].g = tris_color[i * 9 + j * 3 + 1];
+			//cloud.points[i * 3 + j].b = tris_color[i * 9 + j * 3 + 2];
+			cloud.points[i * 3 + j].r = 255;
+			cloud.points[i * 3 + j].g = 255;
+			cloud.points[i * 3 + j].b = 255;
+		}
 	}
 	pcl::toPCLPointCloud2(cloud, mesh->cloud);
 
@@ -70,5 +74,6 @@ pcl::PolygonMesh::Ptr TsdfVolume::calnMesh()
 	}
 
 	delete[] tris;
+	delete[] tris_color;
 	return mesh;
 }
