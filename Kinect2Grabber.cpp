@@ -179,6 +179,13 @@ namespace pcl
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr Kinect2Grabber::getPointCloud()
 	{
+		updateDepthAndColor();
+		return convertRGBDepthToPointXYZRGB();
+	}
+
+
+	void Kinect2Grabber::updateDepthAndColor()
+	{
 		IDepthFrame* depthFrame = nullptr;
 		depthReader->AcquireLatestFrame(&depthFrame);
 		if (depthFrame != NULL) {
@@ -188,33 +195,15 @@ namespace pcl
 
 		IColorFrame* colorFrame = nullptr;
 		colorReader->AcquireLatestFrame(&colorFrame);
-
 		if (colorFrame != NULL) {
 			colorFrame->CopyConvertedFrameDataToArray(colorBuffer.size() * sizeof(RGBQUAD), reinterpret_cast<BYTE*>(&colorBuffer[0]), ColorImageFormat::ColorImageFormat_Bgra);
 			colorFrame->Release();
 		}
 
-		return convertRGBDepthToPointXYZRGB(&colorBuffer[0]);
-	}
-
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB(RGBQUAD* colorDataHD)
-	{
 		spatialFiltering();
 		temporalFiltering();
 		bilateralFiltering();
 		calnForegroundMask();
-
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-
-		cloud->width = static_cast<uint32_t>(W);
-		cloud->height = static_cast<uint32_t>(H);
-		cloud->is_dense = false;
-
-		cloud->points.resize(H * W);
-
-		UINT32 tableCount;
-		PointF* depthToCameraSpaceTable = nullptr;
-		mapper->GetDepthFrameToCameraSpaceTable(&tableCount, &depthToCameraSpaceTable);
 
 		ColorSpacePoint* depthToColorSpaceTable = new ColorSpacePoint[W * H];
 		mapper->MapDepthFrameToColorSpace(W * H, depthData, W * H, depthToColorSpaceTable);
@@ -227,16 +216,17 @@ namespace pcl
 				int colorX = static_cast<int>(std::floor(colorSpacePoint.X));
 				int colorY = static_cast<int>(std::floor(colorSpacePoint.Y));
 				if (foregroundMask[id] && depthData[id] != 0 && (0 <= colorX) && (colorX + 1 < colorWidth) && (0 <= colorY) && (colorY + 1 < colorHeight)) {
-					RGBQUAD colorLU = colorDataHD[colorY * colorWidth + colorX];
-					RGBQUAD colorRU = colorDataHD[colorY * colorWidth + (colorX + 1)];
-					RGBQUAD colorLB = colorDataHD[(colorY + 1) * colorWidth + colorX];
-					RGBQUAD colorRB = colorDataHD[(colorY + 1) * colorWidth + (colorX + 1)];
+					RGBQUAD colorLU = colorBuffer[colorY * colorWidth + colorX];
+					RGBQUAD colorRU = colorBuffer[colorY * colorWidth + (colorX + 1)];
+					RGBQUAD colorLB = colorBuffer[(colorY + 1) * colorWidth + colorX];
+					RGBQUAD colorRB = colorBuffer[(colorY + 1) * colorWidth + (colorX + 1)];
 					float u = colorSpacePoint.X - colorX;
 					float v = colorSpacePoint.Y - colorY;
 					colorData[id].rgbBlue = colorLU.rgbBlue * (1 - u) * (1 - v) + colorRU.rgbBlue * u * (1 - v) + colorLB.rgbBlue * (1 - u) * v + colorRB.rgbBlue * u * v;
 					colorData[id].rgbGreen = colorLU.rgbGreen * (1 - u) * (1 - v) + colorRU.rgbGreen * u * (1 - v) + colorLB.rgbGreen * (1 - u) * v + colorRB.rgbGreen * u * v;
 					colorData[id].rgbRed = colorLU.rgbRed * (1 - u) * (1 - v) + colorRU.rgbRed * u * (1 - v) + colorLB.rgbRed * (1 - u) * v + colorRB.rgbRed * u * v;
-				} else {
+				}
+				else {
 					colorData[id].rgbBlue = 0;
 					colorData[id].rgbGreen = 0;
 					colorData[id].rgbRed = 0;
@@ -245,6 +235,21 @@ namespace pcl
 				}
 			}
 		}
+
+		delete[] depthToColorSpaceTable;
+	}
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB()
+	{
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+		cloud->points.resize(H * W);
+		cloud->width = W;
+		cloud->height = H;
+		cloud->is_dense = false;
+
+		UINT32 tableCount;
+		PointF* depthToCameraSpaceTable = nullptr;
+		mapper->GetDepthFrameToCameraSpaceTable(&tableCount, &depthToCameraSpaceTable);
 
 #pragma omp parallel for schedule(dynamic, 1)
 		for (int y = 0; y < H; y++) {
@@ -265,7 +270,6 @@ namespace pcl
 		}
 
 		delete[] depthToCameraSpaceTable;
-		delete[] depthToColorSpaceTable;
 		
 		return cloud;
 	}

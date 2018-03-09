@@ -32,14 +32,14 @@ namespace pcl
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
 		void updateBackground();
-		//void outputRGBD();
+		void updateDepthAndColor();
 		UINT16* getDepthData() { return depthData; }
 		RGBQUAD* getColorData() { return colorData; }
 
 	protected:
 		void loadBackground();
 		void calnForegroundMask();
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB(RGBQUAD* colorBuffer);
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB();
 		void spatialFiltering();
 		void temporalFiltering();
 		void bilateralFiltering();

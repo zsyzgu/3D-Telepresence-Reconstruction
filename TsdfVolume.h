@@ -12,8 +12,7 @@ public:
 	~TsdfVolume();
 	void clear();
 	void integrate(UINT16* depth, RGBQUAD* color, Eigen::Matrix4f transformation);
-	pcl::PolygonMesh::Ptr calnMesh();
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr calnPointCloud();
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr calnMesh();
 };
 
 #endif

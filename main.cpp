@@ -96,59 +96,45 @@ int main(int argc, char *argv[]) {
 	start();
 	startViewer();
 
-	TsdfVolume volume(256, 256, 256, 1, 1, 1, 0, 0, 0.5);
+	TsdfVolume volume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
 
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
 		Timer timer;
 
-		grabber->getPointCloud();
-
-		volume.clear();
-
+		grabber->updateDepthAndColor();
 		UINT16* depthData = grabber->getDepthData();
 		RGBQUAD* colorData = grabber->getColorData();
 
+		volume.clear();
 		volume.integrate(depthData, colorData, transformation);
 
-		pcl::PolygonMesh::Ptr mesh = volume.calnMesh();
-		viewer->removePolygonMesh("mesh");
-		viewer->addPolygonMesh(*mesh, "mesh");
-
-		//pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = volume.calnPointCloud();
-		//if (!viewer->updatePointCloud(cloud, "pc")) {
-		//	viewer->addPointCloud(cloud, "pc");
-		//}
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = volume.calnMesh();
 
 		timer.outputTime();
+
+		if (!viewer->updatePointCloud(cloud, "cloud")) {
+			viewer->addPointCloud(cloud, "cloud");
+		}
 	}
 
-	/*start();
+	/*
+	start();
 	startViewer();
 
-	#pragma omp parallel sections
-	{
-		#pragma omp section
-		{
-			Timer timer;
-			while (!viewer->wasStopped()) {
-				viewer->spinOnce();
+	Timer timer;
+	while (!viewer->wasStopped()) {
+		viewer->spinOnce();
 
-				timer.reset();
-				update();
-				timer.outputTime();
+		timer.reset();
+		update();
+		timer.outputTime();
 
-				pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-				pcl::copyPointCloud(*sceneLocal, *viewCloud);
-				if (!viewer->updatePointCloud(viewCloud, "result")) {
-					viewer->addPointCloud(viewCloud, "result");
-				}
-			}
-		}
-		#pragma omp section
-		{
-			//Grabbing sceneRemote
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+		pcl::copyPointCloud(*sceneLocal, *viewCloud);
+		if (!viewer->updatePointCloud(viewCloud, "result")) {
+			viewer->addPointCloud(viewCloud, "result");
 		}
 	}*/
 
