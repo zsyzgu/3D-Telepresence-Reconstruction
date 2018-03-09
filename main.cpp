@@ -88,14 +88,15 @@ void update() {
 #include <pcl/console/parse.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
-
+#include <pcl/conversions.h>
+#include <pcl/surface/vtk_smoothing/vtk_utils.h>
 
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
 	start();
 	startViewer();
 
-	TsdfVolume volume(128, 128, 128, 1, 1, 1, 0, 0, 0.5);
+	TsdfVolume volume(256, 256, 256, 1, 1, 1, 0, 0, 0.5);
 
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
@@ -112,12 +113,15 @@ int main(int argc, char *argv[]) {
 		volume.integrate(depthData, colorData, transformation);
 
 		pcl::PolygonMesh::Ptr mesh = volume.calnMesh();
-		
-		timer.outputTime();
+		viewer->removePolygonMesh("mesh");
+		viewer->addPolygonMesh(*mesh, "mesh");
 
-		if (!viewer->updatePolygonMesh(*mesh, "mesh")) {
-			viewer->addPolygonMesh(*mesh, "mesh");
-		}
+		//pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = volume.calnPointCloud();
+		//if (!viewer->updatePointCloud(cloud, "pc")) {
+		//	viewer->addPointCloud(cloud, "pc");
+		//}
+
+		timer.outputTime();
 	}
 
 	/*start();

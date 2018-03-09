@@ -71,7 +71,7 @@ void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float siz
 	cudaDeviceSynchronize();
 	cudaMalloc(&volume_device, resolutionX * resolutionY * resolutionZ * sizeof(float));
 	cudaMalloc(&weight_device, resolutionX * resolutionY * resolutionZ * sizeof(UINT16));
-	cudaMalloc(&volume_color_device, resolutionX * resolutionY * resolutionZ * 4 * sizeof(UINT8));
+	cudaMalloc(&volume_color_device, resolutionX * resolutionY * resolutionZ * 3 * sizeof(UINT8));
 	cudaMalloc(&depth_device, H * W * sizeof(float));
 	cudaMalloc(&color_device, H * W * 4 * sizeof(UINT8));
 	cudaMalloc(&transformation_device, 16 * sizeof(float));
@@ -101,9 +101,9 @@ __global__ void kernelClearVolume(float* volume, UINT16* weight, UINT8* volume_c
 			int id = x + y * resolutionX + z * resolutionX * resolutionY;
 			volume[id] = -1;
 			weight[id] = 0;
-			volume_color[(id << 2) + 0] = 0;
-			volume_color[(id << 2) + 1] = 0;
-			volume_color[(id << 2) + 2] = 0;
+			volume_color[id * 3 + 0] = 0;
+			volume_color[id * 3 + 1] = 0;
+			volume_color[id * 3 + 2] = 0;
 		}
 	}
 }
@@ -118,10 +118,10 @@ __global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT8* volum
 	const int W = 512;
 	const int H = 424;
 	const float FX = 367.347;
-	const float FY = 367.347;
+	const float FY = -367.347;
 	const float CX = 260.118;
 	const float CY = 208.079;
-	const float TRANC_DIST_M = 2.1 * max(volumeSizeX, max(volumeSizeY, volumeSizeZ));
+	const float TRANC_DIST_M = 3.1 * max(volumeSizeX, max(volumeSizeY, volumeSizeZ));
 
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -139,14 +139,55 @@ __global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT8* volum
 		float posY = transformation[4 + 0] * oriX + transformation[4 + 1] * oriY + transformation[4 + 2] * oriZ + transformation[12 + 1];
 		float posZ = transformation[8 + 0] * oriX + transformation[8 + 1] * oriY + transformation[8 + 2] * oriZ + transformation[12 + 2];
 
-		int cooX = oriX * FX / oriZ + CX;
-		int cooY = oriY * FY / oriZ + CY;
 
-		if (posZ > 0 && 0 <= cooX && cooX < W && 0 <= cooY && cooY < H) {
-			int cooId = cooY * W + cooX;
-			UINT16 depth = depthData[cooId];
+		float cooX = oriX * FX / oriZ + CX;
+		float cooY = oriY * FY / oriZ + CY;
+		int cooIntX = (int)floor(cooX);
+		int cooIntY = (int)floor(cooY);
 
-			if (depth != 0) {
+		if (posZ > 0 && 0 <= cooIntX && cooIntX + 1 < W && 0 <= cooIntY && cooIntY + 1 < H) {
+			float u = cooX - cooIntX;
+			float v = cooY - cooIntY;
+			float depth = 0;
+			float colorR = 0;
+			float colorG = 0;
+			float colorB = 0;
+			float cooW = 0;
+			if (depthData[cooIntY * W + cooIntX] != 0) {
+				depth += (1 - u) * (1 - v) * depthData[cooIntY * W + cooIntX];
+				colorR += (1 - u) * (1 - v) * colorData[((cooIntY * W + cooIntX) << 2) + 2];
+				colorG += (1 - u) * (1 - v) * colorData[((cooIntY * W + cooIntX) << 2) + 1];
+				colorB += (1 - u) * (1 - v) * colorData[((cooIntY * W + cooIntX) << 2) + 0];
+				cooW += (1 - u) * (1 - v);
+			}
+			if (depthData[cooIntY * W + (cooIntX + 1)] != 0) {
+				depth += u * (1 - v) * depthData[cooIntY * W + (cooIntX + 1)];
+				colorR += u * (1 - v) * colorData[((cooIntY * W + (cooIntX + 1)) << 2) + 2];
+				colorG += u * (1 - v) * colorData[((cooIntY * W + (cooIntX + 1)) << 2) + 1];
+				colorB += u * (1 - v) * colorData[((cooIntY * W + (cooIntX + 1)) << 2) + 0];
+				cooW += u * (1 - v);
+			}
+			if (depthData[(cooIntY + 1) * W + cooIntX] != 0) {
+				depth += (1 - u) * v * depthData[(cooIntY + 1) * W + cooIntX];
+				colorR += (1 - u) * v * colorData[(((cooIntY + 1) * W + cooIntX) << 2) + 2];
+				colorG += (1 - u) * v * colorData[(((cooIntY + 1) * W + cooIntX) << 2) + 1];
+				colorB += (1 - u) * v * colorData[(((cooIntY + 1) * W + cooIntX) << 2) + 0];
+				cooW += (1 - u) * v;
+			}
+			if (depthData[(cooIntY + 1) * W + (cooIntX + 1)] != 0) {
+				depth += u * v * depthData[(cooIntY + 1) * W + (cooIntX + 1)];
+				colorR += u * v * colorData[(((cooIntY + 1) * W + (cooIntX + 1)) << 2) + 2];
+				colorG += u * v * colorData[(((cooIntY + 1) * W + (cooIntX + 1)) << 2) + 1];
+				colorB += u * v * colorData[(((cooIntY + 1) * W + (cooIntX + 1)) << 2) + 0];
+				cooW += u * v;
+			}
+
+			if (cooW != 0) {
+				depth = depth / cooW;
+				colorR = colorR / cooW;
+				colorG = colorG / cooW;
+				colorB = colorB / cooW;
+
 				float xl = (cooX - CX) / FX;
 				float yl = (cooY - CY) / FY;
 				float lambda = sqrt(xl * xl + yl * yl + 1);
@@ -156,9 +197,9 @@ __global__ void kernelIntegrateDepth(float* volume, UINT16* weight, UINT8* volum
 					float tsdf = sdf / TRANC_DIST_M;
 					int id = x + y * resolutionX + z * resolutionX * resolutionY;
 					if (tsdf < 1.0) {
-						volume_color[(id << 2) + 0] = (volume_color[(id << 2) + 0] * weight[id] + colorData[(cooId << 2) + 0]) / (weight[id] + 1.0);
-						volume_color[(id << 2) + 1] = (volume_color[(id << 2) + 1] * weight[id] + colorData[(cooId << 2) + 1]) / (weight[id] + 1.0);
-						volume_color[(id << 2) + 2] = (volume_color[(id << 2) + 2] * weight[id] + colorData[(cooId << 2) + 2]) / (weight[id] + 1.0);
+						volume_color[id * 3 + 0] = (volume_color[id * 3 + 0] * weight[id] + colorR) / (weight[id] + 1.0);
+						volume_color[id * 3 + 1] = (volume_color[id * 3 + 1] * weight[id] + colorG) / (weight[id] + 1.0);
+						volume_color[id * 3 + 2] = (volume_color[id * 3 + 2] * weight[id] + colorB) / (weight[id] + 1.0);
 					} else {
 						tsdf = 1.0;
 					}
@@ -513,9 +554,9 @@ __device__ void deviceCalnEdgePoint(float* volume, UINT8* volume_color, int x1, 
 		edgePointX = ((1 - k) * x1 + k * x2 - 0.5) * volumeSizeX + offsetX;
 		edgePointY = ((1 - k) * y1 + k * y2 - 0.5) * volumeSizeY + offsetY;
 		edgePointZ = ((1 - k) * z1 + k * z2 - 0.5) * volumeSizeZ + offsetZ;
-		R = (UINT8)min((1 - k) * volume_color[(id1 << 2) + 0] + k * volume_color[(id2 << 2) + 0], 255.0);
-		G = (UINT8)min((1 - k) * volume_color[(id1 << 2) + 1] + k * volume_color[(id2 << 2) + 1], 255.0);
-		B = (UINT8)min((1 - k) * volume_color[(id1 << 2) + 2] + k * volume_color[(id2 << 2) + 2], 255.0);
+		R = (UINT8)min((1 - k) * volume_color[id1 * 3 + 0] + k * volume_color[id2 * 3 + 0], 255.0);
+		G = (UINT8)min((1 - k) * volume_color[id1 * 3 + 1] + k * volume_color[id2 * 3 + 1], 255.0);
+		B = (UINT8)min((1 - k) * volume_color[id1 * 3 + 2] + k * volume_color[id2 * 3 + 2], 255.0);
 	}
 }
 

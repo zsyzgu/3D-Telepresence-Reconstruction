@@ -4,6 +4,7 @@
 #include <pcl/point_types.h>
 #include <Windows.h>
 #include <pcl/PolygonMesh.h>
+#include <pcl/point_cloud.h>
 
 class TsdfVolume {
 public:
@@ -12,6 +13,7 @@ public:
 	void clear();
 	void integrate(UINT16* depth, RGBQUAD* color, Eigen::Matrix4f transformation);
 	pcl::PolygonMesh::Ptr calnMesh();
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr calnPointCloud();
 };
 
 #endif
