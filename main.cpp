@@ -101,8 +101,6 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		Timer timer;
-
 		grabber->updateDepthAndColor();
 		UINT16* depthData = grabber->getDepthData();
 		RGBQUAD* colorData = grabber->getColorData();
@@ -112,8 +110,6 @@ int main(int argc, char *argv[]) {
 		volume.integrate(depthData, colorData, transformation);
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = volume.calnMesh();
-
-		timer.outputTime();
 
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
