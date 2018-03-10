@@ -35,6 +35,8 @@ void TsdfVolume::integrate(UINT16 * depth, RGBQUAD* color, Eigen::Matrix4f trans
 	delete[] trans;
 }
 
+#include "Timer.h"
+
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::calnMesh()
 {
 	float* tris;

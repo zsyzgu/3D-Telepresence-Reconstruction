@@ -108,6 +108,7 @@ int main(int argc, char *argv[]) {
 		RGBQUAD* colorData = grabber->getColorData();
 
 		volume.clear();
+
 		volume.integrate(depthData, colorData, transformation);
 
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = volume.calnMesh();
