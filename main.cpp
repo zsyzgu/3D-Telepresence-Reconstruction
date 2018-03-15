@@ -2,11 +2,17 @@
 #include "PointCloudProcess.h"
 #include "Kinect2Grabber.h"
 #include "SceneRegistration.h"
+#include "TsdfVolume.h"
 #include <pcl/gpu/features/features.hpp>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/compression/octree_pointcloud_compression.h>
 #include <pcl/gpu/utils/safe_call.hpp>
+#include <pcl/console/parse.h>
+#include <pcl/io/vtk_lib_io.h>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/conversions.h>
+#include <pcl/surface/vtk_smoothing/vtk_utils.h>
 
 #define CREATE_EXE
 
@@ -83,14 +89,6 @@ void update() {
 	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
 }
 
-#include "TsdfVolume.h"
-
-#include <pcl/console/parse.h>
-#include <pcl/io/vtk_lib_io.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl/conversions.h>
-#include <pcl/surface/vtk_smoothing/vtk_utils.h>
-
 #ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
 	start();
@@ -104,8 +102,6 @@ int main(int argc, char *argv[]) {
 		grabber->updateDepthAndColor();
 		UINT16* depthData = grabber->getDepthData();
 		RGBQUAD* colorData = grabber->getColorData();
-
-		volume.clear();
 
 		volume.integrate(depthData, colorData, transformation);
 

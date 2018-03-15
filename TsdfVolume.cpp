@@ -4,7 +4,6 @@
 
 extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
-extern "C" void cudaClearVolume();
 extern "C" void cudaIntegrateDepth(UINT16* depth, RGBQUAD* color, float* transformation);
 extern "C" void cudaCalculateMesh(float*& tris, UINT8*& tris_color, int& size);
 
@@ -18,11 +17,6 @@ TsdfVolume::~TsdfVolume()
 	cudaReleaseVolume();
 }
 
-void TsdfVolume::clear()
-{
-	cudaClearVolume();
-}
-
 void TsdfVolume::integrate(UINT16 * depth, RGBQUAD* color, Eigen::Matrix4f transformation)
 {
 	float* trans = new float[16];
@@ -34,8 +28,6 @@ void TsdfVolume::integrate(UINT16 * depth, RGBQUAD* color, Eigen::Matrix4f trans
 	cudaIntegrateDepth(depth, color, trans);
 	delete[] trans;
 }
-
-#include "Timer.h"
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::calnMesh()
 {
