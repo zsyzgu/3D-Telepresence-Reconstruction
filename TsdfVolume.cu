@@ -10,22 +10,10 @@
 namespace tsdf {
 	const int W = 512;
 	const int H = 424;
-
-	int resolutionX;
-	int resolutionY;
-	int resolutionZ;
-	float sizeX;
-	float sizeY;
-	float sizeZ;
-	float centerX;
-	float centerY;
-	float centerZ;
-	float volumeSizeX;
-	float volumeSizeY;
-	float volumeSizeZ;
-	float offsetX;
-	float offsetY;
-	float offsetZ;
+	
+	int3 resolution;
+	float3 size;
+	float3 center;
 
 	float* volume_device;
 	UINT8* volume_color_device;
@@ -42,24 +30,24 @@ using namespace tsdf;
 
 extern "C"
 void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ) {
-	tsdf::resolutionX = resolutionX;
-	tsdf::resolutionY = resolutionY;
-	tsdf::resolutionZ = resolutionZ;
-	tsdf::sizeX = sizeX;
-	tsdf::sizeY = sizeY;
-	tsdf::sizeZ = sizeZ;
-	tsdf::centerX = centerX;
-	tsdf::centerY = centerY;
-	tsdf::centerZ = centerZ;
-	cudaMalloc(&volume_device, resolutionX * resolutionY * resolutionZ * sizeof(float));
-	cudaMalloc(&volume_color_device, resolutionX * resolutionY * resolutionZ * 4 * sizeof(UINT8));
+	resolution.x = resolutionX;
+	resolution.y = resolutionY;
+	resolution.z = resolutionZ;
+	size.x = sizeX;
+	size.y = sizeY;
+	size.z = sizeZ;
+	center.x = centerX;
+	center.y = centerY;
+	center.z = centerZ;
+	cudaMalloc(&volume_device, resolution.x * resolution.y * resolution.z * sizeof(float));
+	cudaMalloc(&volume_color_device, resolution.x * resolution.y * resolution.z * 4 * sizeof(UINT8));
 	cudaMalloc(&depth_device, H * W * sizeof(float));
 	cudaMalloc(&color_device, H * W * 4 * sizeof(UINT8));
 	cudaMalloc(&transformation_device, 16 * sizeof(float));
-	cudaMalloc(&count_device, resolutionX * resolutionY * sizeof(int));
-	count_host = new int[resolutionX * resolutionY];
+	cudaMalloc(&count_device, resolution.x * resolution.y * sizeof(int));
+	count_host = new int[resolution.x * resolution.y];
 	block = dim3(BLOCK_SIZE, BLOCK_SIZE);
-	grid = dim3((resolutionX + BLOCK_SIZE - 1) / BLOCK_SIZE, (resolutionY + BLOCK_SIZE - 1) / BLOCK_SIZE);
+	grid = dim3((resolution.x + BLOCK_SIZE - 1) / BLOCK_SIZE, (resolution.y + BLOCK_SIZE - 1) / BLOCK_SIZE);
 }
 
 extern "C"
@@ -156,7 +144,7 @@ void cudaIntegrateDepth(UINT16* depth, RGBQUAD* color, float* transformation) {
 
 	Timer timer;
 
-	kernelIntegrateDepth << <grid, block >> > (volume_device, volume_color_device, depth_device, color_device, transformation_device, resolutionX, resolutionY, resolutionZ, sizeX, sizeY, sizeZ, centerX, centerY, centerZ);
+	kernelIntegrateDepth << <grid, block >> > (volume_device, volume_color_device, depth_device, color_device, transformation_device, resolution.x, resolution.y, resolution.z, size.x, size.y, size.z, center.x, center.y, center.z);
 	cudaDeviceSynchronize();
 
 	timer.outputTime();
@@ -546,32 +534,32 @@ __global__ void kernelMarchingCubes(float* volume, UINT8* volume_color, int* cou
 }
 
 int cudaCountAccumulation() {
-	cudaMemcpy(count_host, count_device, resolutionX * resolutionY * sizeof(int), cudaMemcpyDeviceToHost);
-	for (int i = 1; i < resolutionX * resolutionY; i++) {
+	cudaMemcpy(count_host, count_device, resolution.x * resolution.y * sizeof(int), cudaMemcpyDeviceToHost);
+	for (int i = 1; i < resolution.x * resolution.y; i++) {
 		count_host[i] += count_host[i - 1];
 	}
-	int size = count_host[resolutionX * resolutionY - 1];
-	cudaMemcpy(count_device, count_host, resolutionX * resolutionY * sizeof(int), cudaMemcpyHostToDevice);
-	return size;
+	int tris_size = count_host[resolution.x * resolution.y - 1];
+	cudaMemcpy(count_device, count_host, resolution.x * resolution.y * sizeof(int), cudaMemcpyHostToDevice);
+	return tris_size;
 }
 
 extern "C"
-void cudaCalculateMesh(float*& tris, UINT8*& tris_color, int& size) {
-	kernelMarchingCubesCount << <grid, block >> > (volume_device, count_device, resolutionX, resolutionY, resolutionZ);
+void cudaCalculateMesh(float*& tris, UINT8*& tris_color, int& tri_size) {
+	kernelMarchingCubesCount << <grid, block >> > (volume_device, count_device, resolution.x, resolution.y, resolution.z);
 
-	size = cudaCountAccumulation();
+	tri_size = cudaCountAccumulation();
 
 	float* tris_device;
 	UINT8* tris_color_device;
-	cudaMalloc(&tris_device, size * 9 * sizeof(float));
-	cudaMalloc(&tris_color_device, size * 9 * sizeof(UINT8));
+	cudaMalloc(&tris_device, tri_size * 9 * sizeof(float));
+	cudaMalloc(&tris_color_device, tri_size * 9 * sizeof(UINT8));
 
-	kernelMarchingCubes << <grid, block >> > (volume_device, volume_color_device, count_device, tris_device, tris_color_device, resolutionX, resolutionY, resolutionZ, sizeX, sizeY, sizeZ, centerX, centerY, centerZ);
+	kernelMarchingCubes << <grid, block >> > (volume_device, volume_color_device, count_device, tris_device, tris_color_device, resolution.x, resolution.y, resolution.z, size.x, size.y, size.z, center.x, center.y, center.z);
 
-	tris = new float[size * 9];
-	tris_color = new UINT8[size * 9];
-	cudaMemcpy(tris, tris_device, size * 9 * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(tris_color, tris_color_device, size * 9 * sizeof(UINT8), cudaMemcpyDeviceToHost);
+	tris = new float[tri_size * 9];
+	tris_color = new UINT8[tri_size * 9];
+	cudaMemcpy(tris, tris_device, tri_size * 9 * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(tris_color, tris_color_device, tri_size * 9 * sizeof(UINT8), cudaMemcpyDeviceToHost);
 	
 	cudaFree(tris_device);
 	cudaFree(tris_color_device);
