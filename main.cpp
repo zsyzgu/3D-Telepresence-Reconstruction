@@ -18,21 +18,20 @@
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 pcl::Kinect2Grabber* grabber;
+TsdfVolume* volume;
 Eigen::Matrix4f transformation;
-pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneLocal;
-pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneRemote;
-pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sceneMerged;
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 
 void registration() {
-	transformation = SceneRegistration::align(sceneRemote, sceneLocal);
+
 }
 
 void setBackground() {
 	grabber->updateBackground();
 }
 
-void saveSceneAsRemote() {
-	pcl::io::savePCDFileASCII("view_remote.pcd", *sceneLocal);
+void saveScene() {
+	pcl::io::savePCDFileASCII("scene.pcd", *cloud);
 }
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
@@ -43,7 +42,7 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 		setBackground();
 	}
 	if (event.getKeySym() == "s" && event.keyDown()) {
-		saveSceneAsRemote();
+		saveScene();
 	}
 }
 
@@ -53,13 +52,11 @@ void start() {
 	omp_set_nested(6);
 
 	grabber = new pcl::Kinect2Grabber();
-	sceneLocal = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
-	sceneRemote = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
-	sceneMerged = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 
 	transformation.setIdentity();
-	pcl::io::loadPCDFile("view_remote.pcd", *sceneRemote);
-	pcl::io::loadPCDFile("view_local.pcd", *sceneLocal);
+
+	volume = new TsdfVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
 }
 
 void startViewer() {
@@ -69,24 +66,14 @@ void startViewer() {
 }
 
 void update() {
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr kinectCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+	grabber->updateDepthAndColor();
 
-	kinectCloud = grabber->getPointCloud();
+	UINT16* depthData = grabber->getDepthData();
+	RGBQUAD* colorData = grabber->getColorData();
 
-	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr transformedRemote(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
-	#pragma omp parallel sections
-	{
-		#pragma omp section
-		{
-			PointCloudProcess::pointCloud2PCNormal(sceneLocal, kinectCloud);
-		}
-		#pragma omp section
-		{
-			pcl::transformPointCloud(*sceneRemote, *transformedRemote, transformation);
-		}
-	}
+	volume->integrate(depthData, colorData, transformation);
 
-	PointCloudProcess::merge2PointClouds(sceneMerged, sceneLocal, transformedRemote);
+	cloud = volume->calnMesh();
 }
 
 #ifdef CREATE_EXE
@@ -94,48 +81,21 @@ int main(int argc, char *argv[]) {
 	start();
 	startViewer();
 
-	TsdfVolume volume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
-
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		grabber->updateDepthAndColor();
-		UINT16* depthData = grabber->getDepthData();
-		RGBQUAD* colorData = grabber->getColorData();
-
-		volume.integrate(depthData, colorData, transformation);
-
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = volume.calnMesh();
+		update();
 
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
 	}
 
-	/*
-	start();
-	startViewer();
-
-	Timer timer;
-	while (!viewer->wasStopped()) {
-		viewer->spinOnce();
-
-		timer.reset();
-		update();
-		timer.outputTime();
-
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr viewCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-		pcl::copyPointCloud(*sceneLocal, *viewCloud);
-		if (!viewer->updatePointCloud(viewCloud, "result")) {
-			viewer->addPointCloud(viewCloud, "result");
-		}
-	}*/
-
 	return 0;
 }
 
 #else
-const int BUFFER_SIZE = 12000000;
+const int BUFFER_SIZE = 30000000;
 
 byte buffer[BUFFER_SIZE];
 
@@ -154,20 +114,17 @@ extern "C" {
 	__declspec(dllexport) byte* callUpdate() {
 		update();
 
-		int size = sceneMerged->size();
+		int size = cloud->size();
 		loadBuffer(buffer, &size, 4);
 #pragma omp parallel for
 		for (int i = 0; i < size; i++) {
-			int id = i * 27 + 4;
-			loadBuffer(buffer + id + 0, &(sceneMerged->points[i].x), 4);
-			loadBuffer(buffer + id + 4, &(sceneMerged->points[i].y), 4);
-			loadBuffer(buffer + id + 8, &(sceneMerged->points[i].z), 4);
-			loadBuffer(buffer + id + 12, &(sceneMerged->points[i].r), 1);
-			loadBuffer(buffer + id + 13, &(sceneMerged->points[i].g), 1);
-			loadBuffer(buffer + id + 14, &(sceneMerged->points[i].b), 1);
-			loadBuffer(buffer + id + 15, &(sceneMerged->points[i].normal_x), 4);
-			loadBuffer(buffer + id + 19, &(sceneMerged->points[i].normal_y), 4);
-			loadBuffer(buffer + id + 23, &(sceneMerged->points[i].normal_z), 4);
+			int id = i * 15 + 4;
+			loadBuffer(buffer + id + 0, &(cloud->points[i].x), 4);
+			loadBuffer(buffer + id + 4, &(cloud->points[i].y), 4);
+			loadBuffer(buffer + id + 8, &(cloud->points[i].z), 4);
+			loadBuffer(buffer + id + 12, &(cloud->points[i].r), 1);
+			loadBuffer(buffer + id + 13, &(cloud->points[i].g), 1);
+			loadBuffer(buffer + id + 14, &(cloud->points[i].b), 1);
 		}
 
 		return buffer;
@@ -181,8 +138,8 @@ extern "C" {
 		setBackground();
 	}
 
-	__declspec(dllexport) void callSaveSceneAsRemote() {
-		saveSceneAsRemote();
+	__declspec(dllexport) void callSaveScene() {
+		saveScene();
 	}
 
 	__declspec(dllexport) void callStop() {

@@ -423,7 +423,7 @@ __device__ __forceinline__ UINT16 deviceGetCubeIndex(float* volume, int x, int y
 	if (volume[deviceVid(x + 1, y + 0, z + 1, resolution)] == -1) return 0;
 	if (volume[deviceVid(x + 0, y + 1, z + 1, resolution)] == -1) return 0;
 	if (volume[deviceVid(x + 1, y + 1, z + 1, resolution)] == -1) return 0;
-	int index = 0;
+	UINT16 index = 0;
 	if (volume[deviceVid(x + 0, y + 0, z + 0, resolution)] < 0) index |= 1;
 	if (volume[deviceVid(x + 1, y + 0, z + 0, resolution)] < 0) index |= 2;
 	if (volume[deviceVid(x + 0, y + 1, z + 0, resolution)] < 0) index |= 8;
@@ -439,20 +439,29 @@ __global__ void kernelMarchingCubesCount(float* volume, int* count, int3 resolut
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
+	__shared__ UINT8 triNumber_shared[256];
+	for (int i = threadIdx.y * blockDim.x + threadIdx.x; i < 256; i += blockDim.x * blockDim.y) {
+		triNumber_shared[i] = triNumber_device[i];
+	}
+	__syncthreads();
+
 	if (x + 1 >= resolution.x || y + 1 >= resolution.y) {
 		if (x == resolution.x - 1 || y == resolution.y - 1) {
 			count[devicePid(x, y, resolution)] = 0;
 		}
 		return;
 	}
+	__syncthreads();
 
 	int cnt = 0;
 	for (int z = 0; z + 1 < resolution.z; z++) {
 		int index = deviceGetCubeIndex(volume, x, y, z, resolution);
-		cnt += triNumber_device[index];
+		cnt += triNumber_shared[index];
+		__syncthreads();
 	}
-
 	count[devicePid(x, y, resolution)] = cnt;
+	__syncthreads();
+
 }
 
 __device__ __forceinline__ void deviceCalnEdgePoint(float* volume, UINT8* volume_color, int x1, int y1, int z1, int x2, int y2, int z2, float3& pos, uchar3& color, int3 resolution, float3 size, float3 center) {
@@ -543,12 +552,7 @@ int cudaCountAccumulation() {
 
 extern "C"
 void cudaCalculateMesh(float*& tris, UINT8*& tris_color, int& tri_size) {
-	Timer timer;
-
 	kernelMarchingCubesCount << <grid, block >> > (volume_device, count_device, resolution);
-	cudaDeviceSynchronize();
-
-	timer.outputTime();
 
 	tri_size = cudaCountAccumulation();
 
