@@ -1,6 +1,7 @@
 #include "TsdfVolume.h"
 #include <pcl/point_cloud.h>
 #include <pcl/conversions.h>
+#include "Timer.h"
 
 extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
@@ -38,9 +39,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::calnMesh()
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 	cloud->resize(size * 3);
-	cloud->width = size * 3;
-	cloud->height = 1;
 
+#pragma omp parallel for schedule(static, 500)
 	for (int i = 0; i < size; i++) {
 		for (int j = 0; j < 3; j++) {
 			cloud->points[i * 3 + j].x = tris[i * 9 + j * 3 + 0];
@@ -51,6 +51,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::calnMesh()
 			cloud->points[i * 3 + j].b = tris_color[i * 9 + j * 3 + 2];
 		}
 	}
+
 
 	delete[] tris;
 	delete[] tris_color;

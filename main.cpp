@@ -67,7 +67,6 @@ void startViewer() {
 
 void update() {
 	grabber->updateDepthAndColor();
-
 	UINT16* depthData = grabber->getDepthData();
 	RGBQUAD* colorData = grabber->getColorData();
 
