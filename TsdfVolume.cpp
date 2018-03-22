@@ -6,7 +6,7 @@
 extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
 extern "C" void cudaIntegrateDepth(UINT16* depth, RGBQUAD* color, float* transformation);
-extern "C" void cudaCalculateMesh(float*& tris, UINT8*& tris_color, int& size);
+extern "C" void cudaCalculateMesh(Vertex* vertex, int& size);
 
 TsdfVolume::TsdfVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
@@ -18,7 +18,7 @@ TsdfVolume::~TsdfVolume()
 	cudaReleaseVolume();
 }
 
-void TsdfVolume::integrate(UINT16 * depth, RGBQUAD* color, Eigen::Matrix4f transformation)
+void TsdfVolume::integrate(UINT16* depth, RGBQUAD* color, Eigen::Matrix4f transformation)
 {
 	float* trans = new float[16];
 	for (int y = 0; y < 4; y++) {
@@ -30,31 +30,29 @@ void TsdfVolume::integrate(UINT16 * depth, RGBQUAD* color, Eigen::Matrix4f trans
 	delete[] trans;
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::calnMesh()
+void TsdfVolume::calnMesh(byte* buffer)
 {
-	float* tris;
-	UINT8* tris_color;
-	int size;
-	cudaCalculateMesh(tris, tris_color, size);
+	Vertex* vertex = (Vertex*)(buffer + 4);
+	cudaCalculateMesh(vertex, *((int*)buffer));
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::getPointCloudFromMesh(byte* buffer)
+{
+	int size = *((int*)buffer);
+	Vertex* vertex = (Vertex*)(buffer + 4);
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 	cloud->resize(size * 3);
 
 #pragma omp parallel for schedule(static, 500)
-	for (int i = 0; i < size; i++) {
-		for (int j = 0; j < 3; j++) {
-			cloud->points[i * 3 + j].x = tris[i * 9 + j * 3 + 0];
-			cloud->points[i * 3 + j].y = tris[i * 9 + j * 3 + 1];
-			cloud->points[i * 3 + j].z = tris[i * 9 + j * 3 + 2];
-			cloud->points[i * 3 + j].r = tris_color[i * 9 + j * 3 + 0]; //TODO
-			cloud->points[i * 3 + j].g = tris_color[i * 9 + j * 3 + 1];
-			cloud->points[i * 3 + j].b = tris_color[i * 9 + j * 3 + 2];
-		}
+	for (int i = 0; i < size * 3; i++) {
+		cloud->points[i].x = vertex[i].pos.x;
+		cloud->points[i].y = vertex[i].pos.y;
+		cloud->points[i].z = vertex[i].pos.z;
+		cloud->points[i].r = vertex[i].color.x;
+		cloud->points[i].g = vertex[i].color.y;
+		cloud->points[i].b = vertex[i].color.z;
 	}
-
-
-	delete[] tris;
-	delete[] tris_color;
 
 	return cloud;
 }

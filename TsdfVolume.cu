@@ -4,8 +4,10 @@
 #include <Windows.h>
 #include <iostream>
 #include "Timer.h"
+#include "Vertex.h"
 
 #define BLOCK_SIZE 16
+#define BLOCK_LOG 4
 
 namespace tsdf {
 	const int W = 512;
@@ -31,13 +33,17 @@ namespace tsdf {
 using namespace tsdf;
 
 __device__ __forceinline__ int devicePid(int x, int y, int3 resolution) {
-	int gx = gridDim.x, bx = x / BLOCK_SIZE, tx = x % BLOCK_SIZE;
-	int gy = gridDim.y, by = y / BLOCK_SIZE, ty = y % BLOCK_SIZE;
-	return (by * gx + bx) * BLOCK_SIZE * BLOCK_SIZE + (ty * BLOCK_SIZE + tx);
+	int bx = x >> BLOCK_LOG, tx = x ^ (bx << BLOCK_LOG);
+	int by = y >> BLOCK_LOG, ty = y ^ (by << BLOCK_LOG);
+	return ((((by * gridDim.x + bx) << BLOCK_LOG) + ty) << BLOCK_LOG) + tx;
 }
 
 __device__ __forceinline__ int deviceVid(int x, int y, int z, int3 resolution) {
 	return devicePid(x, y, resolution) + z * resolution.x * resolution.y;
+	/*int bx = x >> BLOCK_LOG, tx = x ^ (bx << BLOCK_LOG);
+	int by = y >> BLOCK_LOG, ty = y ^ (by << BLOCK_LOG);
+	int bz = z >> BLOCK_LOG, tz = z ^ (bz << BLOCK_LOG);
+	return ((((((((bz * gridDim.y) + by) * gridDim.x + bx) << BLOCK_LOG) + tz) << BLOCK_LOG) + ty) << BLOCK_LOG) + tx;*/
 }
 
 extern "C"
@@ -150,7 +156,6 @@ void cudaIntegrateDepth(UINT16* depth, RGBQUAD* color, float* transformation) {
 	cudaMemcpy(transformation_device, transformation, 16 * sizeof(float), cudaMemcpyHostToDevice);
 
 	kernelIntegrateDepth << <grid, block >> > (volume_device, volume_color_device, depth_device, color_device, transformation_device, resolution, volumeSize, offset);
-	cudaDeviceSynchronize();
 }
 
 __constant__ UINT8 triNumber_device[256] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 2, 3, 4, 4, 3, 3, 4, 4, 3, 4, 5, 5, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 2, 3, 3, 4, 3, 4, 2, 3, 3, 4, 4, 5, 4, 5, 3, 2, 3, 4, 4, 3, 4, 5, 3, 2, 4, 5, 5, 4, 5, 2, 4, 1, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 2, 4, 3, 4, 3, 5, 2, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 3, 4, 4, 3, 4, 5, 5, 4, 4, 3, 5, 2, 5, 4, 2, 1, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 2, 3, 3, 2, 3, 4, 4, 5, 4, 5, 5, 2, 4, 3, 5, 4, 3, 2, 4, 1, 3, 4, 4, 5, 4, 5, 3, 4, 4, 5, 5, 2, 3, 4, 2, 1, 2, 3, 3, 2, 3, 4, 2, 1, 3, 2, 4, 1, 2, 1, 1, 0};
@@ -413,6 +418,9 @@ __constant__ INT8 triTable_device[256][16] =
 { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
 
 __device__ __forceinline__ UINT16 deviceGetCubeIndex(float* volume, int x, int y, int z, int3 resolution) {
+	if (x >= resolution.x) return 0;
+	if (y >= resolution.y) return 0;
+	if (z >= resolution.z) return 0;
 	if (volume[deviceVid(x + 0, y + 0, z + 0, resolution)] == -1) return 0;
 	if (volume[deviceVid(x + 1, y + 0, z + 0, resolution)] == -1) return 0;
 	if (volume[deviceVid(x + 0, y + 1, z + 0, resolution)] == -1) return 0;
@@ -433,71 +441,6 @@ __device__ __forceinline__ UINT16 deviceGetCubeIndex(float* volume, int x, int y
 	return index;
 }
 
-__device__ void deviceGetShared4Byte(int x, int y, int z, float* volume, float sharedVolume[][BLOCK_SIZE + 1], int3 resolution) {
-	sharedVolume[threadIdx.x][threadIdx.y] = volume[deviceVid(x, y, z, resolution)];
-	__syncthreads();
-	if (threadIdx.x == 0) {
-		if (x + BLOCK_SIZE >= resolution.x) {
-			sharedVolume[BLOCK_SIZE][threadIdx.y] = -1;
-		} else {
-			sharedVolume[BLOCK_SIZE][threadIdx.y] = volume[deviceVid(x + BLOCK_SIZE, y, z, resolution)];
-		}
-	}
-	__syncthreads();
-	if (threadIdx.y == 0) {
-		if (y + BLOCK_SIZE >= resolution.y) {
-			sharedVolume[threadIdx.x][BLOCK_SIZE] = -1;
-		} else {
-			sharedVolume[threadIdx.x][BLOCK_SIZE] = volume[deviceVid(x, y + BLOCK_SIZE, z, resolution)];
-		}
-	}
-	__syncthreads();
-	if (threadIdx.x == 0 && threadIdx.y == 0) {
-		if (x + BLOCK_SIZE >= resolution.x || y + BLOCK_SIZE >= resolution.y) {
-			sharedVolume[BLOCK_SIZE][BLOCK_SIZE] = -1;
-		} else {
-			sharedVolume[BLOCK_SIZE][BLOCK_SIZE] = volume[deviceVid(x + BLOCK_SIZE, y + BLOCK_SIZE, z, resolution)];
-		}
-	}
-	__syncthreads();
-}
-
-__device__ void deviceCopyShared4Byte(float volume[][BLOCK_SIZE + 1][BLOCK_SIZE + 1]) {
-	volume[0][threadIdx.x][threadIdx.y] = volume[1][threadIdx.x][threadIdx.y];
-	if (threadIdx.x == 0) {
-		volume[0][BLOCK_SIZE][threadIdx.y] = volume[1][BLOCK_SIZE][threadIdx.y];
-	}
-	if (threadIdx.y == 0) {
-		volume[0][threadIdx.x][BLOCK_SIZE] = volume[1][threadIdx.x][BLOCK_SIZE];
-	}
-	if (threadIdx.x == 0 && threadIdx.y == 0) {
-		volume[0][BLOCK_SIZE][BLOCK_SIZE] = volume[1][BLOCK_SIZE][BLOCK_SIZE];
-	}
-}
-
-__device__ int deviceGetCubeIndex2(float volume[][BLOCK_SIZE + 1][BLOCK_SIZE + 1]) {
-	int x = threadIdx.x;
-	int y = threadIdx.y;
-	if (volume[0][x + 0][y + 0] == -1) return 0;
-	if (volume[0][x + 1][y + 0] == -1) return 0;
-	if (volume[0][x + 0][y + 1] == -1) return 0;
-	if (volume[0][x + 1][y + 1] == -1) return 0;
-	if (volume[1][x + 0][y + 0] == -1) return 0;
-	if (volume[1][x + 1][y + 0] == -1) return 0;
-	if (volume[1][x + 0][y + 1] == -1) return 0;
-	if (volume[1][x + 1][y + 1] == -1) return 0;
-	UINT16 index = 0;
-	if (volume[0][x + 0][y + 0] < 0) index |= 1;
-	if (volume[0][x + 1][y + 0] < 0) index |= 2;
-	if (volume[0][x + 0][y + 1] < 0) index |= 8;
-	if (volume[0][x + 1][y + 1] < 0) index |= 4;
-	if (volume[1][x + 0][y + 0] < 0) index |= 16;
-	if (volume[1][x + 1][y + 0] < 0) index |= 32;
-	if (volume[1][x + 0][y + 1] < 0) index |= 128;
-	if (volume[1][x + 1][y + 1] < 0) index |= 64;
-	return index;
-}
-
 __global__ void kernelMarchingCubesCount(float* volume, int* count, int3 resolution) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -508,23 +451,16 @@ __global__ void kernelMarchingCubesCount(float* volume, int* count, int3 resolut
 	}
 	__syncthreads();
 
-	__shared__ float volume_shared[2][BLOCK_SIZE + 1][BLOCK_SIZE + 1];
-	deviceGetShared4Byte(x, y, 0, volume, volume_shared[1], resolution);
-	__syncthreads();
-
 	int cnt = 0;
 	for (int z = 0; z + 1 < resolution.z; z++) {
-		deviceCopyShared4Byte(volume_shared);
-		deviceGetShared4Byte(x, y, z + 1, volume, volume_shared[1], resolution);
+		cnt += triNumber_shared[deviceGetCubeIndex(volume, x, y, z, resolution)];
 		__syncthreads();
-		UINT16 index = deviceGetCubeIndex2(volume_shared);
-		cnt += triNumber_shared[index];
 	}
-	__syncthreads();
+
 	count[devicePid(x, y, resolution)] = cnt;
 }
 
-__device__ __forceinline__ void deviceCalnEdgePoint(float* volume, uchar4* volume_color, int x1, int y1, int z1, int x2, int y2, int z2, float3& pos, uchar3& color, int3 resolution, float3 volumeSize, float3 offset) {
+__device__ __forceinline__ void deviceCalnEdgePoint(float* volume, uchar4* volume_color, int x1, int y1, int z1, int x2, int y2, int z2, float3& pos, uchar4& color, int3 resolution, float3 volumeSize, float3 offset) {
 	int id1 = deviceVid(x1, y1, z1, resolution);
 	int id2 = deviceVid(x2, y2, z2, resolution);
 	float v1 = volume[id1];
@@ -540,69 +476,30 @@ __device__ __forceinline__ void deviceCalnEdgePoint(float* volume, uchar4* volum
 	}
 }
 
-__device__ __forceinline__ void deviceCalnEdgePoint2(float* volume2, float volume[][BLOCK_SIZE + 1][BLOCK_SIZE + 1], uchar4 volumeColor[][BLOCK_SIZE + 1][BLOCK_SIZE + 1], int x, int y, int z, int dx1, int dy1, int dz1, int dx2, int dy2, int dz2, float3& pos, uchar3& color, int3 resolution, float3 volumeSize, float3 offset) {
-	float v1 = volume[dz1][threadIdx.x + dx1][threadIdx.y + dy1];
-	float v2 = volume[dz2][threadIdx.x + dx2][threadIdx.y + dy2];
-		/*int id1 = deviceVid(x + dx1, y + dy1, z + dz1, resolution);
-		int id2 = deviceVid(x + dx2, y + dy2, z + dz2, resolution);
-		v1 = volume2[id1];
-		v2 = volume2[id2];*/
-	uchar4 color1 = volumeColor[dz1][threadIdx.x + dx1][threadIdx.y + dy1];
-	uchar4 color2 = volumeColor[dz2][threadIdx.x + dx2][threadIdx.y + dy2];
-	if ((v1 < 0) ^ (v2 < 0)) {
-		float k = v1 / (v1 - v2);
-		pos.x = (x + (1 - k) * dx1 + k * dx2 - 0.5) * volumeSize.x + offset.x;
-		pos.y = (y + (1 - k) * dy1 + k * dy2 - 0.5) * volumeSize.y + offset.y;
-		pos.z = (z + (1 - k) * dz1 + k * dz2 - 0.5) * volumeSize.z + offset.z;
-		color.x = (UINT8)min((1 - k) * color1.x + k * color2.x, 255.0);
-		color.y = (UINT8)min((1 - k) * color1.y + k * color2.y, 255.0);
-		color.z = (UINT8)min((1 - k) * color1.z + k * color2.z, 255.0);
-	}
-}
-
-__global__ void kernelMarchingCubes(float* volume, uchar4* volume_color, int* count, float3* tris, uchar3* tris_color, int3 resolution, float3 volumeSize, float3 offset) {
+__global__ void kernelMarchingCubes(float* volume, uchar4* volume_color, int* count, /*float3* tris, uchar4* tris_color*/Vertex* vertex, int3 resolution, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
-	__shared__ float volume_shared[2][BLOCK_SIZE + 1][BLOCK_SIZE + 1];
-	deviceGetShared4Byte(x, y, 0, volume, volume_shared[1], resolution);
-	__syncthreads();
-
-	__shared__ uchar4 volumeColor_shared[2][BLOCK_SIZE + 1][BLOCK_SIZE + 1];
-	deviceGetShared4Byte(x, y, 0, (float*)volume_color, (float (*)[BLOCK_SIZE + 1])volumeColor_shared[1], resolution);
-	__syncthreads();
+	__shared__ INT8 triTable_shared[256][16];
+	for (int i = threadIdx.y * blockDim.x + threadIdx.x; i < 256; i += blockDim.x * blockDim.y) {
+		for (int j = 0; j < 16; j++) {
+			triTable_shared[i][j] = triTable_device[i][j];
+		}
+		__syncthreads();
+	}
 
 	float3 pos[12];
-	uchar3 color[12];
+	uchar4 color[12];
 
-	int tid = count[devicePid(x, y, resolution)];
+	const int MAX_BUFFER = 300;
+	int tot = 0;
+	float3 posBuffer[MAX_BUFFER];
+	uchar4 colorBuffer[MAX_BUFFER];
+
 	for (int z = 0; z + 1 < resolution.z; z++) {
-		deviceCopyShared4Byte(volume_shared);
-		deviceGetShared4Byte(x, y, z + 1, volume, volume_shared[1], resolution);
-		__syncthreads();
+		int index = deviceGetCubeIndex(volume, x, y, z, resolution);
 
-		deviceCopyShared4Byte((float(*)[BLOCK_SIZE + 1][BLOCK_SIZE + 1])volumeColor_shared);
-		deviceGetShared4Byte(x, y, z + 1, (float*)volume_color, (float(*)[BLOCK_SIZE + 1])volumeColor_shared[1], resolution);
-		__syncthreads();
-
-		UINT16 index = deviceGetCubeIndex2(volume_shared);
-
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 0, 0, 0, 1, 0, 0, pos[0], color[0], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 1, 0, 0, 1, 1, 0, pos[1], color[1], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 1, 1, 0, 0, 1, 0, pos[2], color[2], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 0, 1, 0, 0, 0, 0, pos[3], color[3], resolution, volumeSize, offset);
-
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 0, 0, 1, 1, 0, 1, pos[4], color[4], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 1, 0, 1, 1, 1, 1, pos[5], color[5], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 1, 1, 1, 0, 1, 1, pos[6], color[6], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 0, 1, 1, 0, 0, 1, pos[7], color[7], resolution, volumeSize, offset);
-
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 0, 0, 0, 0, 0, 1, pos[8], color[8], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 1, 0, 0, 1, 0, 1, pos[9], color[9], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 1, 1, 0, 1, 1, 1, pos[10], color[10], resolution, volumeSize, offset);
-		deviceCalnEdgePoint2(volume, volume_shared, volumeColor_shared, x, y, z, 0, 1, 0, 0, 1, 1, pos[11], color[11], resolution, volumeSize, offset);
-
-		/*deviceCalnEdgePoint(volume, volume_color, x + 0, y + 0, z + 0, x + 1, y + 0, z + 0, pos[0], color[0], resolution, volumeSize, offset);
+		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 0, z + 0, x + 1, y + 0, z + 0, pos[0], color[0], resolution, volumeSize, offset);
 		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 0, z + 0, x + 1, y + 1, z + 0, pos[1], color[1], resolution, volumeSize, offset);
 		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 1, z + 0, x + 0, y + 1, z + 0, pos[2], color[2], resolution, volumeSize, offset);
 		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 1, z + 0, x + 0, y + 0, z + 0, pos[3], color[3], resolution, volumeSize, offset);
@@ -615,20 +512,30 @@ __global__ void kernelMarchingCubes(float* volume, uchar4* volume_color, int* co
 		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 0, z + 0, x + 0, y + 0, z + 1, pos[8], color[8], resolution, volumeSize, offset);
 		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 0, z + 0, x + 1, y + 0, z + 1, pos[9], color[9], resolution, volumeSize, offset);
 		deviceCalnEdgePoint(volume, volume_color, x + 1, y + 1, z + 0, x + 1, y + 1, z + 1, pos[10], color[10], resolution, volumeSize, offset);
-		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 1, z + 0, x + 0, y + 1, z + 1, pos[11], color[11], resolution, volumeSize, offset);*/
-
-		for (int i = 0; i < 5; i++) {
-			if (triTable_device[index][i * 3] != -1) {
-				for (int j = 0; j < 3; j++) {
-					int edgeId = triTable_device[index][i * 3 + j];
-					tris[tid * 3 + j] = pos[edgeId];
-					tris_color[tid * 3 + j] = color[edgeId];
+		deviceCalnEdgePoint(volume, volume_color, x + 0, y + 1, z + 0, x + 0, y + 1, z + 1, pos[11], color[11], resolution, volumeSize, offset);
+		
+		if (triTable_shared[index][0] != -1) {
+			for (int i = 0; i < 5; i++) {
+				if (triTable_shared[index][i * 3] != -1) {
+					for (int j = 0; j < 3; j++) {
+						int edgeId = triTable_shared[index][i * 3 + j];
+						posBuffer[tot] = pos[edgeId];
+						colorBuffer[tot] = color[edgeId];
+						tot++;
+					}
+				} else {
+					break;
 				}
-				tid++;
-			} else {
-				break;
 			}
 		}
+
+		__syncthreads();
+	}
+
+	int tid = count[devicePid(x, y, resolution)] * 3;
+	for (int i = 0; i < tot; i++) {
+		vertex[tid + i].pos = posBuffer[i];
+		vertex[tid + i].color = colorBuffer[i];
 	}
 }
 
@@ -647,26 +554,14 @@ int cudaCountAccumulation() {
 }
 
 extern "C"
-void cudaCalculateMesh(float*& tris, UINT8*& tris_color, int& tri_size) {
+void cudaCalculateMesh(Vertex* vertex, int& tri_size) {
 	kernelMarchingCubesCount << <grid, block >> > (volume_device, count_device, resolution);
 	tri_size = cudaCountAccumulation();
 
-	float3* tris_device;
-	uchar3* tris_color_device;
+	Vertex* vertex_device;
+	cudaMalloc(&vertex_device, tri_size * 3 * sizeof(Vertex));
+	kernelMarchingCubes << <grid, block >> > (volume_device, volume_color_device, count_device, vertex_device, resolution, volumeSize, offset);
+	cudaMemcpy(vertex, vertex_device, tri_size * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost);
 
-	cudaMalloc(&tris_device, tri_size * 3 * sizeof(float3));
-	cudaMalloc(&tris_color_device, tri_size * 3 * sizeof(uchar3));
-
-	Timer timer;
-	kernelMarchingCubes << <grid, block >> > (volume_device, volume_color_device, count_device, tris_device, tris_color_device, resolution, volumeSize, offset);
-	cudaDeviceSynchronize();
-	timer.outputTime();
-
-	tris = new float[tri_size * 9];
-	tris_color = new UINT8[tri_size * 9];
-	cudaMemcpy(tris, tris_device, tri_size * 9 * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(tris_color, tris_color_device, tri_size * 9 * sizeof(UINT8), cudaMemcpyDeviceToHost);
-
-	cudaFree(tris_device);
-	cudaFree(tris_color_device);
+	cudaFree(vertex_device);
 }

@@ -14,9 +14,10 @@
 #include <pcl/conversions.h>
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 
-#define CREATE_EXE
+//#define CREATE_EXE
 
-boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
+const int BUFFER_SIZE = 30000000;
+byte* buffer;
 pcl::Kinect2Grabber* grabber;
 TsdfVolume* volume;
 Eigen::Matrix4f transformation;
@@ -57,7 +58,32 @@ void start() {
 	transformation.setIdentity();
 
 	volume = new TsdfVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
+
+	buffer = new byte[BUFFER_SIZE];
 }
+
+void update() {
+	grabber->updateDepthAndColor();
+	UINT16* depthData = grabber->getDepthData();
+	RGBQUAD* colorData = grabber->getColorData();
+	volume->integrate(depthData, colorData, transformation);
+	volume->calnMesh(buffer);
+}
+
+void stop() {
+	if (grabber != NULL) {
+		delete grabber;
+	}
+	if (volume != NULL) {
+		delete volume;
+	}
+	if (buffer != nullptr) {
+		delete[] buffer;
+	}
+}
+
+#ifdef CREATE_EXE
+boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
 void startViewer() {
 	viewer = boost::shared_ptr<pcl::visualization::PCLVisualizer>(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
@@ -65,17 +91,6 @@ void startViewer() {
 	viewer->registerKeyboardCallback(keyboardEventOccurred);
 }
 
-void update() {
-	grabber->updateDepthAndColor();
-	UINT16* depthData = grabber->getDepthData();
-	RGBQUAD* colorData = grabber->getColorData();
-
-	volume->integrate(depthData, colorData, transformation);
-
-	cloud = volume->calnMesh();
-}
-
-#ifdef CREATE_EXE
 int main(int argc, char *argv[]) {
 	start();
 	startViewer();
@@ -83,28 +98,23 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
+		Timer timer;
+
 		update();
 
+		timer.outputTime();
+
+		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
 	}
 
+	stop();
 	return 0;
 }
 
 #else
-const int BUFFER_SIZE = 30000000;
-
-byte buffer[BUFFER_SIZE];
-
-void loadBuffer(byte* dst, void* src, int size) {
-	byte* pt = (byte*)src;
-	for (int i = 0; i < size; i++) {
-		dst[i] = pt[i];
-	}
-}
-
 extern "C" {
 	__declspec(dllexport) void callStart() {
 		start();
@@ -112,20 +122,6 @@ extern "C" {
 
 	__declspec(dllexport) byte* callUpdate() {
 		update();
-
-		int size = cloud->size();
-		loadBuffer(buffer, &size, 4);
-#pragma omp parallel for
-		for (int i = 0; i < size; i++) {
-			int id = i * 15 + 4;
-			loadBuffer(buffer + id + 0, &(cloud->points[i].x), 4);
-			loadBuffer(buffer + id + 4, &(cloud->points[i].y), 4);
-			loadBuffer(buffer + id + 8, &(cloud->points[i].z), 4);
-			loadBuffer(buffer + id + 12, &(cloud->points[i].r), 1);
-			loadBuffer(buffer + id + 13, &(cloud->points[i].g), 1);
-			loadBuffer(buffer + id + 14, &(cloud->points[i].b), 1);
-		}
-
 		return buffer;
 	}
 
@@ -142,7 +138,7 @@ extern "C" {
 	}
 
 	__declspec(dllexport) void callStop() {
-
+		stop();
 	}
 }
 #endif
