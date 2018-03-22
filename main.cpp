@@ -17,11 +17,13 @@
 //#define CREATE_EXE
 
 const int BUFFER_SIZE = 30000000;
-byte* buffer;
-pcl::Kinect2Grabber* grabber;
-TsdfVolume* volume;
+byte* buffer = NULL;
+pcl::Kinect2Grabber* grabber = NULL;
+TsdfVolume* volume = NULL;
 Eigen::Matrix4f transformation;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+
+boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
 void registration() {
 
@@ -45,6 +47,12 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "s" && event.keyDown()) {
 		saveScene();
 	}
+}
+
+void startViewer() {
+	viewer = boost::shared_ptr<pcl::visualization::PCLVisualizer>(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
+	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
+	viewer->registerKeyboardCallback(keyboardEventOccurred);
 }
 
 void start() {
@@ -77,19 +85,12 @@ void stop() {
 	if (volume != NULL) {
 		delete volume;
 	}
-	if (buffer != nullptr) {
+	if (buffer != NULL) {
 		delete[] buffer;
 	}
 }
 
 #ifdef CREATE_EXE
-boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
-
-void startViewer() {
-	viewer = boost::shared_ptr<pcl::visualization::PCLVisualizer>(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
-	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
-	viewer->registerKeyboardCallback(keyboardEventOccurred);
-}
 
 int main(int argc, char *argv[]) {
 	start();
@@ -98,11 +99,7 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		Timer timer;
-
 		update();
-
-		timer.outputTime();
 
 		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
@@ -111,6 +108,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	stop();
+
 	return 0;
 }
 

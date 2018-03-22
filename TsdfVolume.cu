@@ -77,6 +77,7 @@ void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float siz
 extern "C"
 void cudaReleaseVolume() {
 	cudaFree(volume_device);
+	cudaFree(volume_color_device);
 	cudaFree(depth_device);
 	cudaFree(color_device);
 	cudaFree(transformation_device);
