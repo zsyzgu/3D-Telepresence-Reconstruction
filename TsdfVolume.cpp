@@ -5,7 +5,7 @@
 
 extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
-extern "C" void cudaIntegrateDepth(UINT16* depth, RGBQUAD* color, float* transformation);
+extern "C" void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, float** transformation);
 extern "C" void cudaCalculateMesh(Vertex* vertex, int& size);
 
 TsdfVolume::TsdfVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
@@ -18,15 +18,21 @@ TsdfVolume::~TsdfVolume()
 	cudaReleaseVolume();
 }
 
-void TsdfVolume::integrate(UINT16* depth, RGBQUAD* color, Eigen::Matrix4f transformation)
+void TsdfVolume::integrate(int cameras, UINT16** depth, RGBQUAD** color, Eigen::Matrix4f* transformation)
 {
-	float* trans = new float[16];
-	for (int y = 0; y < 4; y++) {
-		for (int x = 0; x < 4; x++) {
-			trans[y * 4 + x] = transformation(y, x);
+	float** trans = new float*[cameras];
+	for (int c = 0; c < cameras; c++) {
+		trans[c] = new float[16];
+		for (int i = 0; i < 16; i++) {
+			trans[c][i] = transformation[c](i / 4, i % 4);
 		}
 	}
-	cudaIntegrateDepth(depth, color, trans);
+
+	cudaIntegrateDepth(cameras, depth, color, trans);
+
+	for (int c = 0; c < cameras; c++) {
+		delete[] trans[c];
+	}
 	delete[] trans;
 }
 

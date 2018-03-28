@@ -73,7 +73,7 @@ void update() {
 	grabber->updateDepthAndColor();
 	UINT16* depthData = grabber->getDepthData();
 	RGBQUAD* colorData = grabber->getColorData();
-	volume->integrate(depthData, colorData, transformation);
+	volume->integrate(1, &depthData, &colorData, &transformation);
 	volume->calnMesh(buffer);
 
 	timer.outputTime();

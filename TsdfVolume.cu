@@ -85,7 +85,7 @@ void cudaReleaseVolume() {
 	delete[] count_host;
 }
 
-__global__ void kernelIntegrateDepth(float* volume, uchar4* volume_color, UINT16* depthData, uchar4* colorData, float* transformation, int3 resolution, float3 volumeSize, float3 offset) {
+__global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_color, UINT16* depthData, uchar4* colorData, float* transformation, int3 resolution, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -151,12 +151,14 @@ __global__ void kernelIntegrateDepth(float* volume, uchar4* volume_color, UINT16
 }
 
 extern "C"
-void cudaIntegrateDepth(UINT16* depth, RGBQUAD* color, float* transformation) {
-	cudaMemcpy(depth_device, depth, H * W * sizeof(UINT16), cudaMemcpyHostToDevice);
-	cudaMemcpy(color_device, color, H * W * sizeof(uchar4), cudaMemcpyHostToDevice);
-	cudaMemcpy(transformation_device, transformation, 16 * sizeof(float), cudaMemcpyHostToDevice);
+void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, float** transformation) {
+	for (int c = 0; c < cameras; c++) {
+		cudaMemcpy(depth_device + c * H * W * sizeof(UINT16), depth[c], H * W * sizeof(UINT16), cudaMemcpyHostToDevice);
+		cudaMemcpy(color_device + c * H * W * sizeof(uchar4), color[c], H * W * sizeof(uchar4), cudaMemcpyHostToDevice);
+		cudaMemcpy(transformation_device + c * 16 * sizeof(float) , transformation[c], 16 * sizeof(float), cudaMemcpyHostToDevice);
+	}
 
-	kernelIntegrateDepth << <grid, block >> > (volume_device, volume_color_device, depth_device, color_device, transformation_device, resolution, volumeSize, offset);
+	kernelIntegrateDepth << <grid, block >> > (cameras, volume_device, volume_color_device, depth_device, color_device, transformation_device, resolution, volumeSize, offset);
 }
 
 __constant__ UINT8 triNumber_device[256] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 2, 3, 4, 4, 3, 3, 4, 4, 3, 4, 5, 5, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 2, 3, 3, 4, 3, 4, 2, 3, 3, 4, 4, 5, 4, 5, 3, 2, 3, 4, 4, 3, 4, 5, 3, 2, 4, 5, 5, 4, 5, 2, 4, 1, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 2, 4, 3, 4, 3, 5, 2, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 3, 4, 4, 3, 4, 5, 5, 4, 4, 3, 5, 2, 5, 4, 2, 1, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 2, 3, 3, 2, 3, 4, 4, 5, 4, 5, 5, 2, 4, 3, 5, 4, 3, 2, 4, 1, 3, 4, 4, 5, 4, 5, 3, 4, 4, 5, 5, 2, 3, 4, 2, 1, 2, 3, 3, 2, 3, 4, 2, 1, 3, 2, 4, 1, 2, 1, 1, 0};
