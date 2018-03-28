@@ -6,8 +6,9 @@
 #include "Timer.h"
 #include "Vertex.h"
 
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 16 // FIXED !!! for optimization
 #define BLOCK_LOG 4
+#define MAX_CAMERAS 8
 
 namespace tsdf {
 	const int W = 512;
@@ -65,9 +66,9 @@ void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float siz
 	offset.z = center.z - size.z / 2;
 	cudaMalloc(&volume_device, resolution.x * resolution.y * resolution.z * sizeof(float));
 	cudaMalloc(&volume_color_device, resolution.x * resolution.y * resolution.z * sizeof(uchar4));
-	cudaMalloc(&depth_device, H * W * sizeof(float));
-	cudaMalloc(&color_device, H * W * sizeof(uchar4));
-	cudaMalloc(&transformation_device, 16 * sizeof(float));
+	cudaMalloc(&depth_device, H * W * sizeof(float) * MAX_CAMERAS);
+	cudaMalloc(&color_device, H * W * sizeof(uchar4) * MAX_CAMERAS);
+	cudaMalloc(&transformation_device, 16 * sizeof(float) * MAX_CAMERAS);
 	cudaMalloc(&count_device, resolution.x * resolution.y * sizeof(int));
 	count_host = new int[resolution.x * resolution.y];
 	block = dim3(BLOCK_SIZE, BLOCK_SIZE);
@@ -89,9 +90,9 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
-	__shared__ float trans_shared[16];
-	if (threadIdx.y == 0) {
-		trans_shared[threadIdx.x] = transformation[threadIdx.x];
+	__shared__ float trans_shared[16 * MAX_CAMERAS];
+	if (threadIdx.y < cameras) {
+		trans_shared[threadIdx.y * 16 + threadIdx.x] = transformation[threadIdx.y * 16 + threadIdx.x];
 	}
 
 	if (x >= resolution.x || y >= resolution.y) {
@@ -110,42 +111,58 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 	float oriY = (y + 0.5) * volumeSize.y + offset.y;
 	for (int z = 0; z < resolution.z; z++) {
 		float oriZ = (z + 0.5) * volumeSize.z + offset.z;
-		float posX = trans_shared[0 + 0] * oriX + trans_shared[0 + 1] * oriY + trans_shared[0 + 2] * oriZ + trans_shared[12 + 0];
-		float posY = trans_shared[4 + 0] * oriX + trans_shared[4 + 1] * oriY + trans_shared[4 + 2] * oriZ + trans_shared[12 + 1];
-		float posZ = trans_shared[8 + 0] * oriX + trans_shared[8 + 1] * oriY + trans_shared[8 + 2] * oriZ + trans_shared[12 + 2];
-		
-		int cooX = posX * FX / posZ + CX;
-		int cooY = posY * FY / posZ + CY;
 
-		float tsdf = -1;
-		uchar4 color;
+		int weight = 0;
+		float tsdf = 0;
+		float4 color;
 		color.x = color.y = color.z = 0;
-		if (posZ > 0 && 0 <= cooX && cooX < W && 0 <= cooY && cooY < H) {
-			UINT16 depth = depthData[cooY * W + cooX];
-			
-			if (depth != 0) {
-				float xl = (cooX - CX) / FX;
-				float yl = (cooY - CY) / FY;
-				float sdf = depth * 0.001 - rsqrtf((xl * xl + yl * yl + 1) / (posX * posX + posY * posY + posZ * posZ));
 
-				if (sdf >= -TRANC_DIST_M) {
-					tsdf = sdf / TRANC_DIST_M;
+		for (int c = 0; c < cameras; c++) {
+			float* cameraTrans = trans_shared + c * 16;
+			UINT16* cameraDepth = depthData + c * H * W;
+			uchar4* cameraColor = colorData + c * H * W;
 
-					if (tsdf < 1.0) {
-						color.x = colorData[cooY * W + cooX].z;
-						color.y = colorData[cooY * W + cooX].y;
-						color.z = colorData[cooY * W + cooX].x;
-					} else {
-						tsdf = 1.0;
+			float posX = cameraTrans[0] * oriX + cameraTrans[1] * oriY + cameraTrans[2] * oriZ + cameraTrans[12];
+			float posY = cameraTrans[4] * oriX + cameraTrans[5] * oriY + cameraTrans[6] * oriZ + cameraTrans[13];
+			float posZ = cameraTrans[8] * oriX + cameraTrans[9] * oriY + cameraTrans[10] * oriZ + cameraTrans[14];
+
+			int cooX = posX * FX / posZ + CX;
+			int cooY = posY * FY / posZ + CY;
+
+			if (posZ > 0 && 0 <= cooX && cooX < W && 0 <= cooY && cooY < H) {
+				UINT16 depth = cameraDepth[cooY * W + cooX];
+
+				if (depth != 0) {
+					float xl = (cooX - CX) / FX;
+					float yl = (cooY - CY) / FY;
+					float sdf = depth * 0.001 - rsqrtf((xl * xl + yl * yl + 1) / (posX * posX + posY * posY + posZ * posZ));
+
+					if (sdf >= -TRANC_DIST_M) {
+						weight++;
+						color.x += cameraColor[cooY * W + cooX].z;
+						color.y += cameraColor[cooY * W + cooX].y;
+						color.z += cameraColor[cooY * W + cooX].x;
+						tsdf += min(sdf / TRANC_DIST_M, 1.0);
 					}
 				}
 			}
 		}
-		__syncthreads();
+
 		int id = deviceVid(x, y, z, resolution);
-		volume[id] = tsdf;
 		__syncthreads();
-		volume_color[id] = color;
+
+		if (weight != 0) {
+			volume[id] = tsdf / weight;
+		} else {
+			volume[id] = -1;
+		}
+		__syncthreads();
+
+		if (weight != 0) {
+			volume_color[id].x = color.x / weight;
+			volume_color[id].y = color.y / weight;
+			volume_color[id].z = color.z / weight;
+		}
 		__syncthreads();
 	}
 }
@@ -153,9 +170,9 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 extern "C"
 void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, float** transformation) {
 	for (int c = 0; c < cameras; c++) {
-		cudaMemcpy(depth_device + c * H * W * sizeof(UINT16), depth[c], H * W * sizeof(UINT16), cudaMemcpyHostToDevice);
-		cudaMemcpy(color_device + c * H * W * sizeof(uchar4), color[c], H * W * sizeof(uchar4), cudaMemcpyHostToDevice);
-		cudaMemcpy(transformation_device + c * 16 * sizeof(float) , transformation[c], 16 * sizeof(float), cudaMemcpyHostToDevice);
+		cudaMemcpy(depth_device + c * H * W, depth[c], H * W * sizeof(UINT16), cudaMemcpyHostToDevice);
+		cudaMemcpy(color_device + c * H * W, color[c], H * W * sizeof(uchar4), cudaMemcpyHostToDevice);
+		cudaMemcpy(transformation_device + c * 16, transformation[c], 16 * sizeof(float), cudaMemcpyHostToDevice);
 	}
 
 	kernelIntegrateDepth << <grid, block >> > (cameras, volume_device, volume_color_device, depth_device, color_device, transformation_device, resolution, volumeSize, offset);
@@ -558,6 +575,7 @@ int cudaCountAccumulation() {
 
 extern "C"
 void cudaCalculateMesh(Vertex* vertex, int& tri_size) {
+
 	kernelMarchingCubesCount << <grid, block >> > (volume_device, count_device, resolution);
 	tri_size = cudaCountAccumulation();
 

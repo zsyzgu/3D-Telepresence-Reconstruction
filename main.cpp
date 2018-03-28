@@ -16,7 +16,7 @@
 
 #define CREATE_EXE
 
-const int BUFFER_SIZE = 30000000;
+const int BUFFER_SIZE = 100000000;
 byte* buffer = NULL;
 pcl::Kinect2Grabber* grabber = NULL;
 TsdfVolume* volume = NULL;
@@ -73,8 +73,24 @@ void update() {
 	grabber->updateDepthAndColor();
 	UINT16* depthData = grabber->getDepthData();
 	RGBQUAD* colorData = grabber->getColorData();
-	volume->integrate(1, &depthData, &colorData, &transformation);
+
+	UINT16** depths = new UINT16*[2];
+	depths[0] = depthData;
+	depths[1] = depthData;
+	RGBQUAD** colors = new RGBQUAD*[2];
+	colors[0] = colorData;
+	colors[1] = colorData;
+	Eigen::Matrix4f* trans = new Eigen::Matrix4f[2];
+	trans[0] = transformation;
+	trans[1] = transformation;
+	trans[1](3, 0) = 0.01;
+
+	volume->integrate(2, depths, colors, trans);
 	volume->calnMesh(buffer);
+
+	delete[] depths;
+	delete[] colors;
+	delete[] trans;
 
 	timer.outputTime();
 }
