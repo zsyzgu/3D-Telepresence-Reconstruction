@@ -113,7 +113,7 @@ __global__ void kernelIntegrateDepth(float* volume, uchar4* volume_color, UINT16
 		float posX = trans_shared[0 + 0] * oriX + trans_shared[0 + 1] * oriY + trans_shared[0 + 2] * oriZ + trans_shared[12 + 0];
 		float posY = trans_shared[4 + 0] * oriX + trans_shared[4 + 1] * oriY + trans_shared[4 + 2] * oriZ + trans_shared[12 + 1];
 		float posZ = trans_shared[8 + 0] * oriX + trans_shared[8 + 1] * oriY + trans_shared[8 + 2] * oriZ + trans_shared[12 + 2];
-
+		
 		int cooX = posX * FX / posZ + CX;
 		int cooY = posY * FY / posZ + CY;
 

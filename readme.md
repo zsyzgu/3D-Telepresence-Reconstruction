@@ -1,12 +1,25 @@
-1. 安装最新版本的visual studio
+1. 安装visual studio，版本最好是v15.4。（v15.5与cuda9.1不兼容，v15.6不清楚)
 
-2. 安装point cloud library (pcl): http://pointclouds.org/downloads/windows.html
+2. 安装Cuda9.1，注意此步骤需在安装vs以后进行，这样vs中就会被装上cuda的插件。
 
-3. 通过cmake生成vs工程
+3. 确保你的visual studio可以将一个普通工程改成CUDA工程，这个流程可以网上搜索一下
 
-4. vs工程没有通过cmakelist维护，所以需要手动添加各源文件才能运行
+4. 安装point cloud library (pcl) 1.8.1 with gpu，需要手动编译，会遇到很多的坑，建议按照网上精细教程进行。
 
-由于pcl1.8.1和vs 15.4 / vs15.5之间的兼容bug，我在pcl源码中改动了一些，才能编译通过：
-1. 使用StandaloneMarchingCubes时引出的编译bug: https://github.com/Microsoft/vcpkg/issues/1968
-2. 有一个部分是说最新的cuda不支持怎么怎么直接访问显存的，先下载到主存即可
-3. 还有很多很多的bug来自pcl、微软和英伟达，我已经忘了，祝您编译愉快！
+5. 通过cmake生成本项目的vs工程，编译器选择visual studio 2017 v15 Win64
+
+6. 在vs中打开本项目以后，还需要进行一些cuda方面的配置：
+
+    * 可以删除Object Files文件夹
+    
+    * 右键项目 > 生成依赖项 > 生成自定义 > CUDA 9.1 打勾
+
+    * 右键项目 > 属性 > CUDA C/C++ > Common > 64-bit (--machine 64)
+
+    * 右键项目 > 属性 > CUDA C/C++ > Device > compute_30,sm_30
+
+    * 右键*.cu > 属性 > 常规 > 项类型 > CUDAS C/C++
+
+    * 右键*.cu > 属性 > CUDA C/C++ > Common > 64-bit (--machine 64)
+
+    * 右键*.cu > 属性 > CUDA C/C++ > Device > compute_30,sm_30

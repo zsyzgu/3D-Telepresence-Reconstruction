@@ -4,11 +4,26 @@ set( CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH} )
 project( pc-recog )
 set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "pc-recog" )
 
+# OpenMP
+FIND_PACKAGE( OpenMP REQUIRED )  
+if(OPENMP_FOUND)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")  
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")  
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")  
+endif()  
+
+# Cuda
+find_package( CUDA REQUIRED )
+set(CUDA_NVCC_FLAGS -gencode arch=compute_60,code=sm_60;-G;-g)
+file(GLOB_RECURSE CURRENT_HEADERS  *.h *.hpp *.cuh)
+file(GLOB CURRENT_SOURCES  *.cpp *.cu)
+source_group("Include" FILES ${CURRENT_HEADERS}) 
+source_group("Source" FILES ${CURRENT_SOURCES}) 
+
 # Find Packages
 find_package( PCL 1.8 REQUIRED )
 set( KinectSDK2_FUSION TRUE )
 find_package( KinectSDK2 REQUIRED )
-find_package( CUDA REQUIRED )
 
 # Additional Include Directories
 include_directories( ${PCL_INCLUDE_DIRS} )
@@ -22,11 +37,19 @@ link_directories( ${PCL_LIBRARY_DIRS} )
 link_directories( ${KinectSDK2_LIBRARY_DIRS} )
 
 cuda_add_executable( pc-recog main.cpp
-	Kinect2Grabber.h Kinect2Grabber.cpp
-	PointCloudProcess.cpp PointCloudProcess.h
-	SceneRegistration.cpp SceneRegistration.h
-	Timer.cpp Timer.h
-	BilateralFilter.cu )
+	Vertex.h
+	Kinect2Grabber.h
+	Kinect2Grabber.cpp
+	PointCloudProcess.h
+	PointCloudProcess.cpp
+	SceneRegistration.h
+	SceneRegistration.cpp
+	Timer.h
+	Timer.cpp
+	TsdfVolume.h
+	TsdfVolume.cpp
+	BilateralFilter.cu
+	TsdfVolume.cu)
 
 # Additional Dependencies
 target_link_libraries( pc-recog ${PCL_LIBRARIES} )

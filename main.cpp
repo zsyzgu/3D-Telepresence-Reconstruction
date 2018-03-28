@@ -14,7 +14,7 @@
 #include <pcl/conversions.h>
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 
-//#define CREATE_EXE
+#define CREATE_EXE
 
 const int BUFFER_SIZE = 30000000;
 byte* buffer = NULL;
@@ -62,20 +62,21 @@ void start() {
 
 	grabber = new pcl::Kinect2Grabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-
 	transformation.setIdentity();
-
 	volume = new TsdfVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
-
 	buffer = new byte[BUFFER_SIZE];
 }
 
 void update() {
+	Timer timer;
+
 	grabber->updateDepthAndColor();
 	UINT16* depthData = grabber->getDepthData();
 	RGBQUAD* colorData = grabber->getColorData();
 	volume->integrate(depthData, colorData, transformation);
 	volume->calnMesh(buffer);
+
+	timer.outputTime();
 }
 
 void stop() {
