@@ -496,7 +496,7 @@ __device__ __forceinline__ void deviceCalnEdgePoint(float* volume, uchar4* volum
 	}
 }
 
-__global__ void kernelMarchingCubes(float* volume, uchar4* volume_color, int* count, /*float3* tris, uchar4* tris_color*/Vertex* vertex, int3 resolution, float3 volumeSize, float3 offset) {
+__global__ void kernelMarchingCubes(float* volume, uchar4* volume_color, int* count, Vertex* vertex, int3 resolution, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
