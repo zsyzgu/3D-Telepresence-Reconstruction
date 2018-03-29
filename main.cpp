@@ -56,7 +56,6 @@ void startViewer() {
 }
 
 void start() {
-	cudaSetDevice(1);
 	omp_set_num_threads(4);
 	omp_set_nested(6);
 
@@ -74,7 +73,7 @@ void update() {
 	UINT16* depthData = grabber->getDepthData();
 	RGBQUAD* colorData = grabber->getColorData();
 
-	UINT16** depths = new UINT16*[2];
+	/*UINT16** depths = new UINT16*[2]; // Usage to fuse two depth images.
 	depths[0] = depthData;
 	depths[1] = depthData;
 	RGBQUAD** colors = new RGBQUAD*[2];
@@ -84,13 +83,13 @@ void update() {
 	trans[0] = transformation;
 	trans[1] = transformation;
 	trans[1](3, 0) = 0.01;
-
 	volume->integrate(2, depths, colors, trans);
-	volume->calnMesh(buffer);
-
 	delete[] depths;
 	delete[] colors;
-	delete[] trans;
+	delete[] trans;*/
+
+	volume->integrate(1, &depthData, &colorData, &transformation);
+	volume->calnMesh(buffer);
 
 	timer.outputTime();
 }
