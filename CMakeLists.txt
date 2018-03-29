@@ -1,8 +1,8 @@
  cmake_minimum_required( VERSION 2.8 )
 set( CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH} )
 
-project( pc-recog )
-set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "pc-recog" )
+project( 3D-Telepresence )
+set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "3D-Telepresence" )
 
 # OpenMP
 FIND_PACKAGE( OpenMP REQUIRED )  
@@ -36,7 +36,7 @@ add_definitions( ${PCL_DEFINITIONS} )
 link_directories( ${PCL_LIBRARY_DIRS} )
 link_directories( ${KinectSDK2_LIBRARY_DIRS} )
 
-cuda_add_executable( pc-recog main.cpp
+cuda_add_executable( 3D-Telepresence main.cpp
 	Vertex.h
 	Kinect2Grabber.h
 	Kinect2Grabber.cpp
@@ -52,5 +52,5 @@ cuda_add_executable( pc-recog main.cpp
 	TsdfVolume.cu)
 
 # Additional Dependencies
-target_link_libraries( pc-recog ${PCL_LIBRARIES} )
-target_link_libraries( pc-recog ${KinectSDK2_LIBRARIES} )
+target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )
+target_link_libraries( 3D-Telepresence ${KinectSDK2_LIBRARIES} )
