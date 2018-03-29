@@ -33,8 +33,7 @@ namespace pcl
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
 		void updateBackground();
 		void updateDepthAndColor();
-		UINT16* getDepthData() { return depthData; }
-		RGBQUAD* getColorData() { return colorData; }
+		void getDepthAndColor(UINT16*& depthData, RGBQUAD*& colorData);
 
 	protected:
 		void loadBackground();

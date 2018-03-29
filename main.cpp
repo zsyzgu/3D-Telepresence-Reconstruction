@@ -22,7 +22,6 @@ pcl::Kinect2Grabber* grabber = NULL;
 TsdfVolume* volume = NULL;
 Eigen::Matrix4f transformation;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
-
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
 void registration() {
@@ -69,28 +68,19 @@ void start() {
 void update() {
 	Timer timer;
 
-	grabber->updateDepthAndColor();
-	UINT16* depthData = grabber->getDepthData();
-	RGBQUAD* colorData = grabber->getColorData();
+	UINT16* depthList[2];
+	RGBQUAD* colorList[2];
+	Eigen::Matrix4f transformationArray[2];
+	transformationArray[0] = transformation;
+	transformationArray[1] = transformation;
+	grabber->getDepthAndColor(depthList[0], colorList[0]);
+	
+	//int cameras = 1 + yourInstance->getRemoteDepthAndColor(depthArray[1], colorArray[1]);
+	//volume->integrate(cameras, depthArray, colorArray, transformationArray);
+	volume->integrate(1, depthList, colorList, transformationArray);
 
-	/*UINT16** depths = new UINT16*[2]; // Usage to fuse two depth images.
-	depths[0] = depthData;
-	depths[1] = depthData;
-	RGBQUAD** colors = new RGBQUAD*[2];
-	colors[0] = colorData;
-	colors[1] = colorData;
-	Eigen::Matrix4f* trans = new Eigen::Matrix4f[2];
-	trans[0] = transformation;
-	trans[1] = transformation;
-	trans[1](3, 0) = 0.01;
-	volume->integrate(2, depths, colors, trans);
-	delete[] depths;
-	delete[] colors;
-	delete[] trans;*/
-
-	volume->integrate(1, &depthData, &colorData, &transformation);
 	volume->calnMesh(buffer);
-
+	
 	timer.outputTime();
 }
 

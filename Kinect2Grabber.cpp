@@ -183,7 +183,6 @@ namespace pcl
 		return convertRGBDepthToPointXYZRGB();
 	}
 
-
 	void Kinect2Grabber::updateDepthAndColor()
 	{
 		IDepthFrame* depthFrame = nullptr;
@@ -237,6 +236,13 @@ namespace pcl
 		}
 
 		delete[] depthToColorSpaceTable;
+	}
+
+	void Kinect2Grabber::getDepthAndColor(UINT16 *& depthData, RGBQUAD*& colorData)
+	{
+		updateDepthAndColor();
+		depthData = this->depthData;
+		colorData = this->colorData;
 	}
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB()

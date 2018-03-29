@@ -508,6 +508,10 @@ __global__ void kernelMarchingCubes(float* volume, uchar4* volume_color, int* co
 		__syncthreads();
 	}
 
+	if (x + 1 >= resolution.x || y + 1 >= resolution.y) {
+		return;
+	}	
+
 	float3 pos[12];
 	uchar4 color[12];
 
