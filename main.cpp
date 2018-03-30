@@ -3,6 +3,7 @@
 #include "Kinect2Grabber.h"
 #include "SceneRegistration.h"
 #include "TsdfVolume.h"
+#include "TcpSocket.h"
 #include <pcl/gpu/features/features.hpp>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/io/pcd_io.h>
@@ -23,6 +24,8 @@ TsdfVolume* volume = NULL;
 Eigen::Matrix4f transformation;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
+TcpSocket* tcpsocket = NULL;
+TcpSocket* client = NULL;
 
 void registration() {
 
@@ -63,25 +66,32 @@ void start() {
 	transformation.setIdentity();
 	volume = new TsdfVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
 	buffer = new byte[BUFFER_SIZE];
+
+	tcpsocket = new TcpServer();
+	
+
 }
 
 void update() {
 	Timer timer;
-
 	UINT16* depthList[2];
 	RGBQUAD* colorList[2];
 	Eigen::Matrix4f transformationArray[2];
 	transformationArray[0] = transformation;
 	transformationArray[1] = transformation;
+
 	grabber->getDepthAndColor(depthList[0], colorList[0]);
+	//tcpsocket->SendData(depthList[0], WIDTH * HEIGHT, colorList[0], WIDTH * HEIGHT);
+
+	int cameras = 1 + tcpsocket->getRemoteDepthAndColor(depthList[0], colorList[0]);
 	
-	//int cameras = 1 + yourInstance->getRemoteDepthAndColor(depthArray[1], colorArray[1]);
-	//volume->integrate(cameras, depthArray, colorArray, transformationArray);
-	volume->integrate(1, depthList, colorList, transformationArray);
+	volume->integrate(cameras, depthList, colorList, transformationArray);
+	//volume->integrate(1, depthList, colorList, transformationArray);
 
 	volume->calnMesh(buffer);
-	
+
 	timer.outputTime();
+
 }
 
 void stop() {
@@ -99,22 +109,37 @@ void stop() {
 #ifdef CREATE_EXE
 
 int main(int argc, char *argv[]) {
+
 	start();
 	startViewer();
+	tcpsocket->Init("127.0.0.1", 1234);
+	
+#pragma omp parallel sections
+	{
+#pragma omp section
+		{
+			while (!viewer->wasStopped()) {
+				viewer->spinOnce();
 
-	while (!viewer->wasStopped()) {
-		viewer->spinOnce();
+				update();
 
-		update();
-
-		cloud = volume->getPointCloudFromMesh(buffer);
-		if (!viewer->updatePointCloud(cloud, "cloud")) {
-			viewer->addPointCloud(cloud, "cloud");
+				cloud = volume->getPointCloudFromMesh(buffer);
+				if (!viewer->updatePointCloud(cloud, "cloud")) {
+					viewer->addPointCloud(cloud, "cloud");
+				}
+			}
+		}
+#pragma omp section
+		{
+			
+			while (true) {
+				tcpsocket->Run();
+			}
+			
 		}
 	}
-
+	tcpsocket->Clean();
 	stop();
-
 	return 0;
 }
 

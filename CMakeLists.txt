@@ -44,6 +44,8 @@ cuda_add_executable( 3D-Telepresence main.cpp
 	PointCloudProcess.cpp
 	SceneRegistration.h
 	SceneRegistration.cpp
+	TcpSocket.h
+	TcpSocket.cpp
 	Timer.h
 	Timer.cpp
 	TsdfVolume.h
