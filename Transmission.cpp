@@ -15,7 +15,6 @@ Transmission::Transmission()
 {
 	WSAStartup(MAKEWORD(2, 2), &wsaData);
 	bool isServer = (strcmp(getHostIP(), IP) == 0);
-	std::cout << isServer << std::endl;
 
 	memset(&sockAddr, 0, sizeof(sockAddr));
 	sockAddr.sin_family = PF_INET;
