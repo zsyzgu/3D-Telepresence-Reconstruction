@@ -14,6 +14,7 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/conversions.h>
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
+#include <windows.h>
 
 #define CREATE_EXE
 
@@ -21,11 +22,10 @@ const int BUFFER_SIZE = 100000000;
 byte* buffer = NULL;
 pcl::Kinect2Grabber* grabber = NULL;
 TsdfVolume* volume = NULL;
-Eigen::Matrix4f transformation;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
-Transmission* sock = NULL;
+Transmission* transmission = NULL;
 UINT16* depthList[2];
 RGBQUAD* colorList[2];
 Eigen::Matrix4f transformationList[2];
@@ -60,6 +60,15 @@ void startViewer() {
 	viewer->registerKeyboardCallback(keyboardEventOccurred);
 }
 
+DWORD WINAPI TransmissionRecvThread(LPVOID pM)
+{
+	while (true) {
+		Sleep(1);
+		transmission->recvRGBD(depthList[1], colorList[1]);
+	}
+	return 0;
+}
+
 void start() {
 	omp_set_num_threads(4);
 	omp_set_nested(6);
@@ -71,14 +80,15 @@ void start() {
 	volume = new TsdfVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
 	buffer = new byte[BUFFER_SIZE];
 
-	sock = new Transmission();
+	transmission = new Transmission();
+	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
 }
 
 void update() {
 	Timer timer;
 
 	grabber->getDepthAndColor(depthList[0], colorList[0]);
-	sock->sendRGBD(depthList[0], colorList[0]);
+	transmission->sendRGBD(depthList[0], colorList[0]);
 
 	volume->integrate(2, depthList, colorList, transformationList);
 	volume->calnMesh(buffer);
@@ -96,8 +106,8 @@ void stop() {
 	if (buffer != NULL) {
 		delete[] buffer;
 	}
-	if (sock != NULL) {
-		delete sock;
+	if (transmission != NULL) {
+		delete transmission;
 	}
 }
 
@@ -107,27 +117,14 @@ int main(int argc, char *argv[]) {
 	start();
 	startViewer();
 
-	#pragma omp parallel sections
-	{
-		#pragma omp section
-		{
-			while (!viewer->wasStopped()) {
-				viewer->spinOnce();
+	while (!viewer->wasStopped()) {
+		viewer->spinOnce();
 
-				update();
+		update();
 
-				cloud = volume->getPointCloudFromMesh(buffer);
-				if (!viewer->updatePointCloud(cloud, "cloud")) {
-					viewer->addPointCloud(cloud, "cloud");
-				}
-			}
-		}
-		#pragma omp section
-		{
-			while (true) {
-				Sleep(1);
-				sock->receiveRGBD(depthList[1], colorList[1]);
-			}
+		cloud = volume->getPointCloudFromMesh(buffer);
+		if (!viewer->updatePointCloud(cloud, "cloud")) {
+			viewer->addPointCloud(cloud, "cloud");
 		}
 	}
 

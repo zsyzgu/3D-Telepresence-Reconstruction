@@ -11,6 +11,28 @@ char* Transmission::getHostIP()
 	return hostIP;
 }
 
+void Transmission::sendData(char* data, int tot)
+{
+	int offset = 0;
+	while (offset != tot) {
+		int len = min(BUFF_SIZE, tot - offset);
+		send(sock, data + offset, len, 0);
+		offset += len;
+	}
+}
+
+void Transmission::recvData(char* data, int tot)
+{
+	int len = 0;
+	int offset = 0;
+	while (len = recv(sock, data + offset, min(BUFF_SIZE, tot - offset), 0)) {
+		offset += len;
+		if (offset == tot) {
+			break;
+		}
+	}
+}
+
 Transmission::Transmission()
 {
 	WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -35,8 +57,8 @@ Transmission::Transmission()
 		connect(sock, (SOCKADDR*)&sockAddr, sizeof(sockAddr));
 	}
 
-	receivedDepth = new UINT16[LEN];
-	receivedColor = new RGBQUAD[LEN];
+	storedDepth = new UINT16[LEN];
+	storedColor = new RGBQUAD[LEN];
 }
 
 Transmission::~Transmission()
@@ -44,33 +66,11 @@ Transmission::~Transmission()
 	closesocket(sock);
 	WSACleanup();
 
-	if (receivedDepth != NULL) {
-		delete[] receivedDepth;
+	if (storedDepth != NULL) {
+		delete[] storedDepth;
 	}
-	if (receivedColor != NULL) {
-		delete[] receivedColor;
-	}
-}
-
-void Transmission::sendData(char* data, int tot)
-{
-	int offset = 0;
-	while (offset != tot) {
-		int len = min(BUFF_SIZE, tot - offset);
-		send(sock, data + offset, len, 0);
-		offset += len;
-	}
-}
-
-void Transmission::receiveData(char* data, int tot)
-{
-	int len = 0;
-	int offset = 0;
-	while (len = recv(sock, data + offset, min(BUFF_SIZE, tot - offset), 0)) {
-		offset += len;
-		if (offset == tot) {
-			break;
-		}
+	if (storedColor != NULL) {
+		delete[] storedColor;
 	}
 }
 
@@ -81,10 +81,10 @@ void Transmission::sendRGBD(UINT16* sendDepth, RGBQUAD* sendColor)
 }
 
 
-void Transmission::receiveRGBD(UINT16*& receivedDepth, RGBQUAD*& receivedColor)
+void Transmission::recvRGBD(UINT16*& recvDepth, RGBQUAD*& recvColor)
 {
-	receivedDepth = this->receivedDepth;
-	receivedColor = this->receivedColor;
-	receiveData((char*)receivedDepth, LEN * sizeof(UINT16));
-	receiveData((char*)receivedColor, LEN * sizeof(RGBQUAD));
+	recvDepth = this->storedDepth;
+	recvColor = this->storedColor;
+	recvData((char*)recvDepth, LEN * sizeof(UINT16));
+	recvData((char*)recvColor, LEN * sizeof(RGBQUAD));
 }
