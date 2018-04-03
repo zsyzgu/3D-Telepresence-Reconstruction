@@ -1,5 +1,6 @@
 #include "SceneRegistration.h"
 #include "Timer.h"
+#include "PointCloudProcess.h"
 #include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
@@ -13,7 +14,16 @@ SceneRegistration::~SceneRegistration() {
 
 }
 
-Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr target)
+Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGB>::Ptr source, pcl::PointCloud<pcl::PointXYZRGB>::Ptr target)
+{
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr sourceNormal = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr targetNormal = pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	PointCloudProcess::pointCloud2PCNormal(sourceNormal, source);
+	PointCloudProcess::pointCloud2PCNormal(targetNormal, target);
+	align(sourceNormal, targetNormal);
+}
+
+Eigen::Matrix4f SceneRegistration::align(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr target)
 {
 	Timer timer;
 

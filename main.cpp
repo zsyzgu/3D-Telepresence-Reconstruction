@@ -31,7 +31,9 @@ RGBQUAD* colorList[2];
 Eigen::Matrix4f transformationList[2];
 
 void registration() {
-
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr local = grabber->getPointCloud(depthList[0], colorList[0]);
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr remote = grabber->getPointCloud(depthList[1], colorList[1]);
+	transformationList[1] = SceneRegistration::align(local, remote);
 }
 
 void setBackground() {
@@ -88,6 +90,7 @@ void update() {
 	Timer timer;
 
 	grabber->getDepthAndColor(depthList[0], colorList[0]);
+	grabber->getDepthAndColor(depthList[1], colorList[1]);
 	transmission->sendRGBD(depthList[0], colorList[0]);
 
 	volume->integrate(2, depthList, colorList, transformationList);

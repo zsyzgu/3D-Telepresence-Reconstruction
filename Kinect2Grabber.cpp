@@ -113,7 +113,6 @@ namespace pcl
 
 		backgroundDepth = new UINT16[H * W];
 		backgroundColor = new RGBQUAD[H * W];
-		foregroundMask = new bool[H * W];
 		loadBackground();
 		depthData = &depthBuffer[0];
 		colorData = new RGBQUAD[H * W];
@@ -132,7 +131,6 @@ namespace pcl
 		SafeRelease(depthReader);
 		delete[] backgroundDepth;
 		delete[] backgroundColor;
-		delete[] foregroundMask;
 		delete[] colorData;
 	}
 
@@ -158,29 +156,37 @@ namespace pcl
 		}
 	}
 
-	void pcl::Kinect2Grabber::calnForegroundMask() {
-#pragma omp parallel for schedule(static, 500)
-		for (int i = 0; i < H * W; i++) {
-			if (backgroundDepth[i] == 0) {
-				foregroundMask[i] = true;
-			}
-			else {
-				int depthDiff = abs(depthData[i] - backgroundDepth[i]);
-				int colorDiff = abs(colorData[i].rgbRed - backgroundColor[i].rgbRed) + abs(colorData[i].rgbGreen - backgroundColor[i].rgbGreen) + abs(colorData[i].rgbBlue - backgroundColor[i].rgbBlue);
-				if (depthDiff + 5.0 * colorDiff / (3 * 255) >= 10) {
-					foregroundMask[i] = true;
-				}
-				else {
-					foregroundMask[i] = false;
-				}
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr Kinect2Grabber::getPointCloud(UINT16* depthData, RGBQUAD* colorData)
+	{
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+		cloud->points.resize(H * W);
+		cloud->width = W;
+		cloud->height = H;
+		cloud->is_dense = false;
+
+		UINT32 tableCount;
+		PointF* depthToCameraSpaceTable = nullptr;
+		mapper->GetDepthFrameToCameraSpaceTable(&tableCount, &depthToCameraSpaceTable);
+
+#pragma omp parallel for schedule(dynamic, 1)
+		for (int y = 0; y < H; y++) {
+			int id = y * W;
+			pcl::PointXYZRGB* pt = &cloud->points[id];
+			for (int x = 0; x < W; x++, pt++, id++) {
+				float depth = depthData[id];
+				pt->b = colorData[id].rgbBlue;
+				pt->g = colorData[id].rgbGreen;
+				pt->r = colorData[id].rgbRed;
+				PointF spacePoint = depthToCameraSpaceTable[id];
+				pt->x = spacePoint.X * depth * 0.001f;
+				pt->y = spacePoint.Y * depth * 0.001f;
+				pt->z = depth * 0.001f;
 			}
 		}
-	}
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr Kinect2Grabber::getPointCloud()
-	{
-		updateDepthAndColor();
-		return convertRGBDepthToPointXYZRGB();
+		delete[] depthToCameraSpaceTable;
+
+		return cloud;
 	}
 
 	void Kinect2Grabber::updateDepthAndColor()
@@ -202,7 +208,6 @@ namespace pcl
 		spatialFiltering();
 		temporalFiltering();
 		bilateralFiltering();
-		calnForegroundMask();
 
 		ColorSpacePoint* depthToColorSpaceTable = new ColorSpacePoint[W * H];
 		mapper->MapDepthFrameToColorSpace(W * H, depthData, W * H, depthToColorSpaceTable);
@@ -214,7 +219,7 @@ namespace pcl
 				ColorSpacePoint colorSpacePoint = depthToColorSpaceTable[id];
 				int colorX = static_cast<int>(std::floor(colorSpacePoint.X));
 				int colorY = static_cast<int>(std::floor(colorSpacePoint.Y));
-				if (foregroundMask[id] && depthData[id] != 0 && (0 <= colorX) && (colorX + 1 < colorWidth) && (0 <= colorY) && (colorY + 1 < colorHeight)) {
+				if (depthData[id] != 0 && (0 <= colorX) && (colorX + 1 < colorWidth) && (0 <= colorY) && (colorY + 1 < colorHeight)) {
 					RGBQUAD colorLU = colorBuffer[colorY * colorWidth + colorX];
 					RGBQUAD colorRU = colorBuffer[colorY * colorWidth + (colorX + 1)];
 					RGBQUAD colorLB = colorBuffer[(colorY + 1) * colorWidth + colorX];
@@ -230,7 +235,6 @@ namespace pcl
 					colorData[id].rgbGreen = 0;
 					colorData[id].rgbRed = 0;
 					depthData[id] = 0;
-					foregroundMask[id] = false;
 				}
 			}
 		}
@@ -243,41 +247,6 @@ namespace pcl
 		updateDepthAndColor();
 		depthData = this->depthData;
 		colorData = this->colorData;
-	}
-
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl::Kinect2Grabber::convertRGBDepthToPointXYZRGB()
-	{
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-		cloud->points.resize(H * W);
-		cloud->width = W;
-		cloud->height = H;
-		cloud->is_dense = false;
-
-		UINT32 tableCount;
-		PointF* depthToCameraSpaceTable = nullptr;
-		mapper->GetDepthFrameToCameraSpaceTable(&tableCount, &depthToCameraSpaceTable);
-
-#pragma omp parallel for schedule(dynamic, 1)
-		for (int y = 0; y < H; y++) {
-			int id = y * W;
-			pcl::PointXYZRGB* pt = &cloud->points[id];
-			for (int x = 0; x < W; x++, pt++, id++) {
-				if (foregroundMask[id]) {
-					float depth = depthData[id];
-					pt->b = colorData[id].rgbBlue;
-					pt->g = colorData[id].rgbGreen;
-					pt->r = colorData[id].rgbRed;
-					PointF spacePoint = depthToCameraSpaceTable[id];
-					pt->x = spacePoint.X * depth * 0.001f;
-					pt->y = spacePoint.Y * depth * 0.001f;
-					pt->z = depth * 0.001f;
-				}
-			}
-		}
-
-		delete[] depthToCameraSpaceTable;
-		
-		return cloud;
 	}
 
 	void pcl::Kinect2Grabber::spatialFiltering() {

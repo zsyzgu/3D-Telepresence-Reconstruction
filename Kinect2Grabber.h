@@ -30,15 +30,13 @@ namespace pcl
 		Kinect2Grabber();
 		~Kinect2Grabber() throw ();
 
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud(UINT16* depthData, RGBQUAD* colorData);
 		void updateBackground();
 		void updateDepthAndColor();
 		void getDepthAndColor(UINT16*& depthData, RGBQUAD*& colorData);
 
 	protected:
 		void loadBackground();
-		void calnForegroundMask();
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertRGBDepthToPointXYZRGB();
 		void spatialFiltering();
 		void temporalFiltering();
 		void bilateralFiltering();
@@ -60,7 +58,6 @@ namespace pcl
 		int H;
 		UINT16* backgroundDepth;
 		RGBQUAD* backgroundColor;
-		bool* foregroundMask;
 		UINT16* depthData;
 		RGBQUAD* colorData;
 	};

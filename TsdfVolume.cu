@@ -41,10 +41,6 @@ __device__ __forceinline__ int devicePid(int x, int y, int3 resolution) {
 
 __device__ __forceinline__ int deviceVid(int x, int y, int z, int3 resolution) {
 	return devicePid(x, y, resolution) + z * resolution.x * resolution.y;
-	/*int bx = x >> BLOCK_LOG, tx = x ^ (bx << BLOCK_LOG);
-	int by = y >> BLOCK_LOG, ty = y ^ (by << BLOCK_LOG);
-	int bz = z >> BLOCK_LOG, tz = z ^ (bz << BLOCK_LOG);
-	return ((((((((bz * gridDim.y) + by) * gridDim.x + bx) << BLOCK_LOG) + tz) << BLOCK_LOG) + ty) << BLOCK_LOG) + tx;*/
 }
 
 extern "C"

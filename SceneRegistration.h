@@ -12,7 +12,8 @@ public:
 	~SceneRegistration();
 
 public:
-	Eigen::Matrix4f static align(pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::ConstPtr target);
+	Eigen::Matrix4f static align(pcl::PointCloud<pcl::PointXYZRGB>::Ptr source, pcl::PointCloud<pcl::PointXYZRGB>::Ptr target);
+	Eigen::Matrix4f static align(pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr source, pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr target);
 };
 
 #endif
