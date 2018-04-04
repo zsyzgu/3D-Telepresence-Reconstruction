@@ -108,9 +108,9 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 	for (int z = 0; z < resolution.z; z++) {
 		float oriZ = (z + 0.5) * volumeSize.z + offset.z;
 
-		int weight = 0;
-		float tsdf = 0;
-		float4 color;
+		bool flag = false;
+		float tsdf = 1.0;
+		uchar4 color;
 		color.x = color.y = color.z = 0;
 
 		for (int c = 0; c < cameras; c++) {
@@ -134,11 +134,12 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 					float sdf = depth * 0.001 - rsqrtf((xl * xl + yl * yl + 1) / (posX * posX + posY * posY + posZ * posZ));
 
 					if (sdf >= -TRANC_DIST_M) {
-						weight++;
-						color.x += cameraColor[cooY * W + cooX].z;
-						color.y += cameraColor[cooY * W + cooX].y;
-						color.z += cameraColor[cooY * W + cooX].x;
-						tsdf += min(sdf / TRANC_DIST_M, 1.0);
+						flag = true;
+						sdf = sdf / TRANC_DIST_M;
+						if (sdf < tsdf) {
+							color = cameraColor[cooY * W + cooX];
+							tsdf = sdf;
+						}
 					}
 				}
 			}
@@ -147,17 +148,17 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 		int id = deviceVid(x, y, z, resolution);
 		__syncthreads();
 
-		if (weight != 0) {
-			volume[id] = tsdf / weight;
+		if (flag) {
+			volume[id] = tsdf;
 		} else {
 			volume[id] = -1;
 		}
 		__syncthreads();
 
-		if (weight != 0) {
-			volume_color[id].x = color.x / weight;
-			volume_color[id].y = color.y / weight;
-			volume_color[id].z = color.z / weight;
+		if (flag) {
+			volume_color[id].x = color.z;
+			volume_color[id].y = color.y;
+			volume_color[id].z = color.x;
 		}
 		__syncthreads();
 	}
