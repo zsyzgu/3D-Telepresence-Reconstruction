@@ -16,7 +16,7 @@
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 #include <windows.h>
 
-#define CREATE_EXE
+//#define CREATE_EXE
 
 const int BUFFER_SIZE = 100000000;
 byte* buffer = NULL;
@@ -90,7 +90,6 @@ void update() {
 	Timer timer;
 
 	grabber->getDepthAndColor(depthList[0], colorList[0]);
-	grabber->getDepthAndColor(depthList[1], colorList[1]);
 	transmission->sendRGBD(depthList[0], colorList[0]);
 
 	volume->integrate(2, depthList, colorList, transformationList);

@@ -8,8 +8,7 @@
 
 class Transmission {
 private:
-	//const char* IP = "192.168.1.1";
-	const char* IP = "127.0.0.1";
+	const char* IP = "192.168.1.1";
 	const int port = 1234;
 
 	WSADATA wsaData;
