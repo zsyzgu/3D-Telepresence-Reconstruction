@@ -16,7 +16,7 @@
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 #include <windows.h>
 
-#define CREATE_EXE
+//#define CREATE_EXE
 
 const int BUFFER_SIZE = 100000000;
 byte* buffer = NULL;
