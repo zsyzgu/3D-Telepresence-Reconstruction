@@ -16,7 +16,8 @@
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 #include <windows.h>
 
-//#define CREATE_EXE
+#define CREATE_EXE
+//#define TRANSMISSION
 
 const int BUFFER_SIZE = 100000000;
 byte* buffer = NULL;
@@ -25,10 +26,13 @@ TsdfVolume* volume = NULL;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
-Transmission* transmission = NULL;
 UINT16* depthList[2];
 RGBQUAD* colorList[2];
 Eigen::Matrix4f transformationList[2];
+
+#ifdef TRANSMISSION
+Transmission* transmission = NULL;
+#endif
 
 void registration() {
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr local = grabber->getPointCloud(depthList[0], colorList[0]);
@@ -62,6 +66,7 @@ void startViewer() {
 	viewer->registerKeyboardCallback(keyboardEventOccurred);
 }
 
+#ifdef TRANSMISSION
 DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 {
 	while (true) {
@@ -70,6 +75,7 @@ DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 	}
 	return 0;
 }
+#endif
 
 void start() {
 	omp_set_num_threads(4);
@@ -82,17 +88,24 @@ void start() {
 	volume = new TsdfVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
 	buffer = new byte[BUFFER_SIZE];
 
+#ifdef TRANSMISSION
 	transmission = new Transmission();
 	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
+#endif
 }
 
 void update() {
 	Timer timer;
 
 	grabber->getDepthAndColor(depthList[0], colorList[0]);
-	transmission->sendRGBD(depthList[0], colorList[0]);
 
+#ifdef TRANSMISSION
+	transmission->sendRGBD(depthList[0], colorList[0]);
 	volume->integrate(2, depthList, colorList, transformationList);
+#else
+	volume->integrate(1, depthList, colorList, transformationList);
+#endif
+
 	volume->calnMesh(buffer);
 
 	timer.outputTime();
@@ -108,9 +121,11 @@ void stop() {
 	if (buffer != NULL) {
 		delete[] buffer;
 	}
+#ifdef TRANSMISSION
 	if (transmission != NULL) {
 		delete transmission;
 	}
+#endif
 }
 
 #ifdef CREATE_EXE

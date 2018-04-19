@@ -1,6 +1,4 @@
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-#include "device_functions.h"
+#include "CudaHandleError.h"
 #include <Windows.h>
 #include <iostream>
 #include "Timer.h"
@@ -60,12 +58,12 @@ void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float siz
 	offset.x = center.x - size.x / 2;
 	offset.y = center.y - size.y / 2;
 	offset.z = center.z - size.z / 2;
-	cudaMalloc(&volume_device, resolution.x * resolution.y * resolution.z * sizeof(float));
-	cudaMalloc(&volume_color_device, resolution.x * resolution.y * resolution.z * sizeof(uchar4));
-	cudaMalloc(&depth_device, H * W * sizeof(float) * MAX_CAMERAS);
-	cudaMalloc(&color_device, H * W * sizeof(uchar4) * MAX_CAMERAS);
-	cudaMalloc(&transformation_device, 16 * sizeof(float) * MAX_CAMERAS);
-	cudaMalloc(&count_device, resolution.x * resolution.y * sizeof(int));
+	HANDLE_ERROR(cudaMalloc(&volume_device, resolution.x * resolution.y * resolution.z * sizeof(float)));
+	HANDLE_ERROR(cudaMalloc(&volume_color_device, resolution.x * resolution.y * resolution.z * sizeof(uchar4)));
+	HANDLE_ERROR(cudaMalloc(&depth_device, H * W * sizeof(float) * MAX_CAMERAS));
+	HANDLE_ERROR(cudaMalloc(&color_device, H * W * sizeof(uchar4) * MAX_CAMERAS));
+	HANDLE_ERROR(cudaMalloc(&transformation_device, 16 * sizeof(float) * MAX_CAMERAS));
+	HANDLE_ERROR(cudaMalloc(&count_device, resolution.x * resolution.y * sizeof(int)));
 	count_host = new int[resolution.x * resolution.y];
 	block = dim3(BLOCK_SIZE, BLOCK_SIZE);
 	grid = dim3((resolution.x + BLOCK_SIZE - 1) / BLOCK_SIZE, (resolution.y + BLOCK_SIZE - 1) / BLOCK_SIZE);
@@ -73,12 +71,12 @@ void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float siz
 
 extern "C"
 void cudaReleaseVolume() {
-	cudaFree(volume_device);
-	cudaFree(volume_color_device);
-	cudaFree(depth_device);
-	cudaFree(color_device);
-	cudaFree(transformation_device);
-	cudaFree(count_device);
+	HANDLE_ERROR(cudaFree(volume_device));
+	HANDLE_ERROR(cudaFree(volume_color_device));
+	HANDLE_ERROR(cudaFree(depth_device));
+	HANDLE_ERROR(cudaFree(color_device));
+	HANDLE_ERROR(cudaFree(transformation_device));
+	HANDLE_ERROR(cudaFree(count_device));
 	delete[] count_host;
 }
 
@@ -167,12 +165,13 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 extern "C"
 void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, float** transformation) {
 	for (int c = 0; c < cameras; c++) {
-		cudaMemcpy(depth_device + c * H * W, depth[c], H * W * sizeof(UINT16), cudaMemcpyHostToDevice);
-		cudaMemcpy(color_device + c * H * W, color[c], H * W * sizeof(uchar4), cudaMemcpyHostToDevice);
-		cudaMemcpy(transformation_device + c * 16, transformation[c], 16 * sizeof(float), cudaMemcpyHostToDevice);
+		HANDLE_ERROR(cudaMemcpy(depth_device + c * H * W, depth[c], H * W * sizeof(UINT16), cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(color_device + c * H * W, color[c], H * W * sizeof(uchar4), cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(transformation_device + c * 16, transformation[c], 16 * sizeof(float), cudaMemcpyHostToDevice));
 	}
 
 	kernelIntegrateDepth << <grid, block >> > (cameras, volume_device, volume_color_device, depth_device, color_device, transformation_device, resolution, volumeSize, offset);
+	HANDLE_ERROR(cudaGetLastError());
 }
 
 __constant__ UINT8 triNumber_device[256] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 2, 3, 4, 4, 3, 3, 4, 4, 3, 4, 5, 5, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 2, 3, 3, 4, 3, 4, 2, 3, 3, 4, 4, 5, 4, 5, 3, 2, 3, 4, 4, 3, 4, 5, 3, 2, 4, 5, 5, 4, 5, 2, 4, 1, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 2, 4, 3, 4, 3, 5, 2, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 3, 4, 4, 3, 4, 5, 5, 4, 4, 3, 5, 2, 5, 4, 2, 1, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 2, 3, 3, 2, 3, 4, 4, 5, 4, 5, 5, 2, 4, 3, 5, 4, 3, 2, 4, 1, 3, 4, 4, 5, 4, 5, 3, 4, 4, 5, 5, 2, 3, 4, 2, 1, 2, 3, 3, 2, 3, 4, 2, 1, 3, 2, 4, 1, 2, 1, 1, 0};
@@ -561,7 +560,7 @@ __global__ void kernelMarchingCubes(float* volume, uchar4* volume_color, int* co
 }
 
 int cudaCountAccumulation() {
-	cudaMemcpy(count_host, count_device, resolution.x * resolution.y * sizeof(int), cudaMemcpyDeviceToHost);
+	HANDLE_ERROR(cudaMemcpy(count_host, count_device, resolution.x * resolution.y * sizeof(int), cudaMemcpyDeviceToHost));
 	for (int i = 1; i < resolution.x * resolution.y; i++) {
 		count_host[i] += count_host[i - 1];
 	}
@@ -570,20 +569,22 @@ int cudaCountAccumulation() {
 	}
 	count_host[0] = 0;
 	int tris_size = count_host[resolution.x * resolution.y - 1];
-	cudaMemcpy(count_device, count_host, resolution.x * resolution.y * sizeof(int), cudaMemcpyHostToDevice);
+	HANDLE_ERROR(cudaMemcpy(count_device, count_host, resolution.x * resolution.y * sizeof(int), cudaMemcpyHostToDevice));
 	return tris_size;
 }
 
 extern "C"
 void cudaCalculateMesh(Vertex* vertex, int& tri_size) {
-
 	kernelMarchingCubesCount << <grid, block >> > (volume_device, count_device, resolution);
+	HANDLE_ERROR(cudaGetLastError());
 	tri_size = cudaCountAccumulation();
+	HANDLE_ERROR(cudaGetLastError());
 
 	Vertex* vertex_device;
-	cudaMalloc(&vertex_device, tri_size * 3 * sizeof(Vertex));
+	HANDLE_ERROR(cudaMalloc(&vertex_device, tri_size * 3 * sizeof(Vertex)));
 	kernelMarchingCubes << <grid, block >> > (volume_device, volume_color_device, count_device, vertex_device, resolution, volumeSize, offset);
-	cudaMemcpy(vertex, vertex_device, tri_size * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost);
+	HANDLE_ERROR(cudaGetLastError());
+	HANDLE_ERROR(cudaMemcpy(vertex, vertex_device, tri_size * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost));
 
-	cudaFree(vertex_device);
+	HANDLE_ERROR(cudaFree(vertex_device));
 }

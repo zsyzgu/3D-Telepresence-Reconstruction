@@ -1,6 +1,4 @@
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-#include "device_functions.h"
+#include "CudaHandleError.h"
 #include <Windows.h>
 #include <math.h>
 
@@ -50,17 +48,18 @@ void cudaBilateralFiltering(UINT16* depth) {
 
 	UINT16* d_depth;
 	UINT16* d_output;
-	cudaMalloc(&d_depth, n * sizeof(UINT16));
-	cudaMalloc(&d_output, n * sizeof(UINT16));
+	HANDLE_ERROR(cudaMalloc(&d_depth, n * sizeof(UINT16)));
+	HANDLE_ERROR(cudaMalloc(&d_output, n * sizeof(UINT16)));
 
-	cudaMemcpy(d_depth, depth, n * sizeof(UINT16), cudaMemcpyHostToDevice);
+	HANDLE_ERROR(cudaMemcpy(d_depth, depth, n * sizeof(UINT16), cudaMemcpyHostToDevice));
 
 	dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
 	dim3 blockNum((W + BLOCK_SIZE - 1) / BLOCK_SIZE, (H + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernelBilateralFiltering << <blockNum, blockSize >> > (d_depth, d_output, H, W);
+	HANDLE_ERROR(cudaGetLastError());
 
-	cudaMemcpy(depth, d_output, n * sizeof(UINT16), cudaMemcpyDeviceToHost);
+	HANDLE_ERROR(cudaMemcpy(depth, d_output, n * sizeof(UINT16), cudaMemcpyDeviceToHost));
 
-	cudaFree(d_depth);
-	cudaFree(d_output);
+	HANDLE_ERROR(cudaFree(d_depth));
+	HANDLE_ERROR(cudaFree(d_output));
 }
