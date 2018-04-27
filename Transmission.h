@@ -3,7 +3,7 @@
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 
 #include <Windows.h>
-#define BUFF_SIZE 4096
+#define BUFF_SIZE 1024
 #define LEN 424 * 512
 
 class Transmission {
@@ -23,6 +23,7 @@ private:
 	void recvData(char* data, int tot);
 
 public:
+	Transmission(bool isServer);
 	Transmission();
 	~Transmission();
 	void sendRGBD(UINT16* sendDepth, RGBQUAD* sendCoor);

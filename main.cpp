@@ -69,10 +69,16 @@ void startViewer() {
 #ifdef TRANSMISSION
 DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 {
-	while (true) {
-		Sleep(1);
-		transmission->recvRGBD(depthList[1], colorList[1]);
+#pragma omp parallel sections
+{
+	#pragma omp section
+	{
+		while (true) {
+			Sleep(1);
+			transmission->recvRGBD(depthList[1], colorList[1]);
+		}
 	}
+}
 	return 0;
 }
 #endif
@@ -89,7 +95,7 @@ void start() {
 	buffer = new byte[BUFFER_SIZE];
 
 #ifdef TRANSMISSION
-	transmission = new Transmission();
+	transmission = new Transmission(true);
 	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
 #endif
 }

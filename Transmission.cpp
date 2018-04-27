@@ -33,11 +33,8 @@ void Transmission::recvData(char* data, int tot)
 	}
 }
 
-Transmission::Transmission()
+Transmission::Transmission(bool isServer)
 {
-	WSAStartup(MAKEWORD(2, 2), &wsaData);
-	bool isServer = (strcmp(getHostIP(), IP) == 0);
-
 	memset(&sockAddr, 0, sizeof(sockAddr));
 	sockAddr.sin_family = PF_INET;
 	sockAddr.sin_addr.s_addr = inet_addr(IP);
@@ -60,6 +57,13 @@ Transmission::Transmission()
 	storedDepth = new UINT16[LEN];
 	storedColor = new RGBQUAD[LEN];
 }
+
+Transmission::Transmission()
+{
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+	bool isServer = (strcmp(getHostIP(), IP) == 0);
+	this->Transmission::Transmission(isServer);
+}	
 
 Transmission::~Transmission()
 {
