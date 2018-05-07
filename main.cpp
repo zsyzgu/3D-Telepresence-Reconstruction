@@ -16,7 +16,7 @@
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 #include <windows.h>
 
-#define CREATE_EXE
+//#define CREATE_EXE
 //#define TRANSMISSION
 
 const int BUFFER_SIZE = 100000000;
@@ -86,6 +86,7 @@ DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 void start() {
 	omp_set_num_threads(4);
 	omp_set_nested(6);
+	cudaSetDevice(1);
 	
 	grabber = new pcl::Kinect2Grabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
