@@ -16,8 +16,6 @@
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 #include <windows.h>
 
-
-
 #define CREATE_EXE
 //#define TRANSMISSION
 
@@ -97,8 +95,6 @@ void start() {
 }
 
 void update() {
-	Timer timer;
-
 	grabber->getRGBD(depthList[0], colorList[0]);
 
 #ifdef TRANSMISSION
@@ -109,8 +105,6 @@ void update() {
 #endif
 
 	volume->calnMesh(buffer);
-
-	timer.outputTime();
 }
 
 void stop() {
@@ -139,12 +133,17 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
+		Timer timer;
+
 		update();
 
 		cloud = volume->getPointCloudFromMesh(buffer);
+
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
+
+		timer.outputTime();
 	}
 
 	stop();
@@ -164,10 +163,6 @@ extern "C" {
 
 	__declspec(dllexport) void callRegistration() {
 		registration();
-	}
-
-	__declspec(dllexport) void callSetBackground() {
-		setBackground();
 	}
 
 	__declspec(dllexport) void callSaveScene() {

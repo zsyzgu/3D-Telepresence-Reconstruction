@@ -92,6 +92,8 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 	}
 
 	const float TRANC_DIST_M = 3.1 * max(volumeSize.x, max(volumeSize.y, volumeSize.z));
+	uchar4 color;
+	color.x = color.y = color.z = 255;
 
 	float oriX = (x + 0.5) * volumeSize.x + offset.x;
 	float oriY = (y + 0.5) * volumeSize.y + offset.y;
@@ -100,13 +102,11 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 
 		bool flag = false;
 		float tsdf = 1.0;
-		uchar4 color;
-		color.x = color.y = color.z = 0;
 
 		for (int c = 0; c < cameras; c++) {
 			float* cameraTrans = trans_shared + c * 16;
 			UINT16* cameraDepth = depthData + c * DEPTH_H * DEPTH_W;
-			//uchar4* cameraColor = colorData + c * H * W;
+			uchar4* cameraColor = colorData + c * COLOR_H * COLOR_W;
 
 			float posX = cameraTrans[0] * oriX + cameraTrans[1] * oriY + cameraTrans[2] * oriZ + cameraTrans[12];
 			float posY = cameraTrans[4] * oriX + cameraTrans[5] * oriY + cameraTrans[6] * oriZ + cameraTrans[13];
@@ -114,7 +114,9 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 
 			int depthX = posX * DEPTH_FX / posZ + DEPTH_CX;
 			int depthY = posY * DEPTH_FY / posZ + DEPTH_CY;
-
+			int colorX = posX * COLOR_FX / posZ + COLOR_CX;
+			int colorY = posY * COLOR_FY / posZ + COLOR_CY;
+			
 			if (posZ > 0 && 0 <= depthX && depthX < DEPTH_W && 0 <= depthY && depthY < DEPTH_H) {
 				UINT16 depth = cameraDepth[depthY * DEPTH_W + depthX];
 
@@ -127,7 +129,9 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 						flag = true;
 						sdf = sdf / TRANC_DIST_M;
 						if (sdf < tsdf) {
-							//color = cameraColor[cooY * W + cooX];
+							if ( 0 <= colorX && colorX < COLOR_W && 0 <= colorY && colorY < COLOR_H) {
+								color = cameraColor[colorY * COLOR_W + colorX];
+							}
 							tsdf = sdf;
 						}
 					}
@@ -146,12 +150,9 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 		__syncthreads();
 
 		if (flag) {
-			/*volume_color[id].x = color.z;
+			volume_color[id].x = color.z;
 			volume_color[id].y = color.y;
-			volume_color[id].z = color.x;*/
-			volume_color[id].x = 255;
-			volume_color[id].y = 255;
-			volume_color[id].z = 255; 
+			volume_color[id].z = color.x;
 		}
 		__syncthreads();
 	}
@@ -429,9 +430,9 @@ __constant__ INT8 triTable_device[256][16] =
 { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
 
 __device__ __forceinline__ UINT16 deviceGetCubeIndex(float* volume, int x, int y, int z, int3 resolution) {
-	if (x >= resolution.x) return 0;
-	if (y >= resolution.y) return 0;
-	if (z >= resolution.z) return 0;
+	if (x + 1 >= resolution.x) return 0;
+	if (y + 1 >= resolution.y) return 0;
+	if (z + 1 >= resolution.z) return 0;
 	if (volume[deviceVid(x + 0, y + 0, z + 0, resolution)] == -1) return 0;
 	if (volume[deviceVid(x + 1, y + 0, z + 0, resolution)] == -1) return 0;
 	if (volume[deviceVid(x + 0, y + 1, z + 0, resolution)] == -1) return 0;
