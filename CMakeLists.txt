@@ -37,10 +37,11 @@ link_directories( ${PCL_LIBRARY_DIRS} )
 link_directories( ${KinectSDK2_LIBRARY_DIRS} )
 
 cuda_add_executable( 3D-Telepresence main.cpp
-	Vertex.h
 	CudaHandleError.h
-	Kinect2Grabber.h
-	Kinect2Grabber.cpp
+	Parameters.h
+	Vertex.h
+	RealsenseGrabber.h
+	RealsenseGrabber.cpp
 	PointCloudProcess.h
 	PointCloudProcess.cpp
 	SceneRegistration.h

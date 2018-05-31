@@ -1,4 +1,5 @@
 #include "CudaHandleError.h"
+#include "Parameters.h"
 #include <Windows.h>
 #include <math.h>
 
@@ -42,8 +43,8 @@ __global__ void kernelBilateralFiltering(UINT16* depth, UINT16* output, int H, i
 
 extern "C"
 void cudaBilateralFiltering(UINT16* depth) {
-	static const int H = 424;
-	static const int W = 512;
+	static const int H = DEPTH_H;
+	static const int W = DEPTH_W;
 	static const int n = H * W;
 
 	UINT16* d_depth;

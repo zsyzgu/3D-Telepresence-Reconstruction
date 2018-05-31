@@ -27,3 +27,11 @@
 	* 右键项目 > 属性 > CUDA C/C++ > Device > compute_60,sm_60 （这是显卡的架构代号，机器不同需要搜一下）
 
 	* 右键*.cu > 属性 > 常规 > 项类型 > CUDAS C/C++
+
+7. Realsense配置：下载并安装realsense SDK2, 目前realsense在VS中只能通过props文件来配置：
+	
+	* 在属性管理器，将intel.realsense.props配置文件加入工程中
+	
+	* 双击intel.realsense，将其中的变化部分（粗体字）手动添加到工程属性里
+
+8. 最后在Visual Studio中删除CmakeList.txt，以免Cmake重新编译了。（这一系列麻烦操作的根源在于各种库不一定都能被Cmake支持）

@@ -1,4 +1,5 @@
 #include "CudaHandleError.h"
+#include "Parameters.h"
 #include <Windows.h>
 #include <iostream>
 #include "Timer.h"
@@ -9,9 +10,6 @@
 #define MAX_CAMERAS 8
 
 namespace tsdf {
-	const int W = 512;
-	const int H = 424;
-	
 	int3 resolution;
 	float3 size;
 	float3 center;
@@ -60,8 +58,8 @@ void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float siz
 	offset.z = center.z - size.z / 2;
 	HANDLE_ERROR(cudaMalloc(&volume_device, resolution.x * resolution.y * resolution.z * sizeof(float)));
 	HANDLE_ERROR(cudaMalloc(&volume_color_device, resolution.x * resolution.y * resolution.z * sizeof(uchar4)));
-	HANDLE_ERROR(cudaMalloc(&depth_device, H * W * sizeof(float) * MAX_CAMERAS));
-	HANDLE_ERROR(cudaMalloc(&color_device, H * W * sizeof(uchar4) * MAX_CAMERAS));
+	HANDLE_ERROR(cudaMalloc(&depth_device, DEPTH_H * DEPTH_W * sizeof(float) * MAX_CAMERAS));
+	HANDLE_ERROR(cudaMalloc(&color_device, COLOR_H * COLOR_W * sizeof(uchar4) * MAX_CAMERAS));
 	HANDLE_ERROR(cudaMalloc(&transformation_device, 16 * sizeof(float) * MAX_CAMERAS));
 	HANDLE_ERROR(cudaMalloc(&count_device, resolution.x * resolution.y * sizeof(int)));
 	count_host = new int[resolution.x * resolution.y];
@@ -93,12 +91,6 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 		return;
 	}
 
-	const int W = 512;
-	const int H = 424;
-	const float FX = 367.347;
-	const float FY = -367.347;
-	const float CX = 260.118;
-	const float CY = 208.079;
 	const float TRANC_DIST_M = 3.1 * max(volumeSize.x, max(volumeSize.y, volumeSize.z));
 
 	float oriX = (x + 0.5) * volumeSize.x + offset.x;
@@ -113,29 +105,29 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 
 		for (int c = 0; c < cameras; c++) {
 			float* cameraTrans = trans_shared + c * 16;
-			UINT16* cameraDepth = depthData + c * H * W;
-			uchar4* cameraColor = colorData + c * H * W;
+			UINT16* cameraDepth = depthData + c * DEPTH_H * DEPTH_W;
+			//uchar4* cameraColor = colorData + c * H * W;
 
 			float posX = cameraTrans[0] * oriX + cameraTrans[1] * oriY + cameraTrans[2] * oriZ + cameraTrans[12];
 			float posY = cameraTrans[4] * oriX + cameraTrans[5] * oriY + cameraTrans[6] * oriZ + cameraTrans[13];
 			float posZ = cameraTrans[8] * oriX + cameraTrans[9] * oriY + cameraTrans[10] * oriZ + cameraTrans[14];
 
-			int cooX = posX * FX / posZ + CX;
-			int cooY = posY * FY / posZ + CY;
+			int depthX = posX * DEPTH_FX / posZ + DEPTH_CX;
+			int depthY = posY * DEPTH_FY / posZ + DEPTH_CY;
 
-			if (posZ > 0 && 0 <= cooX && cooX < W && 0 <= cooY && cooY < H) {
-				UINT16 depth = cameraDepth[cooY * W + cooX];
+			if (posZ > 0 && 0 <= depthX && depthX < DEPTH_W && 0 <= depthY && depthY < DEPTH_H) {
+				UINT16 depth = cameraDepth[depthY * DEPTH_W + depthX];
 
 				if (depth != 0) {
-					float xl = (cooX - CX) / FX;
-					float yl = (cooY - CY) / FY;
+					float xl = (depthX - DEPTH_CX) / DEPTH_FX;
+					float yl = (depthY - DEPTH_CY) / DEPTH_FY;
 					float sdf = depth * 0.001 - rsqrtf((xl * xl + yl * yl + 1) / (posX * posX + posY * posY + posZ * posZ));
 
 					if (sdf >= -TRANC_DIST_M) {
 						flag = true;
 						sdf = sdf / TRANC_DIST_M;
 						if (sdf < tsdf) {
-							color = cameraColor[cooY * W + cooX];
+							//color = cameraColor[cooY * W + cooX];
 							tsdf = sdf;
 						}
 					}
@@ -154,9 +146,12 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 		__syncthreads();
 
 		if (flag) {
-			volume_color[id].x = color.z;
+			/*volume_color[id].x = color.z;
 			volume_color[id].y = color.y;
-			volume_color[id].z = color.x;
+			volume_color[id].z = color.x;*/
+			volume_color[id].x = 255;
+			volume_color[id].y = 255;
+			volume_color[id].z = 255; 
 		}
 		__syncthreads();
 	}
@@ -165,8 +160,8 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 extern "C"
 void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, float** transformation) {
 	for (int c = 0; c < cameras; c++) {
-		HANDLE_ERROR(cudaMemcpy(depth_device + c * H * W, depth[c], H * W * sizeof(UINT16), cudaMemcpyHostToDevice));
-		HANDLE_ERROR(cudaMemcpy(color_device + c * H * W, color[c], H * W * sizeof(uchar4), cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(depth_device + c * DEPTH_H * DEPTH_W, depth[c], DEPTH_H * DEPTH_W * sizeof(UINT16), cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(color_device + c * COLOR_H * COLOR_W, color[c], COLOR_H * COLOR_W * sizeof(uchar4), cudaMemcpyHostToDevice));
 		HANDLE_ERROR(cudaMemcpy(transformation_device + c * 16, transformation[c], 16 * sizeof(float), cudaMemcpyHostToDevice));
 	}
 

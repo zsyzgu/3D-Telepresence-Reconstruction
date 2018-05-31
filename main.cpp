@@ -1,9 +1,9 @@
 #include "Timer.h"
 #include "PointCloudProcess.h"
-#include "Kinect2Grabber.h"
 #include "SceneRegistration.h"
 #include "TsdfVolume.h"
 #include "Transmission.h"
+#include "RealsenseGrabber.h"
 #include <pcl/gpu/features/features.hpp>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/io/pcd_io.h>
@@ -16,12 +16,14 @@
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 #include <windows.h>
 
-//#define CREATE_EXE
+
+
+#define CREATE_EXE
 //#define TRANSMISSION
 
 const int BUFFER_SIZE = 100000000;
 byte* buffer = NULL;
-pcl::Kinect2Grabber* grabber = NULL;
+RealsenseGrabber* grabber = NULL;
 TsdfVolume* volume = NULL;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
@@ -35,13 +37,9 @@ Transmission* transmission = NULL;
 #endif
 
 void registration() {
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr local = grabber->getPointCloud(depthList[0], colorList[0]);
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr remote = grabber->getPointCloud(depthList[1], colorList[1]);
-	transformationList[1] = SceneRegistration::align(local, remote);
-}
-
-void setBackground() {
-	grabber->updateBackground();
+	//pcl::PointCloud<pcl::PointXYZRGB>::Ptr local = grabber->getPointCloud(depthList[0], colorList[0]);
+	//pcl::PointCloud<pcl::PointXYZRGB>::Ptr remote = grabber->getPointCloud(depthList[1], colorList[1]);
+	//transformationList[1] = SceneRegistration::align(local, remote);
 }
 
 void saveScene() {
@@ -51,9 +49,6 @@ void saveScene() {
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "r" && event.keyDown()) {
 		registration();
-	}
-	if (event.getKeySym() == "b" && event.keyDown()) {
-		setBackground();
 	}
 	if (event.getKeySym() == "s" && event.keyDown()) {
 		saveScene();
@@ -88,7 +83,7 @@ void start() {
 	omp_set_nested(6);
 	cudaSetDevice(1);
 	
-	grabber = new pcl::Kinect2Grabber();
+	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	transformationList[0].setIdentity();
 	transformationList[1].setIdentity();
@@ -104,7 +99,7 @@ void start() {
 void update() {
 	Timer timer;
 
-	grabber->getDepthAndColor(depthList[0], colorList[0]);
+	grabber->getRGBD(depthList[0], colorList[0]);
 
 #ifdef TRANSMISSION
 	transmission->sendRGBD(depthList[0], colorList[0]);
