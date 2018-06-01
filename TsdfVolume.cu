@@ -18,8 +18,12 @@ namespace tsdf {
 
 	float* volume_device;
 	uchar4* volume_color_device;
-	UINT16* depth_device;
-	uchar4* color_device;
+	cudaChannelFormatDesc depthDesc;
+	cudaChannelFormatDesc colorDesc;
+	cudaArray* depth_device;
+	cudaArray* color_device;
+	texture<UINT16, 2, cudaReadModeElementType> depthTexture;
+	texture<uchar4, 2, cudaReadModeElementType> colorTexture;
 	float* transformation_device;
 	int* count_device;
 	int* count_host;
@@ -58,8 +62,11 @@ void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float siz
 	offset.z = center.z - size.z / 2;
 	HANDLE_ERROR(cudaMalloc(&volume_device, resolution.x * resolution.y * resolution.z * sizeof(float)));
 	HANDLE_ERROR(cudaMalloc(&volume_color_device, resolution.x * resolution.y * resolution.z * sizeof(uchar4)));
-	HANDLE_ERROR(cudaMalloc(&depth_device, DEPTH_H * DEPTH_W * sizeof(float) * MAX_CAMERAS));
-	HANDLE_ERROR(cudaMalloc(&color_device, COLOR_H * COLOR_W * sizeof(uchar4) * MAX_CAMERAS));
+	depthDesc = cudaCreateChannelDesc<UINT16>();
+	HANDLE_ERROR(cudaMallocArray(&depth_device, &depthDesc, DEPTH_W, DEPTH_H));
+	colorDesc = cudaCreateChannelDesc<uchar4>();
+	HANDLE_ERROR(cudaMallocArray(&color_device, &colorDesc, COLOR_W, COLOR_H));
+
 	HANDLE_ERROR(cudaMalloc(&transformation_device, 16 * sizeof(float) * MAX_CAMERAS));
 	HANDLE_ERROR(cudaMalloc(&count_device, resolution.x * resolution.y * sizeof(int)));
 	count_host = new int[resolution.x * resolution.y];
@@ -71,21 +78,16 @@ extern "C"
 void cudaReleaseVolume() {
 	HANDLE_ERROR(cudaFree(volume_device));
 	HANDLE_ERROR(cudaFree(volume_color_device));
-	HANDLE_ERROR(cudaFree(depth_device));
-	HANDLE_ERROR(cudaFree(color_device));
+	HANDLE_ERROR(cudaFreeArray(depth_device));
+	HANDLE_ERROR(cudaFreeArray(color_device));
 	HANDLE_ERROR(cudaFree(transformation_device));
 	HANDLE_ERROR(cudaFree(count_device));
 	delete[] count_host;
 }
 
-__global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_color, UINT16* depthData, uchar4* colorData, float* transformation, int3 resolution, float3 volumeSize, float3 offset) {
+__global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_color, float* transformation, int3 resolution, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
-
-	__shared__ float trans_shared[16 * MAX_CAMERAS];
-	if (threadIdx.y < cameras) {
-		trans_shared[threadIdx.y * 16 + threadIdx.x] = transformation[threadIdx.y * 16 + threadIdx.x];
-	}
 
 	if (x >= resolution.x || y >= resolution.y) {
 		return;
@@ -97,43 +99,43 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 
 	float oriX = (x + 0.5) * volumeSize.x + offset.x;
 	float oriY = (y + 0.5) * volumeSize.y + offset.y;
-	for (int z = 0; z < resolution.z; z++) {
-		float oriZ = (z + 0.5) * volumeSize.z + offset.z;
+	float oriZ = (0 - 0.5) * volumeSize.z + offset.z;
+	float posX = transformation[0] * oriX + transformation[1] * oriY + transformation[2] * oriZ + transformation[12];
+	float posY = transformation[4] * oriX + transformation[5] * oriY + transformation[6] * oriZ + transformation[13];
+	float posZ = transformation[8] * oriX + transformation[9] * oriY + transformation[10] * oriZ + transformation[14];
+	const float deltaX = transformation[2] * volumeSize.z;
+	const float deltaY = transformation[6] * volumeSize.z;
+	const float deltaZ = transformation[10] * volumeSize.z;
 
+	__syncthreads();
+
+	for (int z = 0; z < resolution.z; z++) {
 		bool flag = false;
 		float tsdf = 1.0;
 
-		for (int c = 0; c < cameras; c++) {
-			float* cameraTrans = trans_shared + c * 16;
-			UINT16* cameraDepth = depthData + c * DEPTH_H * DEPTH_W;
-			uchar4* cameraColor = colorData + c * COLOR_H * COLOR_W;
+		posX += deltaX;
+		posY += deltaY;
+		posZ += deltaZ;
 
-			float posX = cameraTrans[0] * oriX + cameraTrans[1] * oriY + cameraTrans[2] * oriZ + cameraTrans[12];
-			float posY = cameraTrans[4] * oriX + cameraTrans[5] * oriY + cameraTrans[6] * oriZ + cameraTrans[13];
-			float posZ = cameraTrans[8] * oriX + cameraTrans[9] * oriY + cameraTrans[10] * oriZ + cameraTrans[14];
-
-			int depthX = posX * DEPTH_FX / posZ + DEPTH_CX;
-			int depthY = posY * DEPTH_FY / posZ + DEPTH_CY;
-			int colorX = posX * COLOR_FX / posZ + COLOR_CX;
-			int colorY = posY * COLOR_FY / posZ + COLOR_CY;
+		float depthX = posX * DEPTH_FX / posZ + DEPTH_CX;
+		float depthY = posY * DEPTH_FY / posZ + DEPTH_CY;
 			
-			if (posZ > 0 && 0 <= depthX && depthX < DEPTH_W && 0 <= depthY && depthY < DEPTH_H) {
-				UINT16 depth = cameraDepth[depthY * DEPTH_W + depthX];
+		if (posZ > 0 && 0 <= depthX && depthX <= DEPTH_W && 0 <= depthY && depthY <= DEPTH_H) {
+			UINT16 depth = tex2D<UINT16>(depthTexture, depthX, depthY);
 
-				if (depth != 0) {
-					float xl = (depthX - DEPTH_CX) / DEPTH_FX;
-					float yl = (depthY - DEPTH_CY) / DEPTH_FY;
-					float sdf = depth * 0.001 - rsqrtf((xl * xl + yl * yl + 1) / (posX * posX + posY * posY + posZ * posZ));
+			if (depth != 0) {
+				float sdf = depth * 0.001 - posZ;
 
-					if (sdf >= -TRANC_DIST_M) {
-						flag = true;
-						sdf = sdf / TRANC_DIST_M;
-						if (sdf < tsdf) {
-							if ( 0 <= colorX && colorX < COLOR_W && 0 <= colorY && colorY < COLOR_H) {
-								color = cameraColor[colorY * COLOR_W + colorX];
-							}
-							tsdf = sdf;
+				if (sdf >= -TRANC_DIST_M) {
+					flag = true;
+					sdf = sdf / TRANC_DIST_M;
+					if (sdf < tsdf) {
+						float colorX = posX * COLOR_FX / posZ + COLOR_CX;
+						float colorY = posY * COLOR_FY / posZ + COLOR_CY;
+						if ( 0 <= colorX && colorX <= COLOR_W && 0 <= colorY && colorY <= COLOR_H) {
+							color = tex2D<uchar4>(colorTexture, colorX, colorY);
 						}
+						tsdf = sdf;
 					}
 				}
 			}
@@ -150,9 +152,7 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 		__syncthreads();
 
 		if (flag) {
-			volume_color[id].x = color.z;
-			volume_color[id].y = color.y;
-			volume_color[id].z = color.x;
+			volume_color[id] = color;
 		}
 		__syncthreads();
 	}
@@ -160,14 +160,25 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 
 extern "C"
 void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, float** transformation) {
-	for (int c = 0; c < cameras; c++) {
-		HANDLE_ERROR(cudaMemcpy(depth_device + c * DEPTH_H * DEPTH_W, depth[c], DEPTH_H * DEPTH_W * sizeof(UINT16), cudaMemcpyHostToDevice));
-		HANDLE_ERROR(cudaMemcpy(color_device + c * COLOR_H * COLOR_W, color[c], COLOR_H * COLOR_W * sizeof(uchar4), cudaMemcpyHostToDevice));
-		HANDLE_ERROR(cudaMemcpy(transformation_device + c * 16, transformation[c], 16 * sizeof(float), cudaMemcpyHostToDevice));
-	}
+	HANDLE_ERROR(cudaMemcpy(transformation_device + 0 * 16, transformation[0], 16 * sizeof(float), cudaMemcpyHostToDevice));
 
-	kernelIntegrateDepth << <grid, block >> > (cameras, volume_device, volume_color_device, depth_device, color_device, transformation_device, resolution, volumeSize, offset);
+	HANDLE_ERROR(cudaMemcpyToArray(depth_device, 0, 0, depth[0], sizeof(UINT16) * DEPTH_W * DEPTH_H, cudaMemcpyHostToDevice));
+	depthTexture.filterMode = cudaFilterModePoint;
+	depthTexture.addressMode[0] = cudaAddressModeWrap;
+	depthTexture.addressMode[1] = cudaAddressModeWrap;
+	HANDLE_ERROR(cudaBindTextureToArray(&depthTexture, depth_device, &depthDesc));
+
+	HANDLE_ERROR(cudaMemcpyToArray(color_device, 0, 0, color[0], sizeof(uchar4) * COLOR_W * COLOR_H, cudaMemcpyHostToDevice));
+	colorTexture.filterMode = cudaFilterModePoint;
+	colorTexture.addressMode[0] = cudaAddressModeWrap;
+	colorTexture.addressMode[1] = cudaAddressModeWrap;
+	HANDLE_ERROR(cudaBindTextureToArray(&colorTexture, color_device, &colorDesc));
+
+	kernelIntegrateDepth << <grid, block >> > (cameras, volume_device, volume_color_device, transformation_device, resolution, volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());
+
+	HANDLE_ERROR(cudaUnbindTexture(&depthTexture));
+	HANDLE_ERROR(cudaUnbindTexture(&colorTexture));
 }
 
 __constant__ UINT8 triNumber_device[256] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 2, 3, 4, 4, 3, 3, 4, 4, 3, 4, 5, 5, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 2, 3, 3, 4, 3, 4, 2, 3, 3, 4, 4, 5, 4, 5, 3, 2, 3, 4, 4, 3, 4, 5, 3, 2, 4, 5, 5, 4, 5, 2, 4, 1, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 2, 4, 3, 4, 3, 5, 2, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 3, 4, 4, 3, 4, 5, 5, 4, 4, 3, 5, 2, 5, 4, 2, 1, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 2, 3, 3, 2, 3, 4, 4, 5, 4, 5, 5, 2, 4, 3, 5, 4, 3, 2, 4, 1, 3, 4, 4, 5, 4, 5, 3, 4, 4, 5, 5, 2, 3, 4, 2, 1, 2, 3, 3, 2, 3, 4, 2, 1, 3, 2, 4, 1, 2, 1, 1, 0};

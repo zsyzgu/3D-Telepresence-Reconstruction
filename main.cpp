@@ -85,7 +85,7 @@ void start() {
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	transformationList[0].setIdentity();
 	transformationList[1].setIdentity();
-	volume = new TsdfVolume(512, 512, 512, 1, 1, 1, 0, 0, 0.5);
+	volume = new TsdfVolume(512, 512, 512, 2, 2, 2, 0, 0, 1);
 	buffer = new byte[BUFFER_SIZE];
 
 #ifdef TRANSMISSION

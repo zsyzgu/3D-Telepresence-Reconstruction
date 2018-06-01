@@ -16,7 +16,6 @@ private:
 	rs2::disparity_transform* toDisparityFilter;
 	rs2::disparity_transform* toDepthFilter;
 
-	UINT16* depthData;
 	RGBQUAD* colorData;
 
 public:
