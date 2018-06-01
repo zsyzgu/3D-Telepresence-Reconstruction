@@ -559,18 +559,103 @@ __global__ void kernelMarchingCubes(float* volume, uchar4* volume_color, UINT8* 
 	}
 }
 
-int cudaCountAccumulation() {
-	HANDLE_ERROR(cudaMemcpy(count_host, count_device, resolution.x * resolution.y * sizeof(int), cudaMemcpyDeviceToHost));
+__global__ void cudaCountAccumulation(int *count_device, int *sum_device, int *temp_device) {//一个block用1024个线程，处理2048个数。一共需要处理resx*resy = 2^18个数，分成128个block。fixed！！
+	int block_offset = blockIdx.x * 2048;//确定处理第几个2048。
+	int thid = threadIdx.x;
 
-	for (int i = 1; i < resolution.x * resolution.y; i++) {
-		count_host[i] += count_host[i - 1];
+	__shared__ int shared_count_device[2048];
+	if (block_offset == 0 && thid == 0)
+		shared_count_device[0] = 0;
+	else
+		shared_count_device[2 * thid] = count_device[block_offset + 2 * thid - 1];
+	shared_count_device[2 * thid + 1] = count_device[block_offset + 2 * thid];
+	__syncthreads();//shared赋值需要同步。
+
+					//UpSweep
+	int offset = 1;
+	int n = 2048;
+	for (int d = n >> 1; d > 0; d >>= 1)                    // build sum in place up the tree
+	{
+		__syncthreads();
+		if (thid < d)
+		{
+			int ai = offset*(2 * thid + 1) - 1;
+			int bi = offset*(2 * thid + 2) - 1;
+			shared_count_device[bi] += shared_count_device[ai];
+		}
+		offset *= 2;
 	}
-	for (int i = resolution.x * resolution.y - 1; i >= 1; i--) {
-		count_host[i] = count_host[i - 1];
+
+	//DownSweep,注意这里因为要和其它block再求和，所以使用的是inclusive scan，不是教程中的exclusive scan。
+	for (int i = n / 2; i > 1; i /= 2) {
+		__syncthreads();
+		int start = (i - 1) + (i >> 1);
+		int doffset = (i >> 1);
+		if ((2 * thid - start) % i == 0 && 2 * thid - start >= 0) {
+			shared_count_device[2 * thid] += shared_count_device[2 * thid - doffset];
+		}
+		if ((2 * thid + 1 - start) % i == 0 && 2 * thid + 1 - start >= 0) {
+			shared_count_device[2 * thid + 1] += shared_count_device[2 * thid + 1 - doffset];
+		}
 	}
-	count_host[0] = 0;
-	int tris_size = count_host[resolution.x * resolution.y - 1];
-	HANDLE_ERROR(cudaMemcpy(count_device, count_host, resolution.x * resolution.y * sizeof(int), cudaMemcpyHostToDevice));
+	temp_device[block_offset + 2 * thid] = shared_count_device[2 * thid];
+	temp_device[block_offset + 2 * thid + 1] = shared_count_device[2 * thid + 1];
+	if (thid == 0) {
+		sum_device[blockIdx.x] = shared_count_device[n - 1];
+	}
+}
+
+__global__ void cudaCountAccumulation2(int *count_device, int *sum_device, int *temp_device) {//一个block用1024个线程，处理2048个数。一共需要处理resx*resy = 2^18个数，分成128个block。fixed！！
+	int block_offset = blockIdx.x * 2048;//确定处理第几个2048。
+	int thid = threadIdx.x;
+	int n = 2048;
+	__shared__ int shared_count_device[2048];
+	__shared__ int presum;
+	shared_count_device[2 * thid] = temp_device[block_offset + 2 * thid];
+	shared_count_device[2 * thid + 1] = temp_device[block_offset + 2 * thid + 1];
+	if (blockIdx.x == 0 && thid == 0) {
+		count_device[0] = count_device[114688];
+	}
+	if (thid == 0) {
+		if (blockIdx.x != 0) {
+			presum = sum_device[blockIdx.x - 1];
+		}
+		else {
+			presum = 0;
+		}
+	}
+	__syncthreads();//shared赋值需要同步。
+
+	shared_count_device[2 * thid] += presum;
+	shared_count_device[2 * thid + 1] += presum;
+
+	count_device[block_offset + 2 * thid] = shared_count_device[2 * thid];
+	count_device[block_offset + 2 * thid + 1] = shared_count_device[2 * thid + 1];
+}
+
+int cpu_cudaCountAccumulation() {
+	int temp_grid = 128, temp_block = 1024;
+	const int DATASIZE = 262144;
+	int *temp_device;
+	int *sum_device, *sum_host;
+	HANDLE_ERROR(cudaMalloc(&temp_device, DATASIZE * sizeof(int)));
+	HANDLE_ERROR(cudaMalloc(&sum_device, temp_grid * sizeof(int)));
+	sum_host = new int[temp_grid];
+	for (int i = 0; i < temp_grid; ++i) {
+		sum_host[i] = 0;
+	}
+	//stage1
+	HANDLE_ERROR(cudaMemcpy(sum_device, sum_host, temp_grid * sizeof(int), cudaMemcpyHostToDevice));
+	cudaCountAccumulation << <temp_grid, temp_block >> > (count_device, sum_device, temp_device);
+	HANDLE_ERROR(cudaMemcpy(sum_host, sum_device, temp_grid * sizeof(int), cudaMemcpyDeviceToHost));
+	for (int i = 1; i<temp_grid; ++i) {
+		sum_host[i] += sum_host[(i - 1)];
+	}
+	//stage2
+	HANDLE_ERROR(cudaMemcpy(sum_device, sum_host, temp_grid * sizeof(int), cudaMemcpyHostToDevice));
+	cudaCountAccumulation2 << <temp_grid, temp_block >> > (count_device, sum_device, temp_device);
+
+	int tris_size = sum_host[temp_grid - 1];
 	return tris_size;
 }
 
@@ -578,9 +663,15 @@ extern "C"
 void cudaCalculateMesh(Vertex* vertex, int& tri_size) {
 	kernelMarchingCubesCount << <grid, block >> > (volume_device, cubeIndex_device, count_device, resolution);
 
+	cudaThreadSynchronize();
+	Timer timer;
+
 	HANDLE_ERROR(cudaGetLastError());
-	tri_size = cudaCountAccumulation();
+	tri_size = cpu_cudaCountAccumulation();
 	HANDLE_ERROR(cudaGetLastError());
+
+	cudaThreadSynchronize();
+	timer.outputTime();
 
 	Vertex* vertex_device;
 	HANDLE_ERROR(cudaMalloc(&vertex_device, tri_size * 3 * sizeof(Vertex)));
