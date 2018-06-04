@@ -96,7 +96,7 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, uchar4* volume_
 		return;
 	}
 
-	const float TRANC_DIST_M = 3.1 * max(volumeSize.x, max(volumeSize.y, volumeSize.z));
+	const float TRANC_DIST_M = 2.1 * max(volumeSize.x, max(volumeSize.y, volumeSize.z));
 	uchar4 color;
 	color.x = color.y = color.z = 255;
 
@@ -613,9 +613,6 @@ __global__ void cudaCountAccumulation2(int *count_device, int *sum_device, int *
 	__shared__ int presum;
 	shared_count_device[2 * thid] = temp_device[block_offset + 2 * thid];
 	shared_count_device[2 * thid + 1] = temp_device[block_offset + 2 * thid + 1];
-	if (blockIdx.x == 0 && thid == 0) {
-		count_device[0] = count_device[114688];
-	}
 	if (thid == 0) {
 		if (blockIdx.x != 0) {
 			presum = sum_device[blockIdx.x - 1];
@@ -633,27 +630,33 @@ __global__ void cudaCountAccumulation2(int *count_device, int *sum_device, int *
 	count_device[block_offset + 2 * thid + 1] = shared_count_device[2 * thid + 1];
 }
 
+
+
 int cpu_cudaCountAccumulation() {
 	int temp_grid = 128, temp_block = 1024;
-	const int DATASIZE = 262144;
-	int *temp_device;
-	int *sum_device, *sum_host;
-	HANDLE_ERROR(cudaMalloc(&temp_device, DATASIZE * sizeof(int)));
-	HANDLE_ERROR(cudaMalloc(&sum_device, temp_grid * sizeof(int)));
-	sum_host = new int[temp_grid];
-	for (int i = 0; i < temp_grid; ++i) {
+	static int sum_host[128];
+	const int DATASIZE = 512 * 512;
+	static int* sum_device = NULL;
+	static int* temp_device = NULL;
+	if (sum_device == NULL) {
+		HANDLE_ERROR(cudaMalloc(&sum_device, temp_grid * sizeof(int)));
+		HANDLE_ERROR(cudaMalloc(&temp_device, DATASIZE * sizeof(int)));
+	}
+	for (int i = 0; i < 128; i++) {
 		sum_host[i] = 0;
 	}
-	//stage1
 	HANDLE_ERROR(cudaMemcpy(sum_device, sum_host, temp_grid * sizeof(int), cudaMemcpyHostToDevice));
+	//stage1
 	cudaCountAccumulation << <temp_grid, temp_block >> > (count_device, sum_device, temp_device);
+	HANDLE_ERROR(cudaGetLastError());
 	HANDLE_ERROR(cudaMemcpy(sum_host, sum_device, temp_grid * sizeof(int), cudaMemcpyDeviceToHost));
-	for (int i = 1; i<temp_grid; ++i) {
-		sum_host[i] += sum_host[(i - 1)];
+	for (int i = 1; i < temp_grid; ++i) {
+		sum_host[i] += sum_host[i - 1];
 	}
 	//stage2
 	HANDLE_ERROR(cudaMemcpy(sum_device, sum_host, temp_grid * sizeof(int), cudaMemcpyHostToDevice));
 	cudaCountAccumulation2 << <temp_grid, temp_block >> > (count_device, sum_device, temp_device);
+	HANDLE_ERROR(cudaGetLastError());
 
 	int tris_size = sum_host[temp_grid - 1];
 	return tris_size;
@@ -662,16 +665,9 @@ int cpu_cudaCountAccumulation() {
 extern "C"
 void cudaCalculateMesh(Vertex* vertex, int& tri_size) {
 	kernelMarchingCubesCount << <grid, block >> > (volume_device, cubeIndex_device, count_device, resolution);
-
-	cudaThreadSynchronize();
-	Timer timer;
-
 	HANDLE_ERROR(cudaGetLastError());
+
 	tri_size = cpu_cudaCountAccumulation();
-	HANDLE_ERROR(cudaGetLastError());
-
-	cudaThreadSynchronize();
-	timer.outputTime();
 
 	Vertex* vertex_device;
 	HANDLE_ERROR(cudaMalloc(&vertex_device, tri_size * 3 * sizeof(Vertex)));
