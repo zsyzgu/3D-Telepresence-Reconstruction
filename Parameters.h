@@ -1,6 +1,7 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
+#define MAX_CAMERAS 8
 #define DEPTH_W 320
 #define DEPTH_H 240
 #define COLOR_W 640

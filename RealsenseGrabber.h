@@ -1,28 +1,40 @@
 #ifndef REALSENSE_GRABBER_H
 #define REALSENSE_GRABBER_H
 
-#include <Windows.h>
 #include <librealsense2/rs.hpp>
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <map>
+#include <Windows.h>
+#include "Parameters.h"
 
-class RealsenseGrabber {
+class RealsenseGrabber
+{
 private:
-	rs2::config config;
-	rs2::pipeline pipeline;
-	rs2::pipeline_profile profile;
+	std::mutex _mutex;
 
-	rs2::decimation_filter* decimationFilter;
-	rs2::spatial_filter* spatialFilter;
-	rs2::temporal_filter* temporalFilter;
-	rs2::disparity_transform* toDisparityFilter;
-	rs2::disparity_transform* toDepthFilter;
+	struct ViewPort {
+		rs2::pipeline pipe;
+		rs2::pipeline_profile profile;
+	};
+	std::map<std::string, rs2::pipeline> devices;
 
-	RGBQUAD* colorData;
+	rs2::decimation_filter* decimationFilter[MAX_CAMERAS];
+	rs2::spatial_filter* spatialFilter[MAX_CAMERAS];
+	rs2::temporal_filter* temporalFilter[MAX_CAMERAS];
+	rs2::disparity_transform* toDisparityFilter[MAX_CAMERAS];
+	rs2::disparity_transform* toDepthFilter[MAX_CAMERAS];
+
+	void enableDevice(rs2::device device);
+
+	UINT16** depthImages;
+	RGBQUAD** colorImages;
 
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	void getRGBD(UINT16*& depthData, RGBQUAD*& colorData);
-	void showIntrinsics();
+	int getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages);
 };
 
 #endif

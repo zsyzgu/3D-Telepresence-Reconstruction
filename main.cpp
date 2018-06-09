@@ -26,8 +26,8 @@ TsdfVolume* volume = NULL;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
-UINT16* depthList[2];
-RGBQUAD* colorList[2];
+UINT16** depthImages;
+RGBQUAD** colorImages;
 Eigen::Matrix4f transformationList[2];
 
 #ifdef TRANSMISSION
@@ -95,13 +95,13 @@ void start() {
 }
 
 void update() {
-	grabber->getRGBD(depthList[0], colorList[0]);
+	int cameras = grabber->getRGBD(depthImages, colorImages);
 
 #ifdef TRANSMISSION
 	transmission->sendRGBD(depthList[0], colorList[0]);
 	volume->integrate(2, depthList, colorList, transformationList);
 #else
-	volume->integrate(1, depthList, colorList, transformationList);
+	volume->integrate(cameras, depthImages, colorImages, transformationList);
 #endif
 
 	volume->calnMesh(buffer);

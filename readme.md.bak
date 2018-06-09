@@ -39,3 +39,4 @@
 	* Visual Studio > 项目属性 > 链接器 > 输入 > 附加依赖性加入realsense2.lib
 	
 	* 系统环境便利path中加入(Realsense root)/bin/x64
+
