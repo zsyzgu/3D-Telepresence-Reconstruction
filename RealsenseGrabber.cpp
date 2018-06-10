@@ -46,38 +46,6 @@ RealsenseGrabber::~RealsenseGrabber()
 	}
 }
 
-int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages)
-{
-	std::lock_guard<std::mutex> lock(_mutex);
-	int deviceId = 0;
-	for (auto&& view : devices) {
-		rs2::frameset frameset;
-		if (view.second.poll_for_frames(&frameset) && frameset.size() > 0) {
-			rs2::align align(rs2_stream::RS2_STREAM_COLOR);
-			rs2::frameset alignedFrameset = align.process(frameset);
-			for (int i = 0; i < frameset.size(); i++) {
-				rs2::frame frame = alignedFrameset[i];
-				rs2::stream_profile profile = frame.get_profile();
-				if (profile.stream_type() == RS2_STREAM_DEPTH) {
-					frame = decimationFilter[deviceId]->process(frame);
-					frame = toDisparityFilter[deviceId]->process(frame);
-					frame = spatialFilter[deviceId]->process(frame);
-					frame = temporalFilter[deviceId]->process(frame);
-					frame = toDepthFilter[deviceId]->process(frame);
-					this->depthImages[deviceId] = (UINT16*)frame.get_data();
-				}
-				if (profile.stream_type() == RS2_STREAM_COLOR) {
-					this->colorImages[deviceId] = (RGBQUAD*)frame.get_data();
-				}
-			}
-			deviceId++;
-		}
-	}
-
-	depthImages = this->depthImages;
-	colorImages = this->colorImages;
-	return deviceId;
-}
 
 void RealsenseGrabber::enableDevice(rs2::device device)
 {
@@ -99,5 +67,37 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	rs2::pipeline pipeline;
 	pipeline.start(cfg);
 
-	devices.emplace(serialNumber, pipeline);
+	devices[serialNumber] = pipeline;
+}
+
+int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages)
+{
+	std::lock_guard<std::mutex> lock(_mutex);
+	int deviceId = 0;
+	for (auto&& view : devices) {
+		rs2::frameset frameset;
+		if (view.second.poll_for_frames(&frameset) && frameset.size() > 0) {
+			for (int i = 0; i < frameset.size(); i++) {
+				rs2::frame frame = frameset[i];
+				rs2::stream_profile profile = frame.get_profile();
+
+				if (profile.stream_type() == RS2_STREAM_DEPTH) {
+					frame = decimationFilter[deviceId]->process(frame);
+					frame = toDisparityFilter[deviceId]->process(frame);
+					frame = spatialFilter[deviceId]->process(frame);
+					frame = temporalFilter[deviceId]->process(frame);
+					frame = toDepthFilter[deviceId]->process(frame);
+					this->depthImages[deviceId] = (UINT16*)frame.get_data();
+				}
+				if (profile.stream_type() == RS2_STREAM_COLOR) {
+					this->colorImages[deviceId] = (RGBQUAD*)frame.get_data();
+				}
+			}
+			deviceId++;
+		}
+	}
+
+	depthImages = this->depthImages;
+	colorImages = this->colorImages;
+	return deviceId;
 }

@@ -3,14 +3,14 @@
 #include <pcl/conversions.h>
 #include "Timer.h"
 
-extern "C" void cudaInitVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
+extern "C" void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
 extern "C" void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, float** transformation);
 extern "C" void cudaCalculateMesh(Vertex* vertex, int& size);
 
-TsdfVolume::TsdfVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
+TsdfVolume::TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
-	cudaInitVolume(resolutionX, resolutionY, resolutionZ, sizeX, sizeY, sizeZ, centerX, centerY, centerZ);
+	cudaInitVolume(sizeX, sizeY, sizeZ, centerX, centerY, centerZ);
 }
 
 TsdfVolume::~TsdfVolume()
@@ -21,18 +21,12 @@ TsdfVolume::~TsdfVolume()
 void TsdfVolume::integrate(int cameras, UINT16** depth, RGBQUAD** color, Eigen::Matrix4f* transformation)
 {
 	float** trans = new float*[cameras];
-	for (int c = 0; c < cameras; c++) {
-		trans[c] = new float[16];
-		for (int i = 0; i < 16; i++) {
-			trans[c][i] = transformation[c](i / 4, i % 4);
-		}
+	for (int i = 0; i < cameras; i++) {
+		trans[i] = transformation[i].data();
 	}
 
 	cudaIntegrateDepth(cameras, depth, color, trans);
 
-	for (int c = 0; c < cameras; c++) {
-		delete[] trans[c];
-	}
 	delete[] trans;
 }
 

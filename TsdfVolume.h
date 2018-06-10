@@ -9,7 +9,7 @@
 
 class TsdfVolume {
 public:
-	TsdfVolume(int resolutionX, int resolutionY, int resolutionZ, float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
+	TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 	~TsdfVolume();
 	void integrate(int cameras, UINT16** depth, RGBQUAD** color, Eigen::Matrix4f* transformation);
 	void calnMesh(byte* buffer);
