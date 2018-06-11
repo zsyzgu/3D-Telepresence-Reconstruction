@@ -28,7 +28,7 @@ boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
 UINT16** depthImages;
 RGBQUAD** colorImages;
-Eigen::Matrix4f transformationList[2];
+Transformation depthTrans[MAX_CAMERAS];
 
 #ifdef TRANSMISSION
 Transmission* transmission = NULL;
@@ -83,8 +83,9 @@ void start() {
 	
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-	transformationList[0].setIdentity();
-	transformationList[1].setIdentity();
+	for (int i = 0; i < MAX_CAMERAS; i++) {
+		depthTrans[i].setIdentity();
+	}
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 1);
 	buffer = new byte[BUFFER_SIZE];
 
@@ -95,13 +96,17 @@ void start() {
 }
 
 void update() {
-	int cameras = grabber->getRGBD(depthImages, colorImages);
+	Transformation* colorTrans;
+	Intrinsics* depthIntrinsics;
+	Intrinsics* colorIntrinsics;
+
+	int cameras = grabber->getRGBD(depthImages, colorImages, colorTrans, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
 	transmission->sendRGBD(depthList[0], colorList[0]);
 	volume->integrate(2, depthList, colorList, transformationList);
 #else
-	volume->integrate(cameras, depthImages, colorImages, transformationList);
+	volume->integrate(cameras, depthImages, colorImages, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
 #endif
 
 	volume->calnMesh(buffer);
@@ -136,14 +141,13 @@ int main(int argc, char *argv[]) {
 		Timer timer;
 
 		update();
-
 		cloud = volume->getPointCloudFromMesh(buffer);
+
+		timer.outputTime();
 
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
-
-		timer.outputTime();
 	}
 
 	stop();

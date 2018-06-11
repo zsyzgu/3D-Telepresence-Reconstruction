@@ -7,7 +7,9 @@
 #include <mutex>
 #include <map>
 #include <Windows.h>
+#include <pcl/point_cloud.h>
 #include "Parameters.h"
+#include "TsdfVolume.cuh"
 
 class RealsenseGrabber
 {
@@ -30,11 +32,14 @@ private:
 
 	UINT16** depthImages;
 	RGBQUAD** colorImages;
+	Transformation* colorTrans;
+	Intrinsics* depthIntrinsics;
+	Intrinsics* colorIntrinsics;
 
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages);
+	int getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& colorTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
 };
 
 #endif
