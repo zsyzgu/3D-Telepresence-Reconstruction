@@ -15,13 +15,12 @@ namespace tsdf {
 	float3 offset;
 
 	float* volume_device;
+	UINT8* volumeBin_device;
 	UINT8* cubeIndex_device;
 	cudaChannelFormatDesc depthDesc;
 	cudaChannelFormatDesc colorDesc;
-	cudaArray* depth_device;
-	cudaArray* color_device;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture;
+	cudaArray* depth_device[MAX_CAMERAS];
+	cudaArray* color_device[MAX_CAMERAS];
 	Transformation* depthTrans_device;
 	Transformation* colorTrans_device;
 	Intrinsics* depthIntrinsics_device;
@@ -59,12 +58,14 @@ void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float 
 	offset.y = center.y - size.y / 2;
 	offset.z = center.z - size.z / 2;
 	HANDLE_ERROR(cudaMalloc(&volume_device, VOLUME_X * VOLUME_Y * VOLUME_Z * sizeof(float)));
+	HANDLE_ERROR(cudaMalloc(&volumeBin_device, VOLUME_X * VOLUME_Y * VOLUME_Z * sizeof(UINT8)));
 	HANDLE_ERROR(cudaMalloc(&cubeIndex_device, VOLUME_X * VOLUME_Y * VOLUME_Z * sizeof(UINT8)));
 	depthDesc = cudaCreateChannelDesc<UINT16>();
-	HANDLE_ERROR(cudaMallocArray(&depth_device, &depthDesc, DEPTH_W, DEPTH_H));
 	colorDesc = cudaCreateChannelDesc<uchar4>();
-	HANDLE_ERROR(cudaMallocArray(&color_device, &colorDesc, COLOR_W, COLOR_H));
-
+	for (int i = 0; i < MAX_CAMERAS; i++) {
+		HANDLE_ERROR(cudaMallocArray(&depth_device[i], &depthDesc, DEPTH_W, DEPTH_H));
+		HANDLE_ERROR(cudaMallocArray(&color_device[i], &colorDesc, COLOR_W, COLOR_H));
+	}
 	HANDLE_ERROR(cudaMalloc(&depthTrans_device, MAX_CAMERAS * sizeof(Transformation)));
 	HANDLE_ERROR(cudaMalloc(&colorTrans_device, MAX_CAMERAS * sizeof(Transformation)));
 	HANDLE_ERROR(cudaMalloc(&depthIntrinsics_device, MAX_CAMERAS * sizeof(Intrinsics)));
@@ -79,10 +80,12 @@ void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float 
 extern "C"
 void cudaReleaseVolume() {
 	HANDLE_ERROR(cudaFree(volume_device));
+	HANDLE_ERROR(cudaFree(volumeBin_device));
 	HANDLE_ERROR(cudaFree(cubeIndex_device));
-	HANDLE_ERROR(cudaFreeArray(depth_device));
-	HANDLE_ERROR(cudaFreeArray(color_device));
-
+	for (int i = 0; i < MAX_CAMERAS; i++) {
+		HANDLE_ERROR(cudaFreeArray(depth_device[i]));
+		HANDLE_ERROR(cudaFreeArray(color_device[i]));
+	}
 	HANDLE_ERROR(cudaFree(depthTrans_device));
 	HANDLE_ERROR(cudaFree(colorTrans_device));
 	HANDLE_ERROR(cudaFree(depthIntrinsics_device));
@@ -92,7 +95,7 @@ void cudaReleaseVolume() {
 	delete[] count_host;
 }
 
-__global__ void kernelIntegrateDepth(int cameras, float* volume, Transformation* transformation, Intrinsics* intrinsics, float3 volumeSize, float3 offset) {
+__global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBin, Transformation* transformation, Intrinsics* intrinsics, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -104,67 +107,79 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, Transformation*
 	uchar4 color = make_uchar4(255, 255, 255, 0);
 
 	float3 ori = make_float3(x + 0.5, y + 0.5, -0.5) * volumeSize + offset;
-	float3 pos = transformation[0].translate(ori);
-	const float3 deltaZ = transformation[0].deltaZ() * volumeSize;
+	float3 pos[MAX_CAMERAS];
+	float3 deltaZ[MAX_CAMERAS];
+	for (int i = 0; i < cameras; i++) {
+		pos[i] = transformation[i].translate(ori);
+		deltaZ[i] = transformation[i].deltaZ() * volumeSize;
+	}
 
 	__syncthreads();
 
 	for (int z = 0; z < VOLUME_Z; z++) {
-		pos = pos + deltaZ;
+		int cnt = 0;
+		UINT8 bin = 0;
+		float tsdf = 0;
 
-		bool flag = false;
-		float tsdf = 1.0;
+		for (int i = 0; i < 2; i++) {
+			pos[i] = pos[i] + deltaZ[i];
 
-		float depthX = pos.x * intrinsics[0].fx / pos.z + intrinsics[0].ppx;
-		float depthY = pos.y * intrinsics[0].fy / pos.z + intrinsics[0].ppy;
-			
-		if (pos.z > 0 && 0 <= depthX && depthX <= DEPTH_W && 0 <= depthY && depthY <= DEPTH_H) {
-			UINT16 depth = tex2D<UINT16>(depthTexture, depthX, depthY);
+			float depthX = pos[i].x * intrinsics[i].fx / pos[i].z + intrinsics[i].ppx;
+			float depthY = pos[i].y * intrinsics[i].fy / pos[i].z + intrinsics[i].ppy;
 
-			if (depth != 0) {
-				float sdf = depth * 0.001 - pos.z;
 
-				if (sdf >= -TRANC_DIST_M) {
-					flag = true;
-					tsdf = min(tsdf, sdf / TRANC_DIST_M);
+			if (pos[i].z > 0 && 0 <= depthX && depthX <= DEPTH_W && 0 <= depthY && depthY <= DEPTH_H) {
+				auto depthTexture = getDepthTexture(i);
+				UINT16 depth = tex2D<UINT16>(depthTexture, depthX, depthY);
+
+				if (depth != 0) {
+					float sdf = depth * 0.001 - pos[i].z;
+
+					if (sdf >= -TRANC_DIST_M) {
+						cnt++;
+						bin |= (1 << i);
+						tsdf += sdf / TRANC_DIST_M;
+					}
 				}
 			}
 		}
 
 		int id = deviceVid(x, y, z);
-		if (flag) {
-			volume[id] = tsdf;
+		if (cnt != 0) {
+			volume[id] = tsdf / cnt;
 		} else {
 			volume[id] = -1;
 		}
+		volumeBin[id] = bin;
 		__syncthreads();
 	}
 }
 
 extern "C"
 void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
-	HANDLE_ERROR(cudaMemcpy(&depthTrans_device[0], &depthTrans[0], sizeof(Transformation), cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(&colorTrans_device[0], &colorTrans[0], sizeof(Transformation), cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(&depthIntrinsics_device[0], &depthIntrinsics[0], sizeof(Intrinsics), cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(&colorIntrinsics_device[0], &colorIntrinsics[0], sizeof(Intrinsics), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(depthTrans_device, depthTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(colorTrans_device, colorTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, depthIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 
-	HANDLE_ERROR(cudaMemcpyToArray(depth_device, 0, 0, depth[0], sizeof(UINT16) * DEPTH_W * DEPTH_H, cudaMemcpyHostToDevice));
-	depthTexture.filterMode = cudaFilterModePoint;
-	depthTexture.addressMode[0] = cudaAddressModeWrap;
-	depthTexture.addressMode[1] = cudaAddressModeWrap;
-	HANDLE_ERROR(cudaBindTextureToArray(&depthTexture, depth_device, &depthDesc));
+	for (int i = 0; i < cameras; i++) {
+		auto depthTexturePointer = getDepthTexturePointer(i);
+		HANDLE_ERROR(cudaMemcpyToArray(depth_device[i], 0, 0, depth[i], sizeof(UINT16) * DEPTH_W * DEPTH_H, cudaMemcpyHostToDevice));
+		depthTexturePointer->filterMode = cudaFilterModePoint;
+		depthTexturePointer->addressMode[0] = cudaAddressModeWrap;
+		depthTexturePointer->addressMode[1] = cudaAddressModeWrap;
+		HANDLE_ERROR(cudaBindTextureToArray(depthTexturePointer, depth_device[i], &depthDesc));
 
-	HANDLE_ERROR(cudaMemcpyToArray(color_device, 0, 0, color[0], sizeof(uchar4) * COLOR_W * COLOR_H, cudaMemcpyHostToDevice));
-	colorTexture.filterMode = cudaFilterModePoint;
-	colorTexture.addressMode[0] = cudaAddressModeWrap;
-	colorTexture.addressMode[1] = cudaAddressModeWrap;
-	HANDLE_ERROR(cudaBindTextureToArray(&colorTexture, color_device, &colorDesc));
+		auto colorTexturePointer = getColorTexturePointer(i);
+		HANDLE_ERROR(cudaMemcpyToArray(color_device[i], 0, 0, color[i], sizeof(uchar4) * COLOR_W * COLOR_H, cudaMemcpyHostToDevice));
+		colorTexturePointer->filterMode = cudaFilterModePoint;
+		colorTexturePointer->addressMode[0] = cudaAddressModeWrap;
+		colorTexturePointer->addressMode[1] = cudaAddressModeWrap;
+		HANDLE_ERROR(cudaBindTextureToArray(colorTexturePointer, color_device[i], &colorDesc));
+	}
 
-	kernelIntegrateDepth << <grid, block >> > (cameras, volume_device, depthTrans_device, depthIntrinsics_device, volumeSize, offset);
+	kernelIntegrateDepth << <grid, block >> > (cameras, volume_device, volumeBin_device, depthTrans_device, depthIntrinsics_device, volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());
-
-	HANDLE_ERROR(cudaUnbindTexture(&depthTexture));
-	//DELETE LATER: colorTexture
 }
 
 __constant__ UINT8 triNumber_device[256] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 2, 3, 4, 4, 3, 3, 4, 4, 3, 4, 5, 5, 2, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 2, 3, 3, 4, 3, 4, 2, 3, 3, 4, 4, 5, 4, 5, 3, 2, 3, 4, 4, 3, 4, 5, 3, 2, 4, 5, 5, 4, 5, 2, 4, 1, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 3, 2, 3, 3, 4, 3, 4, 4, 5, 3, 2, 4, 3, 4, 3, 5, 2, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 4, 3, 4, 4, 3, 4, 5, 5, 4, 4, 3, 5, 2, 5, 4, 2, 1, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 2, 3, 3, 2, 3, 4, 4, 5, 4, 5, 5, 2, 4, 3, 5, 4, 3, 2, 4, 1, 3, 4, 4, 5, 4, 5, 3, 4, 4, 5, 5, 2, 3, 4, 2, 1, 2, 3, 3, 2, 3, 4, 2, 1, 3, 2, 4, 1, 2, 1, 1, 0};
@@ -477,7 +492,7 @@ __device__ __forceinline__ void deviceCalnEdgePoint(float* volume, int x1, int y
 	}
 }
 
-__global__ void kernelMarchingCubes(float* volume, UINT8* cubeIndex, int* count, Vertex* vertex, Transformation* transformation, Intrinsics* intrinsics, float3 volumeSize, float3 offset) {
+__global__ void kernelMarchingCubes(float* volume, UINT8* volumeBin, UINT8* cubeIndex, int* count, Vertex* vertex, Transformation* transformation, Intrinsics* intrinsics, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -518,12 +533,26 @@ __global__ void kernelMarchingCubes(float* volume, UINT8* cubeIndex, int* count,
 						int edgeId = triTable_device[cubeId][i * 3 + j];
 						posBuffer[tot] = pos[edgeId];
 
-						float3 pos = transformation[0].translate(posBuffer[tot]);
-						float colorX = pos.x * intrinsics[0].fx / pos.z + intrinsics[0].ppx;
-						float colorY = pos.y * intrinsics[0].fy / pos.z + intrinsics[0].ppy;
-						if (0 <= colorX && colorX <= COLOR_W && 0 <= colorY && colorY <= COLOR_H) {
-							colorBuffer[tot] = tex2D<uchar4>(colorTexture, colorX, colorY);
+						short4 colorSum = short4();
+						int cnt = 0;
+						UINT8 bin = volumeBin[id];
+						for (int i = 0; i < 2; i++) { //TODO
+							if (bin & (1 << i)) {
+								float3 pos = transformation[i].translate(posBuffer[tot]);
+								float colorX = pos.x * intrinsics[i].fx / pos.z + intrinsics[i].ppx;
+								float colorY = pos.y * intrinsics[i].fy / pos.z + intrinsics[i].ppy;
+								if (0 <= colorX && colorX <= COLOR_W && 0 <= colorY && colorY <= COLOR_H) {
+									cnt++;
+									auto colorTexture = getColorTexture(i);
+									uchar4 tmp = tex2D<uchar4>(colorTexture, colorX, colorY);
+									colorSum.x += tmp.x;
+									colorSum.y += tmp.y;
+									colorSum.z += tmp.z;
+								}
+							}
 						}
+						uchar4 color = make_uchar4(colorSum.x / cnt, colorSum.y / cnt, colorSum.z / cnt, 0);
+						colorBuffer[tot] = color;
 
 						tot++;
 					}
@@ -650,12 +679,9 @@ void cudaCalculateMesh(Vertex* vertex, int& tri_size) {
 	Vertex* vertex_device;
 	HANDLE_ERROR(cudaMalloc(&vertex_device, tri_size * 3 * sizeof(Vertex)));
 
-	kernelMarchingCubes << <grid, block >> > (volume_device, cubeIndex_device, count_device, vertex_device, colorTrans_device, colorIntrinsics_device, volumeSize, offset);
+	kernelMarchingCubes << <grid, block >> > (volume_device, volumeBin_device, cubeIndex_device, count_device, vertex_device, colorTrans_device, colorIntrinsics_device, volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());
 
-
 	HANDLE_ERROR(cudaMemcpy(vertex, vertex_device, tri_size * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost));
-
 	HANDLE_ERROR(cudaFree(vertex_device));
-	HANDLE_ERROR(cudaUnbindTexture(&colorTexture));
 }

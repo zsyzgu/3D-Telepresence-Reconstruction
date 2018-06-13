@@ -20,7 +20,7 @@ private:
 		rs2::pipeline pipe;
 		rs2::pipeline_profile profile;
 	};
-	std::map<std::string, rs2::pipeline> devices;
+	std::vector<rs2::pipeline> devices;
 
 	rs2::decimation_filter* decimationFilter[MAX_CAMERAS];
 	rs2::spatial_filter* spatialFilter[MAX_CAMERAS];

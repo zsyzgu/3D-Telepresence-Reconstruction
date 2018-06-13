@@ -58,17 +58,11 @@ RealsenseGrabber::~RealsenseGrabber()
 	}
 }
 
-
-
-
 void RealsenseGrabber::enableDevice(rs2::device device)
 {
 	std::string serialNumber(device.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
 	std::lock_guard<std::mutex> lock(_mutex);
 
-	if (devices.find(serialNumber) != devices.end()) {
-		return;
-	}
 	if (device.get_info(RS2_CAMERA_INFO_NAME) == "Platform Camera") {
 		return;
 	}
@@ -81,16 +75,17 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	rs2::pipeline pipeline;
 	pipeline.start(cfg);
 
-	devices[serialNumber] = pipeline;
+	devices.push_back(pipeline);
 }
 
 int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& colorTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
 	std::lock_guard<std::mutex> lock(_mutex);
-	int deviceId = 0;
-	for (auto&& view : devices) {
+#pragma omp parallel for
+	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
+		rs2::pipeline pipeline = devices[deviceId];
 		rs2::frameset frameset;
-		if (view.second.poll_for_frames(&frameset) && frameset.size() > 0) {
+		if (pipeline.poll_for_frames(&frameset) && frameset.size() > 0) {
 			rs2::stream_profile depthProfile;
 			rs2::stream_profile colorProfile;
 
@@ -124,7 +119,6 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 
 			rs2_extrinsics extrinsics = depthProfile.get_extrinsics_to(colorProfile);
 			this->colorTrans[deviceId] = Transformation(extrinsics.rotation, extrinsics.translation);
-			deviceId++;
 		}
 	}
 
@@ -133,5 +127,5 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 	colorTrans = this->colorTrans;
 	depthIntrinsics = this->depthIntrinsics;
 	colorIntrinsics = this->colorIntrinsics;
-	return deviceId;
+	return devices.size();
 }
