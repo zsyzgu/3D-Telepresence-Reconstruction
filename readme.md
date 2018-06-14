@@ -12,9 +12,13 @@
 
 4. 安装point cloud library (pcl) 1.8.1 with GPU，需要手动编译，会遇到很多问题，建议按照网上精细教程进行。
 
-5. 通过cmake生成本项目的vs工程，编译器选择visual studio 2017 v15 Win64
+5. 安装Realsense SDK2，系统环境的path中加入(Realsense root)/bin/x64
 
-6. 在Visual Studio中对cuda+pcl进行一些配置：
+6. 安装opencv 3.2，并设置OpenCV_DIR为包含OpenCVConfig.cmake的绝对路径（参考：opencv\build\x64\vc14\lib）
+
+7. 通过cmake生成本项目的vs工程，编译器选择visual studio 2017 v15 Win64
+
+8. 在Visual Studio中对cuda+pcl进行一些配置：
 
 	* 删除CmakeList.txt，以免Cmake重新编译了
 
@@ -25,5 +29,3 @@
 	* 右键项目 > 生成依赖项 > 生成自定义 > CUDA 9.1 打勾
 
 	* 右键*.cu > 属性 > 常规 > 项类型 > CUDAS C/C++
-
-7. Realsense配置，下载并安装realsense SDK2，系统环境中path中加入(Realsense root)/bin/x64
