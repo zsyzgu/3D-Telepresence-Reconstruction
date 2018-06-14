@@ -103,13 +103,10 @@ void update() {
 	int cameras = grabber->getRGBD(depthImages, colorImages, colorTrans, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
-	transmission->sendRGBD(depthList[0], colorList[0]);
-	volume->integrate(2, depthList, colorList, transformationList);
+	// TODO
 #else
-	volume->integrate(cameras, depthImages, colorImages, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
+	volume->integrate(buffer, cameras, depthImages, colorImages, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
 #endif
-
-	volume->calnMesh(buffer);
 }
 
 void stop() {

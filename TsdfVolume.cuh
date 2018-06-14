@@ -146,11 +146,34 @@ public:
 		return make_float3(rotation0.z, rotation1.z, rotation2.z);
 	}
 
+	CUDA_CALLABLE_MEMBER float3 col(int i) {
+		if (i == 0) {
+			return make_float3(rotation0.x, rotation1.x, rotation2.x);
+		} else if (i == 1) {
+			return make_float3(rotation0.y, rotation1.y, rotation2.y);
+		} else if (i == 2) {
+			return make_float3(rotation0.z, rotation1.z, rotation2.z);
+		}
+		return float3();
+	}
+
 	CUDA_CALLABLE_MEMBER void setIdentity() {
 		rotation0 = make_float3(1, 0, 0);
 		rotation1 = make_float3(0, 1, 0);
 		rotation2 = make_float3(0, 0, 1);
 		shift = make_float3(0, 0, 0);
+	}
+
+	CUDA_CALLABLE_MEMBER Transformation operator * (Transformation trans) {
+		float3 col0 = trans.col(0);
+		float3 col1 = trans.col(1);
+		float3 col2 = trans.col(2);
+		Transformation result;
+		result.rotation0 = make_float3(dot(rotation0, col0), dot(rotation0, col1), dot(rotation0, col2));
+		result.rotation1 = make_float3(dot(rotation1, col0), dot(rotation1, col1), dot(rotation1, col2));
+		result.rotation2 = make_float3(dot(rotation2, col0), dot(rotation2, col1), dot(rotation2, col2));
+		result.shift = make_float3(dot(rotation0, trans.shift), dot(rotation1, trans.shift), dot(rotation2, trans.shift)) + shift;
+		return result;
 	}
 };
 
