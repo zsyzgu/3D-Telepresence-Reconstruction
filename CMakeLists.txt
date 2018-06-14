@@ -28,6 +28,7 @@ find_package( KinectSDK2 REQUIRED )
 # Additional Include Directories
 include_directories( ${PCL_INCLUDE_DIRS} )
 include_directories( ${KinectSDK2_INCLUDE_DIRS} )
+include_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/include" )
 
 # Preprocessor Definitions
 add_definitions( ${PCL_DEFINITIONS} )
@@ -35,6 +36,7 @@ add_definitions( ${PCL_DEFINITIONS} )
 # Additional Library Directories
 link_directories( ${PCL_LIBRARY_DIRS} )
 link_directories( ${KinectSDK2_LIBRARY_DIRS} )
+link_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/lib/x64" )
 
 cuda_add_executable( 3D-Telepresence main.cpp
 	CudaHandleError.h
@@ -58,3 +60,4 @@ cuda_add_executable( 3D-Telepresence main.cpp
 # Additional Dependencies
 target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )
 target_link_libraries( 3D-Telepresence ${KinectSDK2_LIBRARIES} )
+target_link_libraries( 3D-Telepresence realsense2.lib )
