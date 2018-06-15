@@ -1,19 +1,9 @@
 #include "Timer.h"
-#include "PointCloudProcess.h"
 #include "SceneRegistration.h"
 #include "TsdfVolume.h"
 #include "Transmission.h"
 #include "RealsenseGrabber.h"
-#include <pcl/gpu/features/features.hpp>
 #include <pcl/visualization/cloud_viewer.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/compression/octree_pointcloud_compression.h>
-#include <pcl/gpu/utils/safe_call.hpp>
-#include <pcl/console/parse.h>
-#include <pcl/io/vtk_lib_io.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl/conversions.h>
-#include <pcl/surface/vtk_smoothing/vtk_utils.h>
 #include <windows.h>
 
 #define CREATE_EXE
@@ -35,19 +25,12 @@ Transmission* transmission = NULL;
 #endif
 
 void registration() {
-	colorTrans[1] = SceneRegistration::align(colorImages[0], colorImages[1]);
-}
-
-void saveScene() {
-	pcl::io::savePCDFileASCII("scene.pcd", *cloud);
+	colorTrans[1] = SceneRegistration::align(grabber);
 }
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "r" && event.keyDown()) {
 		registration();
-	}
-	if (event.getKeySym() == "s" && event.keyDown()) {
-		saveScene();
 	}
 }
 
@@ -94,7 +77,6 @@ void update() {
 	Transformation* depthTrans;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
-
 	int cameras = grabber->getRGBD(depthImages, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
@@ -159,10 +141,6 @@ extern "C" {
 
 	__declspec(dllexport) void callRegistration() {
 		registration();
-	}
-
-	__declspec(dllexport) void callSaveScene() {
-		saveScene();
 	}
 
 	__declspec(dllexport) void callStop() {

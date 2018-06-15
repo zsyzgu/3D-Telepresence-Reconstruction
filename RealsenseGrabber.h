@@ -7,7 +7,6 @@
 #include <mutex>
 #include <map>
 #include <Windows.h>
-#include <pcl/point_cloud.h>
 #include "Parameters.h"
 #include "TsdfVolume.cuh"
 

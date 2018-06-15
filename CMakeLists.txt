@@ -47,8 +47,6 @@ cuda_add_executable( 3D-Telepresence main.cpp
 	Vertex.h
 	RealsenseGrabber.h
 	RealsenseGrabber.cpp
-	PointCloudProcess.h
-	PointCloudProcess.cpp
 	SceneRegistration.h
 	SceneRegistration.cpp
 	Transmission.h

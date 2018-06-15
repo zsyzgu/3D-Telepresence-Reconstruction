@@ -2,9 +2,8 @@
 #define TSDF_VOLUME_H
 
 #include <pcl/point_types.h>
-#include <Windows.h>
-#include <pcl/PolygonMesh.h>
 #include <pcl/point_cloud.h>
+#include <Windows.h>
 #include "Vertex.h"
 #include "TsdfVolume.cuh"
 

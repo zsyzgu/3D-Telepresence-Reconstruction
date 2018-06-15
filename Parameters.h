@@ -17,10 +17,3 @@
 #define VOLUME_Z_LOG 9
 
 #endif
-
-/*
-#define DEPTH_FX 308.416 // DEPTH was aligned to COLOR, DEPTH intrinsics = 1/2 COLOR intrinsics
-#define DEPTH_FY -308.368
-#define DEPTH_CX 152.659
-#define DEPTH_CY 115.051
-*/
