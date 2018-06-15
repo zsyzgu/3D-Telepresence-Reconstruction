@@ -32,14 +32,14 @@ private:
 
 	UINT16** depthImages;
 	RGBQUAD** colorImages;
-	Transformation* colorTrans;
+	Transformation* depthTrans;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
 
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& colorTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
+	int getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
 };
 
 #endif

@@ -12,7 +12,7 @@ RealsenseGrabber::RealsenseGrabber()
 
 	depthImages = new UINT16*[MAX_CAMERAS];
 	colorImages = new RGBQUAD*[MAX_CAMERAS];
-	colorTrans = new Transformation[MAX_CAMERAS];
+	depthTrans = new Transformation[MAX_CAMERAS];
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
 
@@ -47,8 +47,8 @@ RealsenseGrabber::~RealsenseGrabber()
 	if (colorImages != NULL) {
 		delete colorImages;
 	}
-	if (colorTrans != NULL) {
-		delete colorTrans;
+	if (depthTrans != NULL) {
+		delete depthTrans;
 	}
 	if (depthIntrinsics != NULL) {
 		delete depthIntrinsics;
@@ -78,7 +78,7 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	devices.push_back(pipeline);
 }
 
-int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& colorTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
 	std::lock_guard<std::mutex> lock(_mutex);
 #pragma omp parallel for
@@ -103,7 +103,7 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 					frame = toDepthFilter[deviceId]->process(frame);
 					this->depthImages[deviceId] = (UINT16*)frame.get_data();
 					this->depthIntrinsics[deviceId].fx = intrinsics.fx * 0.5; //Decimation Filter: pixel *= 0.5
-					this->depthIntrinsics[deviceId].fy = -intrinsics.fy * 0.5;
+					this->depthIntrinsics[deviceId].fy = intrinsics.fy * 0.5;
 					this->depthIntrinsics[deviceId].ppx = intrinsics.ppx * 0.5;
 					this->depthIntrinsics[deviceId].ppy = intrinsics.ppy * 0.5;
 				}
@@ -111,20 +111,20 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 					colorProfile = profile;
 					this->colorImages[deviceId] = (RGBQUAD*)frame.get_data();
 					this->colorIntrinsics[deviceId].fx = intrinsics.fx;
-					this->colorIntrinsics[deviceId].fy = -intrinsics.fy;
+					this->colorIntrinsics[deviceId].fy = intrinsics.fy;
 					this->colorIntrinsics[deviceId].ppx = intrinsics.ppx;
 					this->colorIntrinsics[deviceId].ppy = intrinsics.ppy;
 				}
 			}
 
-			rs2_extrinsics extrinsics = depthProfile.get_extrinsics_to(colorProfile);
-			this->colorTrans[deviceId] = Transformation(extrinsics.rotation, extrinsics.translation);
+			rs2_extrinsics extrinsics = colorProfile.get_extrinsics_to(depthProfile);
+			this->depthTrans[deviceId] = Transformation(extrinsics.rotation, extrinsics.translation);
 		}
 	}
 
 	depthImages = this->depthImages;
 	colorImages = this->colorImages;
-	colorTrans = this->colorTrans;
+	depthTrans = this->depthTrans;
 	depthIntrinsics = this->depthIntrinsics;
 	colorIntrinsics = this->colorIntrinsics;
 	return devices.size();

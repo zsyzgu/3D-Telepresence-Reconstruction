@@ -28,16 +28,14 @@ boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
 UINT16** depthImages;
 RGBQUAD** colorImages;
-Transformation depthTrans[MAX_CAMERAS];
+Transformation colorTrans[MAX_CAMERAS];
 
 #ifdef TRANSMISSION
 Transmission* transmission = NULL;
 #endif
 
 void registration() {
-	//pcl::PointCloud<pcl::PointXYZRGB>::Ptr local = grabber->getPointCloud(depthList[0], colorList[0]);
-	//pcl::PointCloud<pcl::PointXYZRGB>::Ptr remote = grabber->getPointCloud(depthList[1], colorList[1]);
-	//transformationList[1] = SceneRegistration::align(local, remote);
+	colorTrans[1] = SceneRegistration::align(colorImages[0], colorImages[1]);
 }
 
 void saveScene() {
@@ -83,9 +81,6 @@ void start() {
 	
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-	for (int i = 0; i < MAX_CAMERAS; i++) {
-		depthTrans[i].setIdentity();
-	}
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 1);
 	buffer = new byte[BUFFER_SIZE];
 
@@ -96,11 +91,11 @@ void start() {
 }
 
 void update() {
-	Transformation* colorTrans;
+	Transformation* depthTrans;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
 
-	int cameras = grabber->getRGBD(depthImages, colorImages, colorTrans, depthIntrinsics, colorIntrinsics);
+	int cameras = grabber->getRGBD(depthImages, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
 	// TODO

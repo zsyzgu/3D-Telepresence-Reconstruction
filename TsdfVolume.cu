@@ -127,7 +127,6 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 			float depthX = pos[i].x * intrinsics[i].fx / pos[i].z + intrinsics[i].ppx;
 			float depthY = pos[i].y * intrinsics[i].fy / pos[i].z + intrinsics[i].ppy;
 
-
 			if (pos[i].z > 0 && 0 <= depthX && depthX <= DEPTH_W && 0 <= depthY && depthY <= DEPTH_H) {
 				auto depthTexture = getDepthTexture(i);
 				UINT16 depth = tex2D<UINT16>(depthTexture, depthX, depthY);

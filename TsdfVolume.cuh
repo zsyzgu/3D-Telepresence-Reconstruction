@@ -111,35 +111,32 @@ CUDA_CALLABLE_MEMBER __forceinline__ float dot(float3 a, float3 b) {
 }
 
 class Transformation {
-public:
+private:
 	float3 rotation0;
 	float3 rotation1;
 	float3 rotation2;
-	float3 shift;
+	float3 translation;
 public:
 	CUDA_CALLABLE_MEMBER Transformation() {
-		rotation0 = float3();
-		rotation1 = float3();
-		rotation2 = float3();
-		shift = float3();
-	}
-
-	CUDA_CALLABLE_MEMBER Transformation(float* matrix) {
-		rotation0 = make_float3(matrix[0], matrix[1], matrix[2]);
-		rotation1 = make_float3(matrix[4], matrix[5], matrix[6]);
-		rotation2 = make_float3(matrix[8], matrix[9], matrix[10]);
-		shift = make_float3(matrix[12], matrix[13], matrix[14]);
+		setIdentity();
 	}
 
 	CUDA_CALLABLE_MEMBER Transformation(float* rotation, float* translation) {
 		rotation0 = make_float3(rotation[0], rotation[3], rotation[6]);
 		rotation1 = make_float3(rotation[1], rotation[4], rotation[7]);
 		rotation2 = make_float3(rotation[2], rotation[5], rotation[8]);
-		shift = make_float3(translation[0], translation[1], translation[2]);
+		this->translation = make_float3(translation[0], translation[1], translation[2]);
+	}
+
+	CUDA_CALLABLE_MEMBER Transformation(double* rotation, double* translation) {
+		rotation0 = make_float3(rotation[0], rotation[1], rotation[2]);
+		rotation1 = make_float3(rotation[3], rotation[4], rotation[5]);
+		rotation2 = make_float3(rotation[6], rotation[7], rotation[8]);
+		this->translation = make_float3(translation[0], translation[1], translation[2]);
 	}
 
 	CUDA_CALLABLE_MEMBER float3 translate(float3 pos) {
-		return make_float3(dot(pos, rotation0), dot(pos, rotation1), dot(pos, rotation2)) + shift;
+		return make_float3(dot(pos, rotation0), dot(pos, rotation1), dot(pos, rotation2)) + translation;
 	}
 
 	CUDA_CALLABLE_MEMBER float3 deltaZ() {
@@ -161,7 +158,7 @@ public:
 		rotation0 = make_float3(1, 0, 0);
 		rotation1 = make_float3(0, 1, 0);
 		rotation2 = make_float3(0, 0, 1);
-		shift = make_float3(0, 0, 0);
+		translation = make_float3(0, 0, 0);
 	}
 
 	CUDA_CALLABLE_MEMBER Transformation operator * (Transformation trans) {
@@ -172,7 +169,7 @@ public:
 		result.rotation0 = make_float3(dot(rotation0, col0), dot(rotation0, col1), dot(rotation0, col2));
 		result.rotation1 = make_float3(dot(rotation1, col0), dot(rotation1, col1), dot(rotation1, col2));
 		result.rotation2 = make_float3(dot(rotation2, col0), dot(rotation2, col1), dot(rotation2, col2));
-		result.shift = make_float3(dot(rotation0, trans.shift), dot(rotation1, trans.shift), dot(rotation2, trans.shift)) + shift;
+		result.translation = make_float3(dot(rotation0, trans.translation), dot(rotation1, trans.translation), dot(rotation2, trans.translation)) + translation;
 		return result;
 	}
 };

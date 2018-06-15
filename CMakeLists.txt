@@ -24,8 +24,7 @@ source_group("Source" FILES ${CURRENT_SOURCES})
 find_package( PCL 1.8 REQUIRED )
 set( KinectSDK2_FUSION TRUE )
 find_package( KinectSDK2 REQUIRED )
-# Find OpenCV, set OpenCV_DIR variable to the absolute path to
-# the directory containing OpenCVConfig.cmake file (build\x64\vc14\lib)
+# Find OpenCV, set OpenCV_DIR to the path containing OpenCVConfig.cmake (build\x64\vc14\lib)
 find_package(OpenCV REQUIRED)
 
 # Additional Include Directories
@@ -58,7 +57,7 @@ cuda_add_executable( 3D-Telepresence main.cpp
 	Timer.cpp
 	TsdfVolume.h
 	TsdfVolume.cpp
-	BilateralFilter.cu
+	TsdfVolume.cuh
 	TsdfVolume.cu)
 
 # Additional Dependencies

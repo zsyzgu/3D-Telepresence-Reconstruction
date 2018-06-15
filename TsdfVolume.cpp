@@ -20,10 +20,10 @@ TsdfVolume::~TsdfVolume()
 
 void TsdfVolume::integrate(byte* result, int cameras, UINT16** depth, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
 {
-	// Input: depthTrans = depth to world transformation, colorTrans = color to depth transformation
-	// Output: colorTrans = depthTrans * colorTrans = color to world transformation
+	// Input: depthTrans = color to depth transformation, colorTrans = world to color transformation
+	// Output: colorTrans & depthTrans are from world transformation
 	for (int i = 0; i < cameras; i++) {
-		colorTrans[i] = depthTrans[i] * colorTrans[i];
+		depthTrans[i] = depthTrans[i] * colorTrans[i];
 	}
 
 	cudaIntegrateDepth(cameras, depth, color, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
