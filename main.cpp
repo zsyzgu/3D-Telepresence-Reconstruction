@@ -6,7 +6,7 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <windows.h>
 
-#define CREATE_EXE
+//#define CREATE_EXE
 //#define TRANSMISSION
 
 const int BUFFER_SIZE = 100000000;

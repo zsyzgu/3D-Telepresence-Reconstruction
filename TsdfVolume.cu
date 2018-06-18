@@ -104,9 +104,8 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 	}
 
 	const float TRANC_DIST_M = 2.1 * max(volumeSize.x, max(volumeSize.y, volumeSize.z));
-	uchar4 color = make_uchar4(255, 255, 255, 0);
 
-	float3 ori = make_float3(x + 0.5, y + 0.5, -0.5) * volumeSize + offset;
+	float3 ori = make_float3(x, y, -1) * volumeSize + offset;
 	float3 pos[MAX_CAMERAS];
 	float3 deltaZ[MAX_CAMERAS];
 	for (int i = 0; i < cameras; i++) {
@@ -138,6 +137,7 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 						cnt++;
 						bin |= (1 << i);
 						tsdf += sdf / TRANC_DIST_M;
+						tsdf = min(tsdf, sdf / TRANC_DIST_M);
 					}
 				}
 			}
@@ -146,6 +146,7 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 		int id = deviceVid(x, y, z);
 		if (cnt != 0) {
 			volume[id] = tsdf / cnt;
+			volume[id] = tsdf;
 		} else {
 			volume[id] = -1;
 		}
@@ -485,9 +486,9 @@ __device__ __forceinline__ void deviceCalnEdgePoint(float* volume, int x1, int y
 	float v2 = volume[deviceVid(x2, y2, z2)];
 	if ((v1 < 0) ^ (v2 < 0)) {
 		float k =  v1 / (v1 - v2);
-		pos.x = ((1 - k) * x1 + k * x2 - 0.5) * volumeSize.x + offset.x;
-		pos.y = ((1 - k) * y1 + k * y2 - 0.5) * volumeSize.y + offset.y;
-		pos.z = ((1 - k) * z1 + k * z2 - 0.5) * volumeSize.z + offset.z;
+		pos.x = ((1 - k) * x1 + k * x2) * volumeSize.x + offset.x;
+		pos.y = ((1 - k) * y1 + k * y2) * volumeSize.y + offset.y;
+		pos.z = ((1 - k) * z1 + k * z2) * volumeSize.z + offset.z;
 	}
 }
 
@@ -550,8 +551,12 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 								}
 							}
 						}
-						uchar4 color = make_uchar4(colorSum.x / cnt, colorSum.y / cnt, colorSum.z / cnt, 0);
-						colorBuffer[tot] = color;
+						if (cnt == 0) {
+							colorBuffer[tot] = uchar4();;
+						} else {
+							uchar4 color = make_uchar4(colorSum.x / cnt, colorSum.y / cnt, colorSum.z / cnt, 0);
+							colorBuffer[tot] = color;
+						}
 
 						tot++;
 					}
