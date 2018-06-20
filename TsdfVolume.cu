@@ -36,7 +36,7 @@ using namespace tsdf;
 CUDA_CALLABLE_MEMBER __forceinline__ int devicePid(int x, int y) {
 	int bx = x >> BLOCK_SIZE_LOG, tx = x ^ (bx << BLOCK_SIZE_LOG);
 	int by = y >> BLOCK_SIZE_LOG, ty = y ^ (by << BLOCK_SIZE_LOG);
-	return ((((by * gridDim.x + bx) << BLOCK_SIZE_LOG) + ty) << BLOCK_SIZE_LOG) + tx;
+	return (((by << VOLUME_X_LOG) + (bx << BLOCK_SIZE_LOG) + ty) << BLOCK_SIZE_LOG) + tx;
 }
 
 CUDA_CALLABLE_MEMBER __forceinline__ int deviceVid(int x, int y, int z) {
@@ -108,13 +108,12 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 	float3 ori = make_float3(x, y, -1) * volumeSize + offset;
 	float3 pos[MAX_CAMERAS];
 	float3 deltaZ[MAX_CAMERAS];
+
 	for (int i = 0; i < cameras; i++) {
 		pos[i] = transformation[i].translate(ori);
 		deltaZ[i] = transformation[i].deltaZ() * volumeSize;
 	}
-
 	__syncthreads();
-
 	for (int z = 0; z < VOLUME_Z; z++) {
 		int cnt = 0;
 		UINT8 bin = 0;
@@ -122,13 +121,11 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 
 		for (int i = 0; i < cameras; i++) {
 			pos[i] = pos[i] + deltaZ[i];
+			float2 pixel = intrinsics[i].translate(pos[i]);
 
-			float depthX = pos[i].x * intrinsics[i].fx / pos[i].z + intrinsics[i].ppx;
-			float depthY = pos[i].y * intrinsics[i].fy / pos[i].z + intrinsics[i].ppy;
-
-			if (pos[i].z > 0 && 0 <= depthX && depthX <= DEPTH_W && 0 <= depthY && depthY <= DEPTH_H) {
+			if (pos[i].z > 0 && 0 <= pixel.x && pixel.x <= DEPTH_W && 0 <= pixel.y && pixel.y <= DEPTH_H) {
 				auto depthTexture = getDepthTexture(i);
-				UINT16 depth = tex2D<UINT16>(depthTexture, depthX, depthY);
+				UINT16 depth = tex2D<UINT16>(depthTexture, pixel.x, pixel.y);
 
 				if (depth != 0) {
 					float sdf = depth * 0.001 - pos[i].z;
@@ -137,7 +134,6 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 						cnt++;
 						bin |= (1 << i);
 						tsdf += sdf / TRANC_DIST_M;
-						tsdf = min(tsdf, sdf / TRANC_DIST_M);
 					}
 				}
 			}
@@ -146,8 +142,8 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 		int id = deviceVid(x, y, z);
 		if (cnt != 0) {
 			volume[id] = tsdf / cnt;
-			volume[id] = tsdf;
-		} else {
+		}
+		else {
 			volume[id] = -1;
 		}
 		volumeBin[id] = bin;
@@ -157,11 +153,10 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 
 extern "C"
 void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
-	HANDLE_ERROR(cudaMemcpy(depthTrans_device, depthTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(depthTrans_device, depthTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice)); //1.5ms
 	HANDLE_ERROR(cudaMemcpy(colorTrans_device, colorTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, depthIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
-
 	for (int i = 0; i < cameras; i++) {
 		auto depthTexturePointer = getDepthTexturePointer(i);
 		HANDLE_ERROR(cudaMemcpyToArray(depth_device[i], 0, 0, depth[i], sizeof(UINT16) * DEPTH_W * DEPTH_H, cudaMemcpyHostToDevice));
@@ -478,7 +473,7 @@ __global__ void kernelMarchingCubesCount(float* volume, UINT8* cubeIndex, int* c
 	}
 
 	__syncthreads();
-	count[devicePid(x, y)] = cnt;
+	count[devicePid(x, y)] = cnt * 2;
 }
 
 __device__ __forceinline__ void deviceCalnEdgePoint(float* volume, int x1, int y1, int z1, int x2, int y2, int z2, float3& pos, float3 volumeSize, float3 offset) {
@@ -490,6 +485,29 @@ __device__ __forceinline__ void deviceCalnEdgePoint(float* volume, int x1, int y
 		pos.y = ((1 - k) * y1 + k * y2) * volumeSize.y + offset.y;
 		pos.z = ((1 - k) * z1 + k * z2) * volumeSize.z + offset.z;
 	}
+}
+
+__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori , Transformation* transformation, Intrinsics* intrinsics) {
+	short4 colorSum = short4();
+	int cnt = 0;
+	for (int i = 0; i < cameras; i++) {
+		if (bin & (1 << i)) {
+			float3 pos = transformation[i].translate(ori);
+			float2 pixel = intrinsics[i].translate(pos);
+			if (0 <= pixel.x && pixel.x <= COLOR_W && 0 <= pixel.y && pixel.y <= COLOR_H) {
+				cnt++;
+				auto colorTexture = getColorTexture(i);
+				uchar4 tmp = tex2D<uchar4>(colorTexture, pixel.x, pixel.y);
+				colorSum.x += tmp.x;
+				colorSum.y += tmp.y;
+				colorSum.z += tmp.z;
+			}
+		}
+	}
+	if (cnt == 0) {
+		return uchar4();
+	}
+	return make_uchar4(colorSum.x / cnt, colorSum.y / cnt, colorSum.z / cnt, 0);
 }
 
 __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin, UINT8* cubeIndex, int* count, Vertex* vertex, Transformation* transformation, Intrinsics* intrinsics, float3 volumeSize, float3 offset) {
@@ -527,42 +545,18 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 		deviceCalnEdgePoint(volume, x + 0, y + 1, z + 0, x + 0, y + 1, z + 1, pos[11], volumeSize, offset);
 		
 		if (triTable_device[cubeId][0] != -1) {
-			for (int i = 0; i < 5; i++) {
-				if (triTable_device[cubeId][i * 3] != -1) {
-					for (int j = 0; j < 3; j++) {
-						int edgeId = triTable_device[cubeId][i * 3 + j];
-						posBuffer[tot] = pos[edgeId];
-
-						short4 colorSum = short4();
-						int cnt = 0;
-						UINT8 bin = volumeBin[id];
-						for (int i = 0; i < cameras; i++) {
-							if (bin & (1 << i)) {
-								float3 pos = transformation[i].translate(posBuffer[tot]);
-								float colorX = pos.x * intrinsics[i].fx / pos.z + intrinsics[i].ppx;
-								float colorY = pos.y * intrinsics[i].fy / pos.z + intrinsics[i].ppy;
-								if (0 <= colorX && colorX <= COLOR_W && 0 <= colorY && colorY <= COLOR_H) {
-									cnt++;
-									auto colorTexture = getColorTexture(i);
-									uchar4 tmp = tex2D<uchar4>(colorTexture, colorX, colorY);
-									colorSum.x += tmp.x;
-									colorSum.y += tmp.y;
-									colorSum.z += tmp.z;
-								}
-							}
-						}
-						if (cnt == 0) {
-							colorBuffer[tot] = uchar4();;
-						} else {
-							uchar4 color = make_uchar4(colorSum.x / cnt, colorSum.y / cnt, colorSum.z / cnt, 0);
-							colorBuffer[tot] = color;
-						}
-
-						tot++;
-					}
-				} else {
-					break;
+			for (int i = 0; i < 5 && triTable_device[cubeId][i * 3] != -1; i++) {
+				for (int j = 0; j < 3; j++) {
+					int edgeId = triTable_device[cubeId][i * 3 + j];
+					posBuffer[tot + j] = pos[edgeId];
 				}
+				posBuffer[tot + 3] = (posBuffer[tot + 0] + posBuffer[tot + 1]) * 0.5;
+				posBuffer[tot + 4] = (posBuffer[tot + 1] + posBuffer[tot + 2]) * 0.5;
+				posBuffer[tot + 5] = (posBuffer[tot + 2] + posBuffer[tot + 0]) * 0.5;
+				for (int j = 0; j < 6; j++) {
+					colorBuffer[tot + j] = calnColor(cameras, volumeBin[id], posBuffer[tot + j], transformation, intrinsics);
+				}
+				tot += 6;
 			}
 		}
 
@@ -576,7 +570,7 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 	}
 }
 
-__global__ void cudaCountAccumulation(int *count_device, int *sum_device, int *temp_device) {//一个block用1024个线程，处理2048个数。一共需要处理resx*resy = 2^18个数，分成128个block。fixed！！
+__global__ void cudaCountAccumulation(int *count_device, int *sum_device, int *temp_device) {//一个block用1024个线程，处理2048个数。一共需要处理resx*resy = 2^18个数，分成128个block。
 	int block_offset = blockIdx.x * 2048;//确定处理第几个2048。
 	int thid = threadIdx.x;
 
@@ -675,17 +669,14 @@ int cpu_cudaCountAccumulation() {
 
 extern "C"
 void cudaCreateMeshAndIntegrateColor(int cameras, Vertex* vertex, int& tri_size) {
-	kernelMarchingCubesCount << <grid, block >> > (volume_device, cubeIndex_device, count_device);
+	kernelMarchingCubesCount << <grid, block >> > (volume_device, cubeIndex_device, count_device); //0.6ms
 	HANDLE_ERROR(cudaGetLastError());
-
 	tri_size = cpu_cudaCountAccumulation();
 
 	Vertex* vertex_device;
 	HANDLE_ERROR(cudaMalloc(&vertex_device, tri_size * 3 * sizeof(Vertex)));
-
 	kernelMarchingCubes << <grid, block >> > (cameras, volume_device, volumeBin_device, cubeIndex_device, count_device, vertex_device, colorTrans_device, colorIntrinsics_device, volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());
-
 	HANDLE_ERROR(cudaMemcpy(vertex, vertex_device, tri_size * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost));
 	HANDLE_ERROR(cudaFree(vertex_device));
 }

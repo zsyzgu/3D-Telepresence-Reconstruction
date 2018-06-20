@@ -102,6 +102,10 @@ CUDA_CALLABLE_MEMBER __forceinline__ float3 operator * (float3 a, float3 b) {
 	return make_float3(a.x * b.x, a.y * b.y, a.z * b.z);
 }
 
+CUDA_CALLABLE_MEMBER __forceinline__ float3 operator * (float3 a, float k) {
+	return make_float3(a.x * k, a.y * k, a.z * k);
+}
+
 CUDA_CALLABLE_MEMBER __forceinline__ float3 operator + (float3 a, float3 b) {
 	return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
@@ -178,6 +182,9 @@ class Intrinsics {
 public:
 	float ppx, ppy;
 	float fx, fy;
+	CUDA_CALLABLE_MEMBER float2 translate(float3 pos) {
+		return make_float2(pos.x * fx / pos.z + ppx, pos.y * fy / pos.z + ppy);
+	}
 };
 
 #endif

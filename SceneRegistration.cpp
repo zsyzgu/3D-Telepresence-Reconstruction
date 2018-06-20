@@ -6,7 +6,7 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber)
 {
 	const cv::Size boardSize = cv::Size(9, 6);
 	const float gridSize = 0.028f;
-	const int ITERATION = 3;
+	const int ITERATION = 1;
 
 	UINT16** depthImages;
 	RGBQUAD** colorImages;
@@ -75,8 +75,6 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber)
 	}
 	cv::destroyAllWindows();
 
-	//cv::Mat sourceCameraMatrix = cv::initCameraMatrix2D(objectPointsArray, sourcePointsArray, sourceColorMat.size(), 0);
-	//cv::Mat targetCameraMatrix = cv::initCameraMatrix2D(objectPointsArray, targetPointsArray, targetColorMat.size(), 0);
 	cv::Mat sourceCameraMatrix(cv::Size(3, 3), CV_32F);
 	sourceCameraMatrix.at<float>(0, 0) = colorIntrinsics[0].fx;
 	sourceCameraMatrix.at<float>(1, 1) = colorIntrinsics[0].fy;
