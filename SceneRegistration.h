@@ -11,7 +11,7 @@
 
 class SceneRegistration {
 public:
-	static Transformation align(RealsenseGrabber* grabber);
+	static Transformation align(RealsenseGrabber* grabber, Transformation* colorTrans);
 };
 
 #endif

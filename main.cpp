@@ -25,7 +25,7 @@ Transmission* transmission = NULL;
 #endif
 
 void registration() {
-	colorTrans[1] = SceneRegistration::align(grabber);
+	SceneRegistration::align(grabber, colorTrans);
 }
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
