@@ -34,17 +34,28 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::getPointCloudFromMesh(byte* b
 	int size = *((int*)buffer);
 	Vertex* vertex = (Vertex*)(buffer + 4);
 
+	int n = size * 3;
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-	cloud->resize(size * 3);
-	
+	cloud->resize(n * 2);
+
 #pragma omp parallel for schedule(static, 500)
-	for (int i = 0; i < size * 3; i++) {
+	for (int i = 0; i < n; i++) {
 		cloud->points[i].x = vertex[i].pos.x;
 		cloud->points[i].y = vertex[i].pos.y;
 		cloud->points[i].z = vertex[i].pos.z;
 		cloud->points[i].r = vertex[i].color.x;
 		cloud->points[i].g = vertex[i].color.y;
 		cloud->points[i].b = vertex[i].color.z;
+		int j = i + 1;
+		if (j % 3 == 0) {
+			j -= 3;
+		}
+		cloud->points[n + i].x = (vertex[i].pos.x + vertex[j].pos.x) * 0.5;
+		cloud->points[n + i].y = (vertex[i].pos.y + vertex[j].pos.y) * 0.5;
+		cloud->points[n + i].z = (vertex[i].pos.z + vertex[j].pos.z) * 0.5;
+		cloud->points[n + i].r = vertex[i].color2.x;
+		cloud->points[n + i].g = vertex[i].color2.y;
+		cloud->points[n + i].b = vertex[i].color2.z;
 	}
 
 	return cloud;

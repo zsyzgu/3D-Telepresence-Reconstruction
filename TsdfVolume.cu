@@ -459,25 +459,24 @@ __global__ void kernelMarchingCubesCount(float* volume, int* count) {
 	for (int z = 0; z + 1 < VOLUME; z++) {
 		cnt += triNumber_device[deviceGetCubeIndex(volume, x, y, z)];
 	}
-	count[devicePid(x, y)] = cnt * 2;
+	count[devicePid(x, y)] = cnt;
 }
 
-__device__ __forceinline__ void deviceCalnEdgePoint(float* volume, int x1, int y1, int z1, int x2, int y2, int z2, float3& pos, float3 volumeSize, float3 offset) {
-	float v1 = volume[deviceVid(x1, y1, z1)];
-	float v2 = volume[deviceVid(x2, y2, z2)];
+__device__ __forceinline__ float3 deviceCalnEdgePoint(float* volume, int x, int y, int z, int dx, int dy, int dz) {
+	float v1 = volume[deviceVid(x, y, z)];
+	float v2 = volume[deviceVid(x + dx, y + dy, z + dz)];
 	if ((v1 < 0) ^ (v2 < 0)) {
 		float k =  v1 / (v1 - v2);
-		pos.x = ((1 - k) * x1 + k * x2) * volumeSize.x + offset.x;
-		pos.y = ((1 - k) * y1 + k * y2) * volumeSize.y + offset.y;
-		pos.z = ((1 - k) * z1 + k * z2) * volumeSize.z + offset.z;
+		return make_float3(x + k * dx, y + k * dy, z + k * dz);
 	}
+	return float3();
 }
 
-__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori , Transformation* transformation, Intrinsics* intrinsics) {
+__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, Transformation* transformation, Intrinsics* intrinsics) {
 	short4 colorSum = short4();
 	int cnt = 0;
 	for (int i = 0; i < cameras; i++) {
-		if (bin & (1 << i)) {
+		if ((bin >> i) & 1) {
 			float3 pos = transformation[i].translate(ori);
 			float2 pixel = intrinsics[i].translate(pos);
 			if (0 <= pixel.x && pixel.x <= COLOR_W && 0 <= pixel.y && pixel.y <= COLOR_H) {
@@ -505,54 +504,45 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 	}	
 
 	float3 pos[12];
-
-	const int MAX_BUFFER = 512;
-	int tot = 0;
-	float3 posBuffer[MAX_BUFFER];
-	uchar4 colorBuffer[MAX_BUFFER];
+	float3 posBuffer[6];
+	Vertex* vtx = vertex + count[devicePid(x, y)] * 3;
 
 	for (int z = 0; z + 1 < VOLUME; z++) {
-		int id = deviceVid(x, y, z);
 		int cubeId = deviceGetCubeIndex(volume, x, y, z);
 
-		deviceCalnEdgePoint(volume, x + 0, y + 0, z + 0, x + 1, y + 0, z + 0, pos[0], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 1, y + 0, z + 0, x + 1, y + 1, z + 0, pos[1], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 1, y + 1, z + 0, x + 0, y + 1, z + 0, pos[2], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 0, y + 1, z + 0, x + 0, y + 0, z + 0, pos[3], volumeSize, offset);
-		
-		deviceCalnEdgePoint(volume, x + 0, y + 0, z + 1, x + 1, y + 0, z + 1, pos[4], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 1, y + 0, z + 1, x + 1, y + 1, z + 1, pos[5], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 1, y + 1, z + 1, x + 0, y + 1, z + 1, pos[6], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 0, y + 1, z + 1, x + 0, y + 0, z + 1, pos[7], volumeSize, offset);
-
-		deviceCalnEdgePoint(volume, x + 0, y + 0, z + 0, x + 0, y + 0, z + 1, pos[8], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 1, y + 0, z + 0, x + 1, y + 0, z + 1, pos[9], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 1, y + 1, z + 0, x + 1, y + 1, z + 1, pos[10], volumeSize, offset);
-		deviceCalnEdgePoint(volume, x + 0, y + 1, z + 0, x + 0, y + 1, z + 1, pos[11], volumeSize, offset);
-		
 		if (triTable_device[cubeId][0] != -1) {
+			int id = deviceVid(x, y, z);
+			pos[0] = deviceCalnEdgePoint(volume, x + 0, y + 0, z + 0, 1, 0, 0);
+			pos[1] = deviceCalnEdgePoint(volume, x + 1, y + 0, z + 0, 0, 1, 0);
+			pos[2] = deviceCalnEdgePoint(volume, x + 0, y + 1, z + 0, 1, 0, 0);
+			pos[3] = deviceCalnEdgePoint(volume, x + 0, y + 0, z + 0, 0, 1, 0);
+
+			pos[4] = deviceCalnEdgePoint(volume, x + 0, y + 0, z + 1, 1, 0, 0);
+			pos[5] = deviceCalnEdgePoint(volume, x + 1, y + 0, z + 1, 0, 1, 0);
+			pos[6] = deviceCalnEdgePoint(volume, x + 0, y + 1, z + 1, 1, 0, 0);
+			pos[7] = deviceCalnEdgePoint(volume, x + 0, y + 0, z + 1, 0, 1, 0);
+
+			pos[8] = deviceCalnEdgePoint(volume, x + 0, y + 0, z + 0, 0, 0, 1);
+			pos[9] = deviceCalnEdgePoint(volume, x + 1, y + 0, z + 0, 0, 0, 1);
+			pos[10] = deviceCalnEdgePoint(volume, x + 1, y + 1, z + 0, 0, 0, 1);
+			pos[11] = deviceCalnEdgePoint(volume, x + 0, y + 1, z + 0, 0, 0, 1);
+
 			for (int i = 0; i < 5 && triTable_device[cubeId][i * 3] != -1; i++) {
 				for (int j = 0; j < 3; j++) {
 					int edgeId = triTable_device[cubeId][i * 3 + j];
-					posBuffer[tot + j] = pos[edgeId];
+					posBuffer[j] = pos[edgeId] * volumeSize + offset;
 				}
-				posBuffer[tot + 3] = (posBuffer[tot + 0] + posBuffer[tot + 1]) * 0.5;
-				posBuffer[tot + 4] = (posBuffer[tot + 1] + posBuffer[tot + 2]) * 0.5;
-				posBuffer[tot + 5] = (posBuffer[tot + 2] + posBuffer[tot + 0]) * 0.5;
-				for (int j = 0; j < 6; j++) {
-					colorBuffer[tot + j] = calnColor(cameras, volumeBin[id], posBuffer[tot + j], transformation, intrinsics);
+				posBuffer[3] = (posBuffer[0] + posBuffer[1]) * 0.5;
+				posBuffer[4] = (posBuffer[1] + posBuffer[2]) * 0.5;
+				posBuffer[5] = (posBuffer[2] + posBuffer[0]) * 0.5;
+				for (int j = 0; j < 3; j++) {
+					vtx->pos = posBuffer[j];
+					vtx->color = calnColor(cameras, volumeBin[id], posBuffer[j], transformation, intrinsics);
+					vtx->color2 = calnColor(cameras, volumeBin[id], posBuffer[j + 3], transformation, intrinsics);
+					vtx++;
 				}
-				tot += 6;
 			}
 		}
-
-		__syncthreads();
-	}
-
-	int tid = count[devicePid(x, y)] * 3;
-	for (int i = 0; i < tot; i++) {
-		vertex[tid + i].pos = posBuffer[i];
-		vertex[tid + i].color = colorBuffer[i];
 	}
 }
 
