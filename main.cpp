@@ -113,12 +113,10 @@ int main(int argc, char *argv[]) {
 		viewer->spinOnce();
 
 		Timer timer;
-
 		update();
-		cloud = volume->getPointCloudFromMesh(buffer);
-
 		timer.outputTime();
 
+		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}

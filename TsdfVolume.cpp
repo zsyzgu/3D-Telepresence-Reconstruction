@@ -5,8 +5,7 @@
 
 extern "C" void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
-extern "C" void cudaIntegrateDepth(int cameras, UINT16** depth, RGBQUAD** color, Transformation* toWorldTrans, Transformation* depthToColorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
-extern "C" void cudaCreateMeshAndIntegrateColor(int cameras, Vertex* vertex, int& size);
+extern "C" void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, UINT16** depth, RGBQUAD** color, Transformation* toWorldTrans, Transformation* depthToColorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
 
 TsdfVolume::TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
@@ -26,10 +25,8 @@ void TsdfVolume::integrate(byte* result, int cameras, UINT16** depth, RGBQUAD** 
 		depthTrans[i] = depthTrans[i] * colorTrans[i];
 	}
 
-	cudaIntegrateDepth(cameras, depth, color, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
-
 	Vertex* vertex = (Vertex*)(result + 4);
-	cudaCreateMeshAndIntegrateColor(cameras, vertex, *((int*)result));
+	cudaIntegrate(cameras, *((int*)result), vertex, depth, color, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::getPointCloudFromMesh(byte* buffer)
@@ -39,7 +36,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::getPointCloudFromMesh(byte* b
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 	cloud->resize(size * 3);
-
+	
 #pragma omp parallel for schedule(static, 500)
 	for (int i = 0; i < size * 3; i++) {
 		cloud->points[i].x = vertex[i].pos.x;
