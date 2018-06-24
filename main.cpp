@@ -18,7 +18,7 @@ boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 
 UINT16** depthImages;
 RGBQUAD** colorImages;
-Transformation colorTrans[MAX_CAMERAS];
+Transformation* colorTrans = NULL;
 
 #ifdef TRANSMISSION
 Transmission* transmission = NULL;
@@ -66,6 +66,7 @@ void start() {
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 1);
 	buffer = new byte[BUFFER_SIZE];
+	colorTrans = new Transformation[MAX_CAMERAS];
 
 #ifdef TRANSMISSION
 	transmission = new Transmission(true);
@@ -95,6 +96,9 @@ void stop() {
 	}
 	if (buffer != NULL) {
 		delete[] buffer;
+	}
+	if (colorTrans != NULL) {
+		delete[] colorTrans;
 	}
 #ifdef TRANSMISSION
 	if (transmission != NULL) {

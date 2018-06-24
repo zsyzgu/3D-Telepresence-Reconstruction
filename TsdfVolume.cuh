@@ -10,94 +10,6 @@
 #include "CudaHandleError.h"
 #include "Parameters.h"
 
-#ifdef __CUDACC__
-namespace tsdf {
-	texture<UINT16, 3, cudaReadModeElementType> depthTexture;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture0;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture1;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture2;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture3;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture4;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture5;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture6;
-	texture<UINT16, 2, cudaReadModeElementType> depthTexture7;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture0;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture1;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture2;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture3;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture4;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture5;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture6;
-	texture<uchar4, 2, cudaReadModeElementType> colorTexture7;
-}
-using namespace tsdf;
-
-__device__ texture<UINT16, 2, cudaReadModeElementType> getDepthTexture(int id) {
-	if (id < 4) {
-		if (id == 0) return depthTexture0;
-		if (id == 1) return depthTexture1;
-		if (id == 2) return depthTexture2;
-		if (id == 3) return depthTexture3;
-	}
-	else {
-		if (id == 4) return depthTexture4;
-		if (id == 5) return depthTexture5;
-		if (id == 6) return depthTexture6;
-		if (id == 7) return depthTexture7;
-	}
-	return depthTexture0;
-}
-
-__device__ texture<uchar4, 2, cudaReadModeElementType> getColorTexture(int id) {
-	if (id < 4) {
-		if (id == 0) return colorTexture0;
-		if (id == 1) return colorTexture1;
-		if (id == 2) return colorTexture2;
-		if (id == 3) return colorTexture3;
-	}
-	else {
-		if (id == 4) return colorTexture4;
-		if (id == 5) return colorTexture5;
-		if (id == 6) return colorTexture6;
-		if (id == 7) return colorTexture7;
-	}
-	return colorTexture0;
-}
-
-__host__ texture<UINT16, 2, cudaReadModeElementType>* getDepthTexturePointer(int id) {
-	if (id < 4) {
-		if (id == 0) return &depthTexture0;
-		if (id == 1) return &depthTexture1;
-		if (id == 2) return &depthTexture2;
-		if (id == 3) return &depthTexture3;
-	}
-	else {
-		if (id == 4) return &depthTexture4;
-		if (id == 5) return &depthTexture5;
-		if (id == 6) return &depthTexture6;
-		if (id == 7) return &depthTexture7;
-	}
-	return &depthTexture0;
-}
-
-__host__ texture<uchar4, 2, cudaReadModeElementType>* getColorTexturePointer(int id) {
-	if (id < 4) {
-		if (id == 0) return &colorTexture0;
-		if (id == 1) return &colorTexture1;
-		if (id == 2) return &colorTexture2;
-		if (id == 3) return &colorTexture3;
-	}
-	else {
-		if (id == 4) return &colorTexture4;
-		if (id == 5) return &colorTexture5;
-		if (id == 6) return &colorTexture6;
-		if (id == 7) return &colorTexture7;
-	}
-	return &colorTexture0;
-}
-
-#endif 
-
 CUDA_CALLABLE_MEMBER __forceinline__ float3 operator * (float3 a, float3 b) {
 	return make_float3(a.x * b.x, a.y * b.y, a.z * b.z);
 }
@@ -108,6 +20,10 @@ CUDA_CALLABLE_MEMBER __forceinline__ float3 operator * (float3 a, float k) {
 
 CUDA_CALLABLE_MEMBER __forceinline__ float3 operator + (float3 a, float3 b) {
 	return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+
+CUDA_CALLABLE_MEMBER __forceinline__ float3 operator - (float3 a, float3 b) {
+	return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
 CUDA_CALLABLE_MEMBER __forceinline__ float dot(float3 a, float3 b) {
