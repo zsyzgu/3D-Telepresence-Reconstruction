@@ -7,7 +7,8 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber, Transformatio
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.028f;
-	const int ITERATION = 16;
+	const int ITERATION = 20;
+	const float INTERVAL = 0.5f;
 
 	UINT16** depthImages;
 	RGBQUAD** colorImages;
@@ -31,6 +32,7 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber, Transformatio
 		std::vector<std::vector<cv::Point2f> > sourcePointsArray;
 		std::vector<std::vector<cv::Point2f> > targetPointsArray;
 
+		Timer timer;
 		for (int iter = -1; iter < ITERATION;) {
 			cameras = grabber->getRGBD(depthImages, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
 			RGBQUAD* source = colorImages[0];
@@ -49,18 +51,18 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber, Transformatio
 			targetPoints.clear();
 			findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
 			findChessboardCorners(targetColorMat, BOARD_SIZE, targetPoints, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
-			for (int i = 0; i < sourcePoints.size(); i++) {
-				cv::Scalar color = cv::Scalar(0, 0, 255);
-				if (sourcePoints.size() == BOARD_NUM) {
+			cv::Scalar color = cv::Scalar(0, 0, 255);
+			if (sourcePoints.size() == BOARD_NUM) {
+				if (timer.getTime() > INTERVAL) {
 					color = cv::Scalar(0, 255, 0);
+				} else {
+					color = cv::Scalar(0, 255, 255);
 				}
+			}
+			for (int i = 0; i < sourcePoints.size(); i++) {
 				cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
 			}
 			for (int i = 0; i < targetPoints.size(); i++) {
-				cv::Scalar color = cv::Scalar(0, 0, 255);
-				if (targetPoints.size() == BOARD_NUM) {
-					color = cv::Scalar(0, 255, 0);
-				}
 				cv::circle(targetColorMat, targetPoints[i], 3, color, 2);
 			}
 			cv::Mat mergeImage;
@@ -72,10 +74,11 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber, Transformatio
 				iter = 0;
 			}
 
-			if (iter != -1 && sourcePoints.size() == BOARD_NUM && targetPoints.size() == BOARD_NUM) {
+			if (iter != -1 && sourcePoints.size() == BOARD_NUM && targetPoints.size() == BOARD_NUM && timer.getTime() > INTERVAL) {
 				iter++;
 				sourcePointsArray.push_back(sourcePoints);
 				targetPointsArray.push_back(targetPoints);
+				timer.reset();
 			}
 		}
 
