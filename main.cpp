@@ -60,7 +60,7 @@ DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 void start() {
 	omp_set_num_threads(4);
 	omp_set_nested(6);
-	cudaSetDevice(1);
+	cudaSetDevice(0);
 	
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
