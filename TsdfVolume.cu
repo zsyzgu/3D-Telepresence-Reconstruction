@@ -23,6 +23,7 @@ namespace tsdf {
 	Intrinsics* colorIntrinsics_device;
 	int* count_device;
 	int* count_host;
+	Vertex* vertex_device;
 }
 using namespace tsdf;
 
@@ -75,6 +76,9 @@ void cudaReleaseVolume() {
 	HANDLE_ERROR(cudaFree(colorIntrinsics_device));
 	HANDLE_ERROR(cudaFree(count_device));
 	delete[] count_host;
+	if (vertex_device != NULL) {
+		HANDLE_ERROR(cudaFree(vertex_device));
+	}
 }
 
 __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBin, Transformation* transformation, Intrinsics* intrinsics, UINT16* depthMap, float3 volumeSize, float3 offset) {
@@ -85,48 +89,52 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 		return;
 	}
 
-	const float TRANC_DIST_M = 2.1 * max(volumeSize.x, max(volumeSize.y, volumeSize.z));
+	const float TRANC_DIST_M = 3.0 * max(volumeSize.x, max(volumeSize.y, volumeSize.z));
 
-	float3 ori = make_float3(x, y, -1) * volumeSize + offset;
-	float3 pos[MAX_CAMERAS];
-	float3 deltaZ[MAX_CAMERAS];
+	struct VolumePara {
+		float tsdf = 0;
+		UINT8 cnt = 0;
+		UINT8 bin = 0;
+	} volumePara[VOLUME];
 
 	for (int i = 0; i < cameras; i++) {
-		pos[i] = transformation[i].translate(ori);
-		deltaZ[i] = transformation[i].deltaZ() * volumeSize;
-	}
+		float3 ori = make_float3(x, y, -1) * volumeSize + offset;
+		float3 pos = transformation[i].translate(ori);
+		float3 deltaZ = transformation[i].deltaZ() * volumeSize;
 
-	for (int z = 0; z < VOLUME; z++) {
-		int cnt = 0;
-		UINT8 bin = 0;
-		float tsdf = 0;
+		for (int z = 0; z < VOLUME; z++) {
+			float tsdf = -1;
+			pos = pos + deltaZ;
+			int2 pixel = intrinsics[i].translate(pos);
 
-		for (int i = 0; i < cameras; i++) {
-			pos[i] = pos[i] + deltaZ[i];
-			int2 pixel = intrinsics[i].translate(pos[i]);
-
-			if (pos[i].z > 0 && 0 <= pixel.x && pixel.x < DEPTH_W && 0 <= pixel.y && pixel.y < DEPTH_H) {
+			if (pos.z > 0 && 0 <= pixel.x && pixel.x < DEPTH_W && 0 <= pixel.y && pixel.y < DEPTH_H) {
 				UINT16 depth = depthMap[(i * DEPTH_H + pixel.y) * DEPTH_W + pixel.x];
 
 				if (depth != 0) {
-					float sdf = depth * 0.001 - pos[i].z;
+					float sdf = depth * 0.001 - pos.z;
 
 					if (sdf >= -TRANC_DIST_M) {
-						cnt++;
-						bin |= (1 << i);
-						tsdf += sdf / TRANC_DIST_M;
+						tsdf = sdf / TRANC_DIST_M;
 					}
 				}
 			}
-		}
 
+			if (tsdf != -1) {
+				volumePara[z].tsdf += tsdf;
+				volumePara[z].bin |= (1 << i);
+				volumePara[z].cnt++;
+			}
+		}
+	}
+
+	for (int z = 0; z < VOLUME; z++) {
 		int id = deviceVid(x, y, z);
-		if (cnt != 0) {
-			volume[id] = tsdf / cnt;
+		if (volumePara[z].bin != 0) {
+			volume[id] = volumePara[z].tsdf / volumePara[z].cnt;
 		} else {
 			volume[id] = -1;
 		}
-		volumeBin[id] = bin;
+		volumeBin[id] = volumePara[z].bin;
 	}
 }
 
@@ -346,43 +354,76 @@ int cpu_cudaCountAccumulation() {
 	return tris_size;
 }
 
+void registerHostMemory(int cameras, UINT16** depth, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
+	static bool camerasRegistered = false;
+	static bool depthRegistered[MAX_CAMERAS] = { false };
+	static bool colorRegistered[MAX_CAMERAS] = { false };
+	if (camerasRegistered == false) {
+		camerasRegistered = true;
+		HANDLE_ERROR(cudaHostRegister(depthTrans, MAX_CAMERAS * sizeof(Transformation), cudaHostRegisterPortable));
+		HANDLE_ERROR(cudaHostRegister(colorTrans, MAX_CAMERAS * sizeof(Transformation), cudaHostRegisterPortable));
+		HANDLE_ERROR(cudaHostRegister(depthIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaHostRegisterPortable));
+		HANDLE_ERROR(cudaHostRegister(colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaHostRegisterPortable));
+	}
+	for (int i = 0; i < cameras; i++) {
+		if (depth[i] != NULL && !depthRegistered[i]) {
+			depthRegistered[i] = true;
+			HANDLE_ERROR(cudaHostRegister(depth[i], DEPTH_H * DEPTH_W * sizeof(UINT16), cudaHostRegisterPortable));
+		}
+	}
+	for (int i = 0; i < cameras; i++) {
+		if (color[i] != NULL && !colorRegistered[i]) {
+			colorRegistered[i] = true;
+			HANDLE_ERROR(cudaHostRegister(color[i], COLOR_H * COLOR_W * sizeof(uchar4), cudaHostRegisterPortable));
+		}
+	}
+}
+
+void dynamicMallocVectex(int triSize) {
+	static int maxTriSize = 0;
+	if (triSize > maxTriSize) {
+		maxTriSize = triSize;
+		if (vertex_device != NULL) {
+			HANDLE_ERROR(cudaFree(vertex_device));
+		}
+		HANDLE_ERROR(cudaMalloc(&vertex_device, triSize * 3 * sizeof(Vertex)));
+	}
+}
+
+Timer timer;
+
 extern "C"
 void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, UINT16** depth, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
-	//cudaThreadSynchronize();
-	//Timer timer;
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
 	dim3 threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
+	
+	registerHostMemory(cameras, depth, color, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
 
 	HANDLE_ERROR(cudaMemcpy(depthTrans_device, depthTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(colorTrans_device, colorTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, depthIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
-
 	for (int i = 0; i < cameras; i++) {
 		if (depth[i] != NULL) {
 			HANDLE_ERROR(cudaMemcpy(depth_device + i * DEPTH_W * DEPTH_H, depth[i], DEPTH_W * DEPTH_H * sizeof(UINT16), cudaMemcpyHostToDevice));
 		}
 	}
+
+	HANDLE_ERROR(cudaMemcpyAsync(colorTrans_device, colorTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpyAsync(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 	for (int i = 0; i < cameras; i++) {
 		if (color[i] != NULL) {
 			HANDLE_ERROR(cudaMemcpyAsync(color_device + i * COLOR_W * COLOR_H, color[i], COLOR_W * COLOR_H * sizeof(uchar4), cudaMemcpyHostToDevice));
 		}
 	}
 
-	kernelIntegrateDepth << <blocks, threads >> > (cameras, volume_device, volumeBin_device, depthTrans_device, depthIntrinsics_device, depth_device, volumeSize, offset);
+	kernelIntegrateDepth << <blocks, threads >> > (cameras, volume_device, volumeBin_device, depthTrans_device, depthIntrinsics_device, depth_device, volumeSize, offset); //1.7ms
 	HANDLE_ERROR(cudaGetLastError());
 
 	kernelMarchingCubesCount << <blocks, threads >> > (volume_device, count_device);
 	HANDLE_ERROR(cudaGetLastError());
 	triSize = cpu_cudaCountAccumulation();
 
-	Vertex* vertex_device;
-	HANDLE_ERROR(cudaMalloc(&vertex_device, triSize * 3 * sizeof(Vertex)));
-	kernelMarchingCubes << <blocks, threads >> > (cameras, volume_device, volumeBin_device, count_device, vertex_device, colorTrans_device, colorIntrinsics_device, color_device, volumeSize, offset);
+	dynamicMallocVectex(triSize);
+	kernelMarchingCubes << <blocks, threads >> > (cameras, volume_device, volumeBin_device, count_device, vertex_device, colorTrans_device, colorIntrinsics_device, color_device, volumeSize, offset); //3.6ms
 	HANDLE_ERROR(cudaGetLastError());
 	HANDLE_ERROR(cudaMemcpy(vertex, vertex_device, triSize * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost));
-	HANDLE_ERROR(cudaFree(vertex_device));
-
-	//cudaThreadSynchronize();
-	//timer.outputTime();
 }

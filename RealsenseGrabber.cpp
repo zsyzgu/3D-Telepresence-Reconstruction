@@ -96,13 +96,13 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 
 				if (profile.stream_type() == RS2_STREAM_DEPTH) {
 					depthProfile = profile;
-					frame = decimationFilter[deviceId]->process(frame);
+					frame = decimationFilter[deviceId]->process(frame); //Decimation Filter: pixel *= 0.5
 					frame = toDisparityFilter[deviceId]->process(frame);
 					frame = spatialFilter[deviceId]->process(frame);
 					frame = temporalFilter[deviceId]->process(frame);
 					frame = toDepthFilter[deviceId]->process(frame);
 					this->depthImages[deviceId] = (UINT16*)frame.get_data();
-					this->depthIntrinsics[deviceId].fx = intrinsics.fx * 0.5; //Decimation Filter: pixel *= 0.5
+					this->depthIntrinsics[deviceId].fx = intrinsics.fx * 0.5;
 					this->depthIntrinsics[deviceId].fy = intrinsics.fy * 0.5;
 					this->depthIntrinsics[deviceId].ppx = intrinsics.ppx * 0.5;
 					this->depthIntrinsics[deviceId].ppy = intrinsics.ppy * 0.5;

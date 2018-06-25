@@ -7,8 +7,8 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber, Transformatio
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.028f;
-	const int ITERATION = 20;
-	const float INTERVAL = 0.5f;
+	const int ITERATION = 10;
+	const float INTERVAL = 0.0f;
 
 	UINT16** depthImages;
 	RGBQUAD** colorImages;
