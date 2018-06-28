@@ -9,5 +9,6 @@
 //CUDA Parameters
 #define BLOCK_SIZE 16
 #define VOLUME 256
+#define MAX_VERTEX 400000
 
 #endif

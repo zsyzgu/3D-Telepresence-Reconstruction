@@ -3,13 +3,13 @@
 #include "TsdfVolume.h"
 #include "Transmission.h"
 #include "RealsenseGrabber.h"
+#include "Parameters.h"
 #include <pcl/visualization/cloud_viewer.h>
 #include <windows.h>
 
 #define CREATE_EXE
 //#define TRANSMISSION
 
-const int BUFFER_SIZE = 100000000;
 byte* buffer = NULL;
 RealsenseGrabber* grabber = NULL;
 TsdfVolume* volume = NULL;
@@ -65,7 +65,7 @@ void start() {
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 1);
-	buffer = new byte[BUFFER_SIZE];
+	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
 	colorTrans = new Transformation[MAX_CAMERAS];
 
 #ifdef TRANSMISSION
@@ -112,7 +112,6 @@ void stop() {
 int main(int argc, char *argv[]) {
 	start();
 	startViewer();
-
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
@@ -125,8 +124,8 @@ int main(int argc, char *argv[]) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
 	}
-
 	stop();
+
 	return 0;
 }
 

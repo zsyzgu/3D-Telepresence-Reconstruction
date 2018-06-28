@@ -13,8 +13,6 @@
 class RealsenseGrabber
 {
 private:
-	std::mutex _mutex;
-
 	struct ViewPort {
 		rs2::pipeline pipe;
 		rs2::pipeline_profile profile;

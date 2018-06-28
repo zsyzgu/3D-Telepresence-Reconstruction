@@ -12,6 +12,10 @@ RealsenseGrabber::RealsenseGrabber()
 
 	depthImages = new UINT16*[MAX_CAMERAS];
 	colorImages = new RGBQUAD*[MAX_CAMERAS];
+	for (int i = 0; i < MAX_CAMERAS; i++) {
+		depthImages[i] = NULL;
+		colorImages[i] = NULL;
+	}
 	depthTrans = new Transformation[MAX_CAMERAS];
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
@@ -24,6 +28,14 @@ RealsenseGrabber::RealsenseGrabber()
 
 RealsenseGrabber::~RealsenseGrabber()
 {
+	for (int i = 0; i < devices.size(); i++) {
+		if (depthImages[i] != NULL) {
+			cudaHostUnregister(depthImages[i]);
+		}
+		if (colorImages[i] != NULL) {
+			cudaHostUnregister(colorImages[i]);
+		}
+	}
 	for (int i = 0; i < MAX_CAMERAS; i++) {
 		if (decimationFilter[i] != NULL) {
 			delete decimationFilter[i];
@@ -42,26 +54,28 @@ RealsenseGrabber::~RealsenseGrabber()
 		}
 	}
 	if (depthImages != NULL) {
-		delete depthImages;
+		delete[] depthImages;
 	}
 	if (colorImages != NULL) {
-		delete colorImages;
+		delete[] colorImages;
 	}
 	if (depthTrans != NULL) {
-		delete depthTrans;
+		delete[] depthTrans;
 	}
 	if (depthIntrinsics != NULL) {
-		delete depthIntrinsics;
+		delete[] depthIntrinsics;
 	}
 	if (colorIntrinsics != NULL) {
-		delete colorIntrinsics;
+		delete[] colorIntrinsics;
+	}
+	for (int i = 0; i < devices.size(); i++) {
+		devices[i].stop();
 	}
 }
 
 void RealsenseGrabber::enableDevice(rs2::device device)
 {
 	std::string serialNumber(device.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
-	std::lock_guard<std::mutex> lock(_mutex);
 
 	if (device.get_info(RS2_CAMERA_INFO_NAME) == "Platform Camera") {
 		return;
@@ -80,7 +94,6 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 
 int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
-	std::lock_guard<std::mutex> lock(_mutex);
 #pragma omp parallel for
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
@@ -101,19 +114,25 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 					frame = spatialFilter[deviceId]->process(frame);
 					frame = temporalFilter[deviceId]->process(frame);
 					frame = toDepthFilter[deviceId]->process(frame);
-					this->depthImages[deviceId] = (UINT16*)frame.get_data();
-					this->depthIntrinsics[deviceId].fx = intrinsics.fx * 0.5;
-					this->depthIntrinsics[deviceId].fy = intrinsics.fy * 0.5;
-					this->depthIntrinsics[deviceId].ppx = intrinsics.ppx * 0.5;
-					this->depthIntrinsics[deviceId].ppy = intrinsics.ppy * 0.5;
+					if (this->depthImages[deviceId] == NULL) {
+						this->depthImages[deviceId] = (UINT16*)frame.get_data();
+						cudaHostRegister(this->depthImages[deviceId], DEPTH_H * DEPTH_W * sizeof(UINT16), cudaHostRegisterPortable);
+						this->depthIntrinsics[deviceId].fx = intrinsics.fx * 0.5;
+						this->depthIntrinsics[deviceId].fy = intrinsics.fy * 0.5;
+						this->depthIntrinsics[deviceId].ppx = intrinsics.ppx * 0.5;
+						this->depthIntrinsics[deviceId].ppy = intrinsics.ppy * 0.5;
+					}
 				}
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
 					colorProfile = profile;
-					this->colorImages[deviceId] = (RGBQUAD*)frame.get_data();
-					this->colorIntrinsics[deviceId].fx = intrinsics.fx;
-					this->colorIntrinsics[deviceId].fy = intrinsics.fy;
-					this->colorIntrinsics[deviceId].ppx = intrinsics.ppx;
-					this->colorIntrinsics[deviceId].ppy = intrinsics.ppy;
+					if (this->colorImages[deviceId] == NULL) {
+						this->colorImages[deviceId] = (RGBQUAD*)frame.get_data();
+						cudaHostRegister(this->colorImages[deviceId], COLOR_H * COLOR_W * sizeof(uchar4), cudaHostRegisterPortable);
+						this->colorIntrinsics[deviceId].fx = intrinsics.fx;
+						this->colorIntrinsics[deviceId].fy = intrinsics.fy;
+						this->colorIntrinsics[deviceId].ppx = intrinsics.ppx;
+						this->colorIntrinsics[deviceId].ppy = intrinsics.ppy;
+					}
 				}
 			}
 
@@ -121,7 +140,6 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 			this->depthTrans[deviceId] = Transformation(extrinsics.rotation, extrinsics.translation);
 		}
 	}
-
 	depthImages = this->depthImages;
 	colorImages = this->colorImages;
 	depthTrans = this->depthTrans;
