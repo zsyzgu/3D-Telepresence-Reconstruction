@@ -9,6 +9,7 @@
 #include <Windows.h>
 #include "Parameters.h"
 #include "TsdfVolume.cuh"
+#include "DepthFilter.h"
 
 class RealsenseGrabber
 {
@@ -24,6 +25,7 @@ private:
 	rs2::temporal_filter* temporalFilter[MAX_CAMERAS];
 	rs2::disparity_transform* toDisparityFilter[MAX_CAMERAS];
 	rs2::disparity_transform* toDepthFilter[MAX_CAMERAS];
+	DepthFilter* depthFilter[MAX_CAMERAS];
 
 	void enableDevice(rs2::device device);
 

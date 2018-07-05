@@ -115,9 +115,9 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		Timer timer;
+		//Timer timer;
 		update();
-		timer.outputTime();
+		//timer.outputTime();
 
 		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {

@@ -1,4 +1,5 @@
 #include "RealsenseGrabber.h"
+#include "Timer.h"
 
 RealsenseGrabber::RealsenseGrabber()
 {
@@ -92,8 +93,12 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	devices.push_back(pipeline);
 }
 
+Timer timer;
+
 int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
+	timer.reset();
+	
 #pragma omp parallel for
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
@@ -109,13 +114,15 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 
 				if (profile.stream_type() == RS2_STREAM_DEPTH) {
 					depthProfile = profile;
-					frame = decimationFilter[deviceId]->process(frame); //Decimation Filter: pixel *= 0.5
-					frame = toDisparityFilter[deviceId]->process(frame);
+					frame = decimationFilter[deviceId]->process(frame);
+					
+					/*frame = toDisparityFilter[deviceId]->process(frame);
 					frame = spatialFilter[deviceId]->process(frame);
 					frame = temporalFilter[deviceId]->process(frame);
-					frame = toDepthFilter[deviceId]->process(frame);
+					frame = toDepthFilter[deviceId]->process(frame);*/
+
 					if (this->depthImages[deviceId] == NULL) {
-						this->depthImages[deviceId] = (UINT16*)frame.get_data();
+						this->depthImages[deviceId] = (UINT16*)frame.get_data();;
 						cudaHostRegister(this->depthImages[deviceId], DEPTH_H * DEPTH_W * sizeof(UINT16), cudaHostRegisterPortable);
 						this->depthIntrinsics[deviceId].fx = intrinsics.fx * 0.5;
 						this->depthIntrinsics[deviceId].fy = intrinsics.fy * 0.5;
@@ -140,10 +147,18 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 			this->depthTrans[deviceId] = Transformation(extrinsics.rotation, extrinsics.translation);
 		}
 	}
+
+	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
+		depthFilter[deviceId]->process(this->depthImages[deviceId]);
+	}
+
 	depthImages = this->depthImages;
 	colorImages = this->colorImages;
 	depthTrans = this->depthTrans;
 	depthIntrinsics = this->depthIntrinsics;
 	colorIntrinsics = this->colorIntrinsics;
+
+	timer.outputTime(10);
+
 	return devices.size();
 }
