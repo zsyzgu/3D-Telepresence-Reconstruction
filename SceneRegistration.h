@@ -10,6 +10,8 @@
 #include "RealsenseGrabber.h"
 
 class SceneRegistration {
+private:
+	static std::vector<std::vector<float> > getDepth(RealsenseGrabber* grabber);
 public:
 	static Transformation align(RealsenseGrabber* grabber, Transformation* colorTrans);
 };

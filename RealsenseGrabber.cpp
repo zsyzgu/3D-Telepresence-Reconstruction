@@ -77,7 +77,7 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 {
 	std::string serialNumber(device.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
 
-	if (device.get_info(RS2_CAMERA_INFO_NAME) == "Platform Camera") {
+	if (strcmp(device.get_info(RS2_CAMERA_INFO_NAME), "Platform Camera") == 0) {
 		return;
 	}
 

@@ -7,7 +7,7 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <windows.h>
 
-//#define CREATE_EXE
+#define CREATE_EXE
 //#define TRANSMISSION
 
 byte* buffer = NULL;
