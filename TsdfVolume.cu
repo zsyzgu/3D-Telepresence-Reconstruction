@@ -77,7 +77,7 @@ void cudaReleaseVolume() {
 	HANDLE_ERROR(cudaFree(count_device));
 }
 
-__global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBin, Transformation* transformation, Intrinsics* intrinsics, UINT16* depthMap, float3 volumeSize, float3 offset) {
+__global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBin, Transformation* transformation, Intrinsics* intrinsics, float* depthMap, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -351,17 +351,17 @@ int cpu_cudaCountAccumulation() {
 }
 
 extern "C"
-void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, UINT16** depth, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
+void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, UINT16** depth, float* depth_device, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
 	dim3 threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
 
 	HANDLE_ERROR(cudaMemcpy(depthTrans_device, depthTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, depthIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
-	for (int i = 0; i < cameras; i++) {
+	/*for (int i = 0; i < cameras; i++) {
 		if (depth[i] != NULL) {
 			HANDLE_ERROR(cudaMemcpy(depth_device + i * DEPTH_W * DEPTH_H, depth[i], DEPTH_W * DEPTH_H * sizeof(UINT16), cudaMemcpyHostToDevice));
 		}
-	}
+	}*/
 
 	HANDLE_ERROR(cudaMemcpyAsync(colorTrans_device, colorTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpyAsync(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));

@@ -5,7 +5,7 @@
 
 extern "C" void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
-extern "C" void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, UINT16** depth, RGBQUAD** color, Transformation* toWorldTrans, Transformation* depthToColorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+extern "C" void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, UINT16** depth, float* depth_device, RGBQUAD** color, Transformation* toWorldTrans, Transformation* depthToColorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
 
 TsdfVolume::TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
@@ -17,7 +17,7 @@ TsdfVolume::~TsdfVolume()
 	cudaReleaseVolume();
 }
 
-void TsdfVolume::integrate(byte* result, int cameras, UINT16** depth, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
+void TsdfVolume::integrate(byte* result, int cameras, UINT16** depth, float* depth_device, RGBQUAD** color, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
 {
 	// Input: depthTrans = color to depth transformation, colorTrans = world to color transformation
 	// Output: colorTrans & depthTrans are from world transformation
@@ -26,7 +26,7 @@ void TsdfVolume::integrate(byte* result, int cameras, UINT16** depth, RGBQUAD** 
 	}
 
 	Vertex* vertex = (Vertex*)(result + 4);
-	cudaIntegrate(cameras, *((int*)result), vertex, depth, color, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
+	cudaIntegrate(cameras, *((int*)result), vertex, depth, depth_device, color, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::getPointCloudFromMesh(byte* buffer)

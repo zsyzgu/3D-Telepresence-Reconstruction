@@ -1,16 +1,14 @@
 #include "RealsenseGrabber.h"
 #include "Timer.h"
+#include "librealsense2/hpp/rs_sensor.hpp"
+#include "librealsense2/hpp/rs_processing.hpp"
 
 RealsenseGrabber::RealsenseGrabber()
 {
+	depthFilter = new DepthFilter();
 	for (int i = 0; i < MAX_CAMERAS; i++) {
 		decimationFilter[i] = new rs2::decimation_filter();
-		spatialFilter[i] = new rs2::spatial_filter();
-		temporalFilter[i] = new rs2::temporal_filter();
-		toDisparityFilter[i] = new rs2::disparity_transform(true);
-		toDepthFilter[i] = new rs2::disparity_transform(false);
 	}
-
 	depthImages = new UINT16*[MAX_CAMERAS];
 	colorImages = new RGBQUAD*[MAX_CAMERAS];
 	for (int i = 0; i < MAX_CAMERAS; i++) {
@@ -29,6 +27,9 @@ RealsenseGrabber::RealsenseGrabber()
 
 RealsenseGrabber::~RealsenseGrabber()
 {
+	if (depthFilter != NULL) {
+		delete depthFilter;
+	}
 	for (int i = 0; i < devices.size(); i++) {
 		if (depthImages[i] != NULL) {
 			cudaHostUnregister(depthImages[i]);
@@ -40,18 +41,6 @@ RealsenseGrabber::~RealsenseGrabber()
 	for (int i = 0; i < MAX_CAMERAS; i++) {
 		if (decimationFilter[i] != NULL) {
 			delete decimationFilter[i];
-		}
-		if (spatialFilter[i] != NULL) {
-			delete spatialFilter[i];
-		}
-		if (temporalFilter[i] != NULL) {
-			delete temporalFilter[i];
-		}
-		if (toDisparityFilter[i] != NULL) {
-			delete toDisparityFilter[i];
-		}
-		if (toDepthFilter[i] != NULL) {
-			delete toDepthFilter[i];
 		}
 	}
 	if (depthImages != NULL) {
@@ -91,14 +80,21 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	pipeline.start(cfg);
 
 	devices.push_back(pipeline);
+
+	std::vector<rs2::sensor> sensors = device.query_sensors();
+	for (int i = 0; i < sensors.size(); i++) {
+		if (strcmp(sensors[i].get_info(RS2_CAMERA_INFO_NAME), "Stereo Module") == 0) {
+			float depth_unit = sensors[i].get_option(RS2_OPTION_DEPTH_UNITS);
+			float stereo_baseline = sensors[i].get_option(RS2_OPTION_STEREO_BASELINE) * 0.001;
+			convertFactors.push_back(stereo_baseline * (1 << 5) / depth_unit);
+			break;
+		}
+	}
+
 }
 
-Timer timer;
-
-int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGBD(UINT16**& depthImages, float*& depthImages_device, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
-	timer.reset();
-	
 #pragma omp parallel for
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
@@ -115,19 +111,15 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 				if (profile.stream_type() == RS2_STREAM_DEPTH) {
 					depthProfile = profile;
 					frame = decimationFilter[deviceId]->process(frame);
-					
-					/*frame = toDisparityFilter[deviceId]->process(frame);
-					frame = spatialFilter[deviceId]->process(frame);
-					frame = temporalFilter[deviceId]->process(frame);
-					frame = toDepthFilter[deviceId]->process(frame);*/
 
 					if (this->depthImages[deviceId] == NULL) {
-						this->depthImages[deviceId] = (UINT16*)frame.get_data();;
+						this->depthImages[deviceId] = (UINT16*)frame.get_data();
 						cudaHostRegister(this->depthImages[deviceId], DEPTH_H * DEPTH_W * sizeof(UINT16), cudaHostRegisterPortable);
 						this->depthIntrinsics[deviceId].fx = intrinsics.fx * 0.5;
 						this->depthIntrinsics[deviceId].fy = intrinsics.fy * 0.5;
 						this->depthIntrinsics[deviceId].ppx = intrinsics.ppx * 0.5;
 						this->depthIntrinsics[deviceId].ppy = intrinsics.ppy * 0.5;
+						depthFilter->setConvertFactor(deviceId, intrinsics.fx * 0.5 * convertFactors[deviceId]);
 					}
 				}
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
@@ -149,16 +141,26 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Tra
 	}
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
-		depthFilter[deviceId]->process(this->depthImages[deviceId]);
+		if (this->depthImages[deviceId] != NULL) {
+			depthFilter->process(deviceId, this->depthImages[deviceId]);
+		}
 	}
 
 	depthImages = this->depthImages;
 	colorImages = this->colorImages;
+	depthImages_device = depthFilter->getCurrFrame_device();
 	depthTrans = this->depthTrans;
 	depthIntrinsics = this->depthIntrinsics;
 	colorIntrinsics = this->colorIntrinsics;
 
-	timer.outputTime(10);
-
 	return devices.size();
+}
+
+int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics)
+{
+	UINT16** depthImages;
+	float* depthImages_device;
+	Transformation* depthTrans;
+	Intrinsics* depthIntrinsics;
+	return getRGBD(depthImages, depthImages_device, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
 }

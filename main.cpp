@@ -78,12 +78,13 @@ void update() {
 	Transformation* depthTrans;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
-	int cameras = grabber->getRGBD(depthImages, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
+	float* depthImages_device;
+	int cameras = grabber->getRGBD(depthImages, depthImages_device, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
 	// TODO
 #else
-	volume->integrate(buffer, cameras, depthImages, colorImages, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
+	volume->integrate(buffer, cameras, depthImages, depthImages_device, colorImages, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
 #endif
 }
 
@@ -115,9 +116,9 @@ int main(int argc, char *argv[]) {
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		//Timer timer;
+		Timer timer;
 		update();
-		//timer.outputTime();
+		timer.outputTime();
 
 		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {

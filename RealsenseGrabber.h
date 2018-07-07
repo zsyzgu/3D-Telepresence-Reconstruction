@@ -19,13 +19,10 @@ private:
 		rs2::pipeline_profile profile;
 	};
 	std::vector<rs2::pipeline> devices;
+	std::vector<float> convertFactors;
 
 	rs2::decimation_filter* decimationFilter[MAX_CAMERAS];
-	rs2::spatial_filter* spatialFilter[MAX_CAMERAS];
-	rs2::temporal_filter* temporalFilter[MAX_CAMERAS];
-	rs2::disparity_transform* toDisparityFilter[MAX_CAMERAS];
-	rs2::disparity_transform* toDepthFilter[MAX_CAMERAS];
-	DepthFilter* depthFilter[MAX_CAMERAS];
+	DepthFilter* depthFilter;
 
 	void enableDevice(rs2::device device);
 
@@ -38,7 +35,8 @@ private:
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(UINT16**& depthImages, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
+	int getRGBD(UINT16**& depthImages, float*& depthImages_device, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
+	int getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics);
 };
 
 #endif

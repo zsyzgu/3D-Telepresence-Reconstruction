@@ -15,16 +15,13 @@ std::vector<std::vector<float> > SceneRegistration::getDepth(RealsenseGrabber* g
 		}
 	}
 
-	Transformation* depthTrans;
-	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
-	UINT16** depthImages;
 	RGBQUAD** colorImages;
 	std::vector<cv::Point2f> sourcePoints;
 	cv::Mat sourceColorMat(COLOR_H, COLOR_W, CV_8UC3);
 
 	std::vector<std::vector<float> > depths;
-	int cameras = grabber->getRGBD(depthImages, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
+	int cameras = grabber->getRGB(colorImages, colorIntrinsics);
 	for (int id = 0; id < cameras; id++) {
 		std::vector<std::vector<cv::Point2f> > sourcePointsArray;
 		for (int iter = 0; iter < ITERATION;) {
@@ -107,7 +104,7 @@ std::vector<std::vector<float> > SceneRegistration::getDepth(RealsenseGrabber* g
 }
 
 
-Transformation SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTrans)
+void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTrans)
 {
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
@@ -117,10 +114,7 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber, Transformatio
 	const int RECT_DIST_THRESHOLD = 30;
 	const int RECT_AREA_THRESHOLD = 20000;
 
-	UINT16** depthImages;
 	RGBQUAD** colorImages;
-	Transformation* depthTrans;
-	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
 	std::vector<cv::Point2f> sourcePoints;
 	std::vector<cv::Point2f> targetPoints;
@@ -142,7 +136,7 @@ Transformation SceneRegistration::align(RealsenseGrabber* grabber, Transformatio
 		std::vector<cv::Point2f> rects;
 		std::vector<cv::Point2f> centers;
 		for (int iter = 0; iter < ITERATION;) {
-			cameras = grabber->getRGBD(depthImages, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
+			cameras = grabber->getRGB(colorImages, colorIntrinsics);
 			RGBQUAD* source = colorImages[0];
 			RGBQUAD* target = colorImages[targetId];
 			for (int i = 0; i < COLOR_H; i++) {

@@ -3,105 +3,192 @@
 #include "DepthFilter.h"
 #include "Timer.h"
 
-__global__ void kernelSFVertical(UINT16* source, float* result)
-{
-	const int RADIUS = 5;
-	const float ALPHA = 0.5f;
-	const float THRESHOLD = 20.0f;
+namespace FilterNamespace {
+	__constant__ int SF_RADIUS = 8;
+	__constant__ float SF_ALPHA = 0.5f;
+	__constant__ float SF_THRESHOLD = 20.0f;
+	__constant__ float TF_ALPHA = 0.5f;
+	__constant__ float TF_THRESHOLD = 20.0f;
+	float* lastFrame;
+};
+using namespace FilterNamespace;
 
+__global__ void kernelCleanLastFrame(float* lastFrame) {
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (x < DEPTH_W && y < DEPTH_H) {
 		int id = y * DEPTH_W + x;
-
-		float center = source[id];
-		if (center == 0) {
-			result[id] = 0;
-		} else {
-			float sum = center;
-			float weight = 1;
-			float w = 1;
-			for (int r = 1; r <= RADIUS; r++) {
-				w *= ALPHA;
-				if (id - r * DEPTH_W >= 0 && source[id - r * DEPTH_W] != 0 && fabs(source[id - r * DEPTH_W] - center) < THRESHOLD) {
-					weight += w;
-					sum += w * source[id - r * DEPTH_W];
-				}
-				if (id + r * DEPTH_W < DEPTH_H * DEPTH_W && source[id + r * DEPTH_W] != 0 && fabs(source[id + r * DEPTH_W] - center) < THRESHOLD) {
-					weight += w;
-					sum += w * source[id + r * DEPTH_W];
-				}
-			}
-			result[id] = sum / weight;
-		}
+		lastFrame[id] = 0;
 	}
 }
 
-__global__ void kernelSFHorizontal(float* source, float* result)
-{
-	const int RADIUS = 5;
-	const float ALPHA = 0.5f;
-	const float THRESHOLD = 20.0f;
+__global__ void kernelFilterToDisparity(UINT16* source, float* target, float convertFactor) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
 
+	if (x < DEPTH_W && y < DEPTH_H) {
+		int id = y * DEPTH_W + x;
+		target[id] = convertFactor / source[id];
+	}
+}
+
+__global__ void kernelFilterToDepth(float* depth, float convertFactor) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < DEPTH_W && y < DEPTH_H) {
+		int id = y * DEPTH_W + x;
+		depth[id] = convertFactor / depth[id];
+	}
+}
+
+__global__ void kernelSFVertical(float* depth)
+{
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (x < DEPTH_W && y < DEPTH_H) {
 		int id = y * DEPTH_W + x;
 
-		float center = source[id];
-		if (center == 0) {
-			result[id] = 0;
-		}
-		else {
-			float sum = center;
+		float origin = depth[id];
+		float result = 0;
+		if (origin != 0) {
+			float sum = origin;
 			float weight = 1;
 			float w = 1;
-			for (int r = 1; r <= RADIUS; r++) {
-				w *= ALPHA;
-				if (id - r >= 0 && source[id - r] != 0 && fabs(source[id - r] - center) < THRESHOLD) {
+			for (int r = 1; r <= SF_RADIUS; r++) {
+				w *= SF_ALPHA;
+				if (y - r >= 0 && depth[id - r * DEPTH_W] != 0 && fabs(depth[id - r * DEPTH_W] - origin) <= SF_THRESHOLD) {
 					weight += w;
-					sum += w * source[id - r];
+					sum += w * depth[id - r * DEPTH_W];
 				}
-				if (id + r < DEPTH_H * DEPTH_W && source[id + r] != 0 && fabs(source[id + r] - center) < THRESHOLD) {
+				if (y + r < DEPTH_H && depth[id + r * DEPTH_W] != 0 && fabs(depth[id + r * DEPTH_W] - origin) <= SF_THRESHOLD) {
 					weight += w;
-					sum += w * source[id + r];
+					sum += w * depth[id + r * DEPTH_W];
 				}
 			}
-			result[id] = sum / weight;
+			result = sum / weight;
 		}
+		__syncthreads();
+		depth[id] = result;
+	}
+}
+
+__global__ void kernelSFHorizontal(float* depth)
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < DEPTH_W && y < DEPTH_H) {
+		int id = y * DEPTH_W + x;
+
+		float origin = depth[id];
+		float result = 0;
+		if (origin != 0) {
+			float sum = origin;
+			float weight = 1;
+			float w = 1;
+			for (int r = 1; r <= SF_RADIUS; r++) {
+				w *= SF_ALPHA;
+				if (x - r >= 0 && depth[id - r] != 0 && fabs(depth[id - r] - origin) <= SF_THRESHOLD) {
+					weight += w;
+					sum += w * depth[id - r];
+				}
+				if (x + r < DEPTH_W && depth[id + r] != 0 && fabs(depth[id + r] - origin) <= SF_THRESHOLD) {
+					weight += w;
+					sum += w * depth[id + r];
+				}
+			}
+			result = sum / weight;
+		}
+		__syncthreads();
+		depth[id] = result;
+	}
+}
+
+__global__ void kernelFillHoles(float* depth) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < DEPTH_W && y < DEPTH_H) {
+		int id = y * DEPTH_W + x;
+		float result = depth[id];
+		if (result == 0) {
+			if (x - 1 >= 0) {
+				result = max(result, depth[id - 1]);
+				if (y - 1 >= 0) result = max(result, depth[id - 1 - DEPTH_W]);
+				if (y + 1 < DEPTH_H) result = max(result, depth[id - 1 + DEPTH_W]);
+			}
+			if (x + 1 < DEPTH_W) {
+				result = max(result, depth[id + 1]);
+				if (y - 1 >= 0) result = max(result, depth[id + 1 - DEPTH_W]);
+				if (y + 1 < DEPTH_H) result = max(result, depth[id + 1 + DEPTH_W]);
+			}
+			if (y - 1 >= 0) result = max(result, depth[id - DEPTH_W]);
+			if (y + 1 < DEPTH_H) result = max(result, depth[id + DEPTH_H]);
+		}
+		__syncthreads();
+		depth[id] = result;
+	}
+}
+
+__global__ void kernelTemporalFilter(float* depth, float* lastFrame) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < DEPTH_W && y < DEPTH_H) {
+		int id = y * DEPTH_W + x;
+		float result = depth[id];
+		float lastDepth = lastFrame[id];
+		if (result == 0) {
+			result = lastDepth;
+		} else if (lastDepth != 0 && fabs(result - lastDepth) <= TF_THRESHOLD) {
+			result = result * TF_ALPHA + lastDepth * (1 - TF_ALPHA);
+		}
+		__syncthreads();
+		depth[id] = result;
+		lastFrame[id] = result;
 	}
 }
 
 extern "C"
-void cudaDepthFiltering(UINT16* depthMap) {
-	UINT16* depth_device;
-	HANDLE_ERROR(cudaMalloc(&depth_device, DEPTH_H * DEPTH_W * sizeof(UINT16)));
-	HANDLE_ERROR(cudaMemcpy(depth_device, depthMap, DEPTH_H * DEPTH_W * sizeof(UINT16), cudaMemcpyHostToDevice));
-
-	float* depthFloat_device;
-	HANDLE_ERROR(cudaMalloc(&depthFloat_device, DEPTH_H * DEPTH_W * sizeof(float)));
-
-	float* depthFloat_device2;
-	HANDLE_ERROR(cudaMalloc(&depthFloat_device2, DEPTH_H * DEPTH_W * sizeof(float)));
-
-	dim3 threadsPerBlock = dim3(16, 16);
+void cudaFilterInit(UINT16*& depth_device, float*& depthFloat_device, float*& lastFrame_device) {
+	dim3 threadsPerBlock = dim3(256, 1);
 	dim3 blocksPerGrid = dim3((DEPTH_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (DEPTH_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
-	kernelSFVertical << <blocksPerGrid, threadsPerBlock >> > (depth_device, depthFloat_device);
-	cudaGetLastError();
-	kernelSFHorizontal << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device, depthFloat_device2);
-	cudaGetLastError();
-
-	float* depthFloat = new float[DEPTH_H * DEPTH_W];
-	HANDLE_ERROR(cudaMemcpy(depthFloat, depthFloat_device2, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyDeviceToHost));
-	for (int i = 0; i < DEPTH_H * DEPTH_W; i++) {
-		depthMap[i] = depthFloat[i];
+	HANDLE_ERROR(cudaMalloc(&depth_device, DEPTH_H * DEPTH_W * sizeof(UINT16)));
+	HANDLE_ERROR(cudaMalloc(&depthFloat_device, MAX_CAMERAS * DEPTH_H * DEPTH_W * sizeof(float)));
+	HANDLE_ERROR(cudaMalloc(&lastFrame_device, MAX_CAMERAS * DEPTH_H * DEPTH_W * sizeof(float)));
+	for (int i = 0; i < MAX_CAMERAS; i++) {
+		kernelCleanLastFrame << <blocksPerGrid, threadsPerBlock >> > (lastFrame_device + i * DEPTH_H * DEPTH_W);
+		cudaGetLastError();
 	}
+}
 
+extern "C"
+void cudaFilterClean(UINT16*& depth_device, float*& depthFloat_device, float*& lastFrame_device) {
 	HANDLE_ERROR(cudaFree(depth_device));
 	HANDLE_ERROR(cudaFree(depthFloat_device));
-	HANDLE_ERROR(cudaFree(depthFloat_device2));
-	delete[] depthFloat;
+	HANDLE_ERROR(cudaFree(lastFrame_device));
+}
+
+extern "C"
+void cudaDepthFiltering(UINT16* depthMap, UINT16* depth_device, float* depthFloat_device, float* lastFrame_device, float convertFactor) {
+	dim3 threadsPerBlock = dim3(256, 1);
+	dim3 blocksPerGrid = dim3((DEPTH_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (DEPTH_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
+
+	HANDLE_ERROR(cudaMemcpy(depth_device, depthMap, DEPTH_H * DEPTH_W * sizeof(UINT16), cudaMemcpyHostToDevice));
+	kernelFilterToDisparity << <blocksPerGrid, threadsPerBlock >> > (depth_device, depthFloat_device, convertFactor);
+	cudaGetLastError();
+	kernelSFVertical << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
+	cudaGetLastError();
+	kernelSFHorizontal << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
+	cudaGetLastError();
+	kernelFillHoles << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
+	cudaGetLastError();
+	kernelTemporalFilter << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device, lastFrame_device);
+	cudaGetLastError();
+	kernelFilterToDepth << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device, convertFactor);
+	cudaGetLastError();
 }
