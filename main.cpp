@@ -110,12 +110,16 @@ void stop() {
 int main(int argc, char *argv[]) {
 	start();
 	startViewer();
+
+
+	Timer timer;
+
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
-		Timer timer;
+		timer.reset();
 		update();
-		timer.outputTime();
+		timer.outputTime(10);
 
 		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {

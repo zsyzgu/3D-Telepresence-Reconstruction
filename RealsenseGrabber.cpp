@@ -74,7 +74,7 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	rs2::config cfg;
 	cfg.enable_device(serialNumber);
 	cfg.enable_stream(RS2_STREAM_DEPTH, DEPTH_W * 2, DEPTH_H * 2, RS2_FORMAT_Z16, 60);
-	cfg.enable_stream(RS2_STREAM_COLOR, COLOR_W, COLOR_H, RS2_FORMAT_RGBA8, 60);
+	cfg.enable_stream(RS2_STREAM_COLOR, COLOR_W, COLOR_H, RS2_FORMAT_YUYV, 60);
 
 	rs2::pipeline pipeline;
 	pipeline.start(cfg);
@@ -91,6 +91,21 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 		}
 	}
 
+}
+
+void RealsenseGrabber::convertYUVtoRGBA(UINT8* src, RGBQUAD* dst) {
+	UINT8 U, V;
+	for (int i = 0; i < COLOR_H * COLOR_W; i++) {
+		if ((i & 1) == 0) {
+			U = src[i * 2 + 1];
+			V = src[i * 2 + 3];
+		}
+		UINT8 Y = src[i * 2];
+
+		dst[i].rgbRed = Y;
+		dst[i].rgbGreen = Y;
+		dst[i].rgbBlue = Y;
+	}
 }
 
 int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
@@ -125,13 +140,15 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD**& colorImages
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
 					colorProfile = profile;
 					if (this->colorImages[deviceId] == NULL) {
-						this->colorImages[deviceId] = (RGBQUAD*)frame.get_data();
+						this->colorImages[deviceId] = new RGBQUAD[COLOR_H * COLOR_W];
 						cudaHostRegister(this->colorImages[deviceId], COLOR_H * COLOR_W * sizeof(uchar4), cudaHostRegisterPortable);
 						this->colorIntrinsics[deviceId].fx = intrinsics.fx;
 						this->colorIntrinsics[deviceId].fy = intrinsics.fy;
 						this->colorIntrinsics[deviceId].ppx = intrinsics.ppx;
 						this->colorIntrinsics[deviceId].ppy = intrinsics.ppy;
 					}
+
+					convertYUVtoRGBA((UINT8*)frame.get_data(), this->colorImages[deviceId]);
 				}
 			}
 
