@@ -89,12 +89,7 @@ std::vector<std::vector<float> > SceneRegistration::getDepth(RealsenseGrabber* g
 		sourceCameraMatrix.at<float>(1, 2) = colorIntrinsics[0].ppy;
 
 		solvePnP(objectPointsArray[0], sourcePointsArray[0], sourceCameraMatrix, distCoeffs, rv, tv);
-		/*for (int i = 0; i < sourcePointsArray[0].size(); i++) {
-			std::cout << sourcePointsArray[0][i] << " ";
-		}
-		std::cout << std::endl;
-		std::cout << rv << std::endl;
-		std::cout << tv << std::endl;*/
+
 		std::vector<float> depth;
 		for (int i = 0; i < objectPoints.size(); i++)
 			depth.push_back(cv::norm(objectPoints[i] - cv::Point3f(tv)));
@@ -111,7 +106,7 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 	const float GRID_SIZE = 0.028f;
 	const int ITERATION = 10;
 	const int CORNERS[4] = { 0, 8, 53, 45 };
-	const int RECT_DIST_THRESHOLD = 30;
+	const int RECT_DIST_THRESHOLD = 50;
 	const int RECT_AREA_THRESHOLD = 20000;
 
 	RGBQUAD** colorImages;
@@ -134,7 +129,6 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 		std::vector<std::vector<cv::Point2f> > sourcePointsArray;
 		std::vector<std::vector<cv::Point2f> > targetPointsArray;
 		std::vector<cv::Point2f> rects;
-		std::vector<cv::Point2f> centers;
 		for (int iter = 0; iter < ITERATION;) {
 			cameras = grabber->getRGB(colorImages, colorIntrinsics);
 			RGBQUAD* source = colorImages[0];
@@ -171,20 +165,22 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 					cv::line(sourceColorMat, rects[i + j], rects[i + (j + 1) % 4], cv::Scalar(0, 255, 0), 2);
 				}
 			}
-			cv::Point2f center;
 			if (valid) {
 				cv::Point2f p0 = sourcePoints[CORNERS[0]];
 				cv::Point2f p1 = sourcePoints[CORNERS[1]];
 				cv::Point2f p2 = sourcePoints[CORNERS[2]];
 				cv::Point2f p3 = sourcePoints[CORNERS[3]];
-				center = (p0 + p1 + p2 + p3) / 4;
 				float area = (cv::norm(p0 - p1) + cv::norm(p2 - p3)) * (cv::norm(p0 - p3) + cv::norm(p1 - p2)) / 4;
 				std::cout << area << std::endl;
 				if (area < RECT_AREA_THRESHOLD) {
 					valid = false;
 				}
-				for (int i = 0; i < centers.size(); i++) {
-					if (cv::norm(centers[i] - center) < RECT_DIST_THRESHOLD) {
+				for (int i = 0; i < rects.size() / 4; i++) {
+					float dist = (cv::norm(rects[i * 4 + 0] - p0)
+						+ cv::norm(rects[i * 4 + 1] - p1)
+						+ cv::norm(rects[i * 4 + 2] - p2)
+						+ cv::norm(rects[i * 4 + 3] - p3)) / 4;
+					if (dist < RECT_DIST_THRESHOLD) {
 						valid = false;
 					}
 				}
@@ -209,7 +205,6 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 				for (int i = 0; i < 4; i++) {
 					rects.push_back(sourcePoints[CORNERS[i]]);
 				}
-				centers.push_back(center);
 			}
 		}
 

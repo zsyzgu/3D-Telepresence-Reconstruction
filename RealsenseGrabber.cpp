@@ -93,7 +93,7 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 
 }
 
-int RealsenseGrabber::getRGBD(UINT16**& depthImages, float*& depthImages_device, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
 #pragma omp parallel for
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
@@ -146,7 +146,6 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, float*& depthImages_device,
 		}
 	}
 
-	depthImages = this->depthImages;
 	colorImages = this->colorImages;
 	depthImages_device = depthFilter->getCurrFrame_device();
 	depthTrans = this->depthTrans;
@@ -158,9 +157,8 @@ int RealsenseGrabber::getRGBD(UINT16**& depthImages, float*& depthImages_device,
 
 int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics)
 {
-	UINT16** depthImages;
 	float* depthImages_device;
 	Transformation* depthTrans;
 	Intrinsics* depthIntrinsics;
-	return getRGBD(depthImages, depthImages_device, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
+	return getRGBD(depthImages_device, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
 }

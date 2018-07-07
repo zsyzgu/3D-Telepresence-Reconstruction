@@ -35,7 +35,7 @@ private:
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(UINT16**& depthImages, float*& depthImages_device, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
+	int getRGBD(float*& depthImages_device, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
 	int getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics);
 };
 

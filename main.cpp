@@ -15,9 +15,6 @@ RealsenseGrabber* grabber = NULL;
 TsdfVolume* volume = NULL;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
-
-UINT16** depthImages;
-RGBQUAD** colorImages;
 Transformation* colorTrans = NULL;
 
 #ifdef TRANSMISSION
@@ -59,7 +56,6 @@ DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 
 void start() {
 	omp_set_num_threads(4);
-	omp_set_nested(6);
 	cudaSetDevice(0);
 	
 	grabber = new RealsenseGrabber();
@@ -78,13 +74,14 @@ void update() {
 	Transformation* depthTrans;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
+	RGBQUAD** colorImages;
 	float* depthImages_device;
-	int cameras = grabber->getRGBD(depthImages, depthImages_device, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
+	int cameras = grabber->getRGBD(depthImages_device, colorImages, depthTrans, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
 	// TODO
 #else
-	volume->integrate(buffer, cameras, depthImages, depthImages_device, colorImages, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
+	volume->integrate(buffer, cameras, depthImages_device, colorImages, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
 #endif
 }
 
