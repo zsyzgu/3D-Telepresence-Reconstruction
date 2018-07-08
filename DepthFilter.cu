@@ -153,7 +153,7 @@ __global__ void kernelTemporalFilter(float* depth, float* lastFrame) {
 }
 
 extern "C"
-void cudaFilterInit(UINT16*& depth_device, float*& depthFloat_device, float*& lastFrame_device) {
+void cudaDepthFilterInit(UINT16*& depth_device, float*& depthFloat_device, float*& lastFrame_device) {
 	dim3 threadsPerBlock = dim3(256, 1);
 	dim3 blocksPerGrid = dim3((DEPTH_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (DEPTH_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
@@ -167,7 +167,7 @@ void cudaFilterInit(UINT16*& depth_device, float*& depthFloat_device, float*& la
 }
 
 extern "C"
-void cudaFilterClean(UINT16*& depth_device, float*& depthFloat_device, float*& lastFrame_device) {
+void cudaDepthFilterClean(UINT16*& depth_device, float*& depthFloat_device, float*& lastFrame_device) {
 	HANDLE_ERROR(cudaFree(depth_device));
 	HANDLE_ERROR(cudaFree(depthFloat_device));
 	HANDLE_ERROR(cudaFree(lastFrame_device));

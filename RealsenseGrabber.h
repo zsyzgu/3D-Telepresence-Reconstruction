@@ -10,6 +10,7 @@
 #include "Parameters.h"
 #include "TsdfVolume.cuh"
 #include "DepthFilter.h"
+#include "ColorFilter.h"
 
 class RealsenseGrabber
 {
@@ -23,12 +24,14 @@ private:
 
 	rs2::decimation_filter* decimationFilter[MAX_CAMERAS];
 	DepthFilter* depthFilter;
+	ColorFilter* colorFilter;
 
 	void enableDevice(rs2::device device);
 	void convertYUVtoRGBA(UINT8* src, RGBQUAD* dst);
 
 	UINT16** depthImages;
-	RGBQUAD** colorImages;
+	UINT8** colorImages;
+	RGBQUAD** colorImagesRGB;
 	Transformation* depthTrans;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
@@ -36,7 +39,7 @@ private:
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(float*& depthImages_device, RGBQUAD**& colorImages, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
+	int getRGBD(float*& depthImages_device, RGBQUAD**& colorImages, RGBQUAD*& colorImages_device, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
 	int getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics);
 };
 

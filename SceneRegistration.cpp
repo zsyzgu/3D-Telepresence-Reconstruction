@@ -171,7 +171,6 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 				cv::Point2f p2 = sourcePoints[CORNERS[2]];
 				cv::Point2f p3 = sourcePoints[CORNERS[3]];
 				float area = (cv::norm(p0 - p1) + cv::norm(p2 - p3)) * (cv::norm(p0 - p3) + cv::norm(p1 - p2)) / 4;
-				std::cout << area << std::endl;
 				if (area < RECT_AREA_THRESHOLD) {
 					valid = false;
 				}

@@ -1,12 +1,7 @@
 #ifndef DEPTH_FILTER_H
 #define DEPTH_FILTER_H
 
-#include <iostream>
-#include <thread>
-#include <mutex>
-#include <map>
 #include <Windows.h>
-#include <vector>
 #include "Parameters.h"
 
 class DepthFilter {
