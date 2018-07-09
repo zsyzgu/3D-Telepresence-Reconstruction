@@ -71,18 +71,17 @@ void start() {
 }
 
 void update() {
+	float* depthImages_device;
+	RGBQUAD* colorImages_device;
 	Transformation* depthTrans;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
-	RGBQUAD** colorImages;
-	float* depthImages_device;
-	RGBQUAD* colorImages_device;
-	int cameras = grabber->getRGBD(depthImages_device, colorImages, colorImages_device, depthTrans, depthIntrinsics, colorIntrinsics);
+	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, depthTrans, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
 	// TODO
 #else
-	volume->integrate(buffer, cameras, depthImages_device, colorImages, colorImages_device, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
+	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
 #endif
 }
 
