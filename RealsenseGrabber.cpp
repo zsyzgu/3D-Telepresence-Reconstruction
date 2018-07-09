@@ -2,19 +2,18 @@
 #include "Timer.h"
 #include "librealsense2/hpp/rs_sensor.hpp"
 #include "librealsense2/hpp/rs_processing.hpp"
-#include <mutex>
 
 RealsenseGrabber::RealsenseGrabber()
 {
 	depthFilter = new DepthFilter();
 	colorFilter = new ColorFilter();
-	for (int i = 0; i < MAX_CAMERAS; i++) {
-		decimationFilter[i] = new rs2::decimation_filter();
-	}
 	depthImages = new UINT16*[MAX_CAMERAS];
 	colorImages = new UINT8*[MAX_CAMERAS];
 	for (int i = 0; i < MAX_CAMERAS; i++) {
+		depthImages[i] = new UINT16[(2 * DEPTH_H) * (2 * DEPTH_W)];
 		colorImages[i] = new UINT8[2 * COLOR_H * COLOR_W];
+		memset(depthImages[i], 0, (2 * DEPTH_H) * (2 * DEPTH_W) * sizeof(UINT16));
+		memset(colorImages[i], 0, 2 * COLOR_H * COLOR_W * sizeof(UINT8));
 	}
 	colorImagesRGB = new RGBQUAD*[MAX_CAMERAS];
 	for (int i = 0; i < MAX_CAMERAS; i++) {
@@ -38,12 +37,12 @@ RealsenseGrabber::~RealsenseGrabber()
 	if (colorFilter != NULL) {
 		delete colorFilter;
 	}
-	for (int i = 0; i < MAX_CAMERAS; i++) {
-		if (decimationFilter[i] != NULL) {
-			delete decimationFilter[i];
-		}
-	}
 	if (depthImages != NULL) {
+		for (int i = 0; i < MAX_CAMERAS; i++) {
+			if (depthImages[i] != NULL) {
+				delete depthImages[i];
+			}
+		}
 		delete[] depthImages;
 	}
 	if (colorImages != NULL) {
@@ -127,9 +126,9 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD**& colorImages
 #pragma omp parallel for
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
-		rs2::frameset frameset;
+		rs2::frameset frameset = pipeline.wait_for_frames();
 
-		if (pipeline.poll_for_frames(&frameset) && frameset.size() > 0) {
+		if (frameset.size() > 0) {
 			rs2::stream_profile depthProfile;
 			rs2::stream_profile colorProfile;
 
@@ -145,8 +144,7 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD**& colorImages
 					this->depthIntrinsics[deviceId].ppx = intrinsics.ppx * 0.5;
 					this->depthIntrinsics[deviceId].ppy = intrinsics.ppy * 0.5;
 					depthFilter->setConvertFactor(deviceId, intrinsics.fx * 0.5 * convertFactors[deviceId]);
-					frame = decimationFilter[deviceId]->process(frame);
-					this->depthImages[deviceId] = (UINT16*)frame.get_data();
+					memcpy(this->depthImages[deviceId], frame.get_data(), (2 * DEPTH_H) * (2 * DEPTH_W) * sizeof(UINT16));
 				}
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
 					colorProfile = profile;
@@ -154,8 +152,7 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD**& colorImages
 					this->colorIntrinsics[deviceId].fy = intrinsics.fy;
 					this->colorIntrinsics[deviceId].ppx = intrinsics.ppx;
 					this->colorIntrinsics[deviceId].ppy = intrinsics.ppy;
-					std::mutex lock();
-					memcpy(this->colorImages[deviceId], frame.get_data(), 2 * COLOR_W * COLOR_H * sizeof(UINT8));
+					memcpy(this->colorImages[deviceId], frame.get_data(), 2 * COLOR_H * COLOR_W * sizeof(UINT8));
 				}
 			}
 
@@ -187,7 +184,6 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD**& colorImages
 
 int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics)
 {
-#pragma omp parallel for
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
 		rs2::frameset frameset;
@@ -202,7 +198,6 @@ int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsic
 					this->colorIntrinsics[deviceId].fy = intrinsics.fy;
 					this->colorIntrinsics[deviceId].ppx = intrinsics.ppx;
 					this->colorIntrinsics[deviceId].ppy = intrinsics.ppy;
-					std::mutex lock();
 					memcpy(this->colorImages[deviceId], frame.get_data(), 2 * COLOR_W * COLOR_H * sizeof(UINT8));
 				}
 			}

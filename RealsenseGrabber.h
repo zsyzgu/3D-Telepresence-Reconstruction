@@ -22,7 +22,6 @@ private:
 	std::vector<rs2::pipeline> devices;
 	std::vector<float> convertFactors;
 
-	rs2::decimation_filter* decimationFilter[MAX_CAMERAS];
 	DepthFilter* depthFilter;
 	ColorFilter* colorFilter;
 
