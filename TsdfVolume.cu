@@ -21,6 +21,7 @@ namespace tsdf {
 	Intrinsics* colorIntrinsics_device;
 	Vertex* vertex_device;
 	int* count_device;
+	UINT8* triBin_device;
 }
 using namespace tsdf;
 
@@ -51,26 +52,26 @@ void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float 
 	offset = center - size * 0.5;
 	HANDLE_ERROR(cudaMalloc(&volume_device, VOLUME * VOLUME * VOLUME * sizeof(float)));
 	HANDLE_ERROR(cudaMalloc(&volumeBin_device, VOLUME * VOLUME * VOLUME * sizeof(UINT8)));
-	//HANDLE_ERROR(cudaMalloc(&color_device, MAX_CAMERAS * COLOR_H * COLOR_W * sizeof(uchar4)));
 	HANDLE_ERROR(cudaMalloc(&depthTrans_device, MAX_CAMERAS * sizeof(Transformation)));
 	HANDLE_ERROR(cudaMalloc(&colorTrans_device, MAX_CAMERAS * sizeof(Transformation)));
 	HANDLE_ERROR(cudaMalloc(&depthIntrinsics_device, MAX_CAMERAS * sizeof(Intrinsics)));
 	HANDLE_ERROR(cudaMalloc(&colorIntrinsics_device, MAX_CAMERAS * sizeof(Intrinsics)));
 	HANDLE_ERROR(cudaMalloc(&vertex_device, MAX_VERTEX * sizeof(Vertex)));
 	HANDLE_ERROR(cudaMalloc(&count_device, VOLUME * VOLUME * sizeof(int)));
+	HANDLE_ERROR(cudaMalloc(&triBin_device, MAX_VERTEX / 3 * sizeof(UINT8)));
 }
 
 extern "C"
 void cudaReleaseVolume() {
 	HANDLE_ERROR(cudaFree(volume_device));
 	HANDLE_ERROR(cudaFree(volumeBin_device));
-	//HANDLE_ERROR(cudaFree(color_device));
 	HANDLE_ERROR(cudaFree(depthTrans_device));
 	HANDLE_ERROR(cudaFree(colorTrans_device));
 	HANDLE_ERROR(cudaFree(depthIntrinsics_device));
 	HANDLE_ERROR(cudaFree(colorIntrinsics_device));
 	HANDLE_ERROR(cudaFree(vertex_device));
 	HANDLE_ERROR(cudaFree(count_device));
+	HANDLE_ERROR(cudaFree(triBin_device));
 }
 
 __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBin, Transformation* transformation, Intrinsics* intrinsics, float* depthMap, float3 volumeSize, float3 offset) {
@@ -175,30 +176,7 @@ __device__ __forceinline__ float3 deviceCalnEdgePoint(float* volume, int x, int 
 	return float3();
 }
 
-__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, Transformation* transformation, Intrinsics* intrinsics, uchar4* colorMap) {
-	short4 colorSum = short4();
-	int cnt = 0;
-	for (int i = 0; i < cameras; i++) {
-		if ((bin >> i) & 1) {
-			float3 pos = transformation[i].translate(ori);
-			int2 pixel = intrinsics[i].translate(pos);
-			if (0 <= pixel.x && pixel.x < COLOR_W && 0 <= pixel.y && pixel.y < COLOR_H) {
-				cnt++;
-				uchar4 tmp = colorMap[(i * COLOR_H + pixel.y) * COLOR_W + pixel.x];
-				colorSum.x += tmp.x;
-				colorSum.y += tmp.y;
-				colorSum.z += tmp.z;
-				break;
-			}
-		}
-	}
-	if (cnt == 0) {
-		return uchar4();
-	}
-	return make_uchar4(colorSum.x / cnt, colorSum.y / cnt, colorSum.z / cnt, 0);
-}
-
-__global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin, int* count, Vertex* vertex, Transformation* transformation, Intrinsics* intrinsics, uchar4* colorMap, float3 volumeSize, float3 offset) {
+__global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin, int* count, Vertex* vertex, UINT8* triBin, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -207,10 +185,7 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 	}	
 
 	Vertex* vtx = vertex + count[devicePid(x, y)] * 3;
-	int cnt = 0;
-	float3 posBuffer[VOLUME * 15];
-	float3 extBuffer[VOLUME * 15];
-	INT8 binBuffer[VOLUME * 5];
+	UINT8* tri = triBin + count[devicePid(x, y)];
 
 	for (int z = 0; z + 1 < VOLUME; z++) {
 		int cubeId = deviceGetCubeIndex(volume, x, y, z);
@@ -236,30 +211,16 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 			for (int i = 0; i < 5 && triTable_device[cubeId][i * 3] != -1; i++) {
 				for (int j = 0; j < 3; j++) {
 					int edgeId = triTable_device[cubeId][i * 3 + j];
-					posBuffer[cnt * 3 + j] = pos[edgeId] * volumeSize + offset;
-					binBuffer[cnt] = volumeBin[id];
+					vtx->pos = pos[edgeId] * volumeSize + offset;
+					vtx++;
 				}
-				cnt++;
+				*tri = volumeBin[id];
+				tri++;
 			}
 		}
 	}
 
-	__syncthreads();
-	for (int i = 0; i < cnt * 3; i++) {
-		vtx[i].pos = posBuffer[i];
-	}
 
-	__syncthreads();
-	for (int i = 0; i < cnt; i++) {
-		float3 extendedPos[3];
-		extendedPos[0] = (posBuffer[3 * i + 0] + posBuffer[3 * i + 1]) * 0.5f;
-		extendedPos[1] = (posBuffer[3 * i + 1] + posBuffer[3 * i + 2]) * 0.5f;
-		extendedPos[2] = (posBuffer[3 * i + 2] + posBuffer[3 * i + 0]) * 0.5f;
-		for (int j = 0; j < 3; j++) {
-			vtx[3 * i + j].color = calnColor(cameras, binBuffer[i], posBuffer[3 * i + j], transformation, intrinsics, colorMap);
-			vtx[3 * i + j].color2 = calnColor(cameras, binBuffer[i], extendedPos[j], transformation, intrinsics, colorMap);
-		}
-	}
 }
 
 __global__ void cudaCountAccumulation(int *count_device, int *sum_device, int *temp_device) {//一个block用1024个线程，处理2048个数。一共需要处理resx*resy = 2^18个数，分成128个block。
@@ -360,6 +321,45 @@ int cpu_cudaCountAccumulation() {
 	return tris_size;
 }
 
+__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, Transformation* transformation, Intrinsics* intrinsics, uchar4* color) {
+	ushort4 colorSum = ushort4();
+	int weight = 0;
+	for (int i = 0; i < cameras; i++) {
+		if ((bin >> i) & 1) {
+			float3 pos = transformation[i].translate(ori);
+			int2 pixel = intrinsics[i].translate(pos);
+			if (pos.z > 0 && 0 <= pixel.x && pixel.x < COLOR_W && 0 <= pixel.y && pixel.y < COLOR_H) {
+				weight++;
+				uchar4 tmp = color[(i * COLOR_H + pixel.y) * COLOR_W + pixel.x];
+				colorSum.x += tmp.x;
+				colorSum.y += tmp.y;
+				colorSum.z += tmp.z;
+			}
+		}
+	}
+	if (weight == 0) {
+		return uchar4();
+	}
+	return make_uchar4(colorSum.x / weight, colorSum.y / weight, colorSum.z / weight, 0);
+}
+
+__global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UINT8* triBin, uchar4* color, Transformation* transformation, Intrinsics* intrinsics) {
+	int id = threadIdx.x + blockIdx.x * blockDim.x;
+	if (id < triSize) {
+		float3 pos[6];
+		pos[0] = vertex[id * 3 + 0].pos;
+		pos[1] = vertex[id * 3 + 1].pos;
+		pos[2] = vertex[id * 3 + 2].pos;
+		pos[3] = (pos[0] + pos[1]) * 0.5f;
+		pos[4] = (pos[1] + pos[2]) * 0.5f;
+		pos[5] = (pos[2] + pos[0]) * 0.5f;
+		for (int j = 0; j < 3; j++) {
+			vertex[id * 3 + j].color = calnColor(cameras, triBin[id], pos[j], transformation, intrinsics, color);
+			vertex[id * 3 + j].color2 = calnColor(cameras, triBin[id], pos[j + 3], transformation, intrinsics, color);
+		}
+	}
+}
+
 extern "C"
 void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
@@ -378,8 +378,12 @@ void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_devic
 	HANDLE_ERROR(cudaGetLastError());
 	triSize = cpu_cudaCountAccumulation();
 	if (triSize * 3 <= MAX_VERTEX) {
-		kernelMarchingCubes << <blocks, threads >> > (cameras, volume_device, volumeBin_device, count_device, vertex_device, colorTrans_device, colorIntrinsics_device, (uchar4*)color_device, volumeSize, offset); //3.6ms
+		kernelMarchingCubes << <blocks, threads >> > (cameras, volume_device, volumeBin_device, count_device, vertex_device, triBin_device, volumeSize, offset); //3.6ms
 		HANDLE_ERROR(cudaGetLastError());
+
+		kernelColorization << <(triSize + 255) / 256, 256 >> > (cameras, triSize, vertex_device, triBin_device, (uchar4*)color_device, colorTrans_device, colorIntrinsics_device);
+		HANDLE_ERROR(cudaGetLastError());
+
 		HANDLE_ERROR(cudaMemcpy(vertex, vertex_device, triSize * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost));
 	} else {
 		std::cout << "vertex size limit exceeded" << std::endl;
