@@ -188,6 +188,7 @@ __device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, 
 				colorSum.x += tmp.x;
 				colorSum.y += tmp.y;
 				colorSum.z += tmp.z;
+				break;
 			}
 		}
 	}
@@ -205,15 +206,18 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 		return;
 	}	
 
-	float3 pos[12];
-	float3 posBuffer[6];
 	Vertex* vtx = vertex + count[devicePid(x, y)] * 3;
+	int cnt = 0;
+	float3 posBuffer[VOLUME * 15];
+	float3 extBuffer[VOLUME * 15];
+	INT8 binBuffer[VOLUME * 5];
 
 	for (int z = 0; z + 1 < VOLUME; z++) {
 		int cubeId = deviceGetCubeIndex(volume, x, y, z);
 
 		if (triTable_device[cubeId][0] != -1) {
 			int id = deviceVid(x, y, z);
+			float3 pos[12];
 			pos[0] = deviceCalnEdgePoint(volume, x + 0, y + 0, z + 0, 1, 0, 0);
 			pos[1] = deviceCalnEdgePoint(volume, x + 1, y + 0, z + 0, 0, 1, 0);
 			pos[2] = deviceCalnEdgePoint(volume, x + 0, y + 1, z + 0, 1, 0, 0);
@@ -232,18 +236,28 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 			for (int i = 0; i < 5 && triTable_device[cubeId][i * 3] != -1; i++) {
 				for (int j = 0; j < 3; j++) {
 					int edgeId = triTable_device[cubeId][i * 3 + j];
-					posBuffer[j] = pos[edgeId] * volumeSize + offset;
+					posBuffer[cnt * 3 + j] = pos[edgeId] * volumeSize + offset;
+					binBuffer[cnt] = volumeBin[id];
 				}
-				posBuffer[3] = (posBuffer[0] + posBuffer[1]) * 0.5;
-				posBuffer[4] = (posBuffer[1] + posBuffer[2]) * 0.5;
-				posBuffer[5] = (posBuffer[2] + posBuffer[0]) * 0.5;
-				for (int j = 0; j < 3; j++) {
-					vtx->pos = posBuffer[j];
-					vtx->color = calnColor(cameras, volumeBin[id], posBuffer[j], transformation, intrinsics, colorMap);
-					vtx->color2 = calnColor(cameras, volumeBin[id], posBuffer[j + 3], transformation, intrinsics, colorMap);
-					vtx++;
-				}
+				cnt++;
 			}
+		}
+	}
+
+	__syncthreads();
+	for (int i = 0; i < cnt * 3; i++) {
+		vtx[i].pos = posBuffer[i];
+	}
+
+	__syncthreads();
+	for (int i = 0; i < cnt; i++) {
+		float3 extendedPos[3];
+		extendedPos[0] = (posBuffer[3 * i + 0] + posBuffer[3 * i + 1]) * 0.5f;
+		extendedPos[1] = (posBuffer[3 * i + 1] + posBuffer[3 * i + 2]) * 0.5f;
+		extendedPos[2] = (posBuffer[3 * i + 2] + posBuffer[3 * i + 0]) * 0.5f;
+		for (int j = 0; j < 3; j++) {
+			vtx[3 * i + j].color = calnColor(cameras, binBuffer[i], posBuffer[3 * i + j], transformation, intrinsics, colorMap);
+			vtx[3 * i + j].color2 = calnColor(cameras, binBuffer[i], extendedPos[j], transformation, intrinsics, colorMap);
 		}
 	}
 }

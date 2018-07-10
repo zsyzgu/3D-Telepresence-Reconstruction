@@ -30,6 +30,15 @@ CUDA_CALLABLE_MEMBER __forceinline__ float dot(float3 a, float3 b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+class Intrinsics {
+public:
+	float ppx, ppy;
+	float fx, fy;
+	CUDA_CALLABLE_MEMBER int2 translate(float3 pos) {
+		return make_int2(floor(pos.x * fx / pos.z + ppx), floor(pos.y * fy / pos.z + ppy));
+	}
+};
+
 class Transformation {
 private:
 	float3 rotation0;
@@ -91,15 +100,6 @@ public:
 		result.rotation2 = make_float3(dot(rotation2, col0), dot(rotation2, col1), dot(rotation2, col2));
 		result.translation = make_float3(dot(rotation0, trans.translation), dot(rotation1, trans.translation), dot(rotation2, trans.translation)) + translation;
 		return result;
-	}
-};
-
-class Intrinsics {
-public:
-	float ppx, ppy;
-	float fx, fy;
-	CUDA_CALLABLE_MEMBER int2 translate(float3 pos) {
-		return make_int2(floor(pos.x * fx / pos.z + ppx), floor(pos.y * fy / pos.z + ppy));
 	}
 };
 
