@@ -60,7 +60,7 @@ void start() {
 	
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-	volume = new TsdfVolume(2.5, 2.5, 2.5, 0, 0, 1.25);
+	volume = new TsdfVolume(2, 2, 2, 0, 0, 1.);
 	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
 	world2color = new Transformation[MAX_CAMERAS];
 
@@ -73,11 +73,10 @@ void start() {
 void update() {
 	float* depthImages_device;
 	RGBQUAD* colorImages_device;
-	Transformation* depth2color;
 	Transformation* color2depth;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
-	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, depth2color, color2depth, depthIntrinsics, colorIntrinsics);
+	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, color2depth, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
 	// TODO

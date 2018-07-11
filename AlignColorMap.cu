@@ -9,7 +9,7 @@ __global__ void kernelAlignProcess(uchar4* alignedColor, float* depth, uchar4* c
 	if (x < COLOR_W && y < COLOR_H) {
 		float2 dpFloat = make_float2((float)x * DEPTH_W / COLOR_W, (float)y * DEPTH_H / COLOR_H);
 		int2 dp = make_int2((int)dpFloat.x, (int)dpFloat.y);
-		uchar4 result = make_uchar4(0, 0, 0, 0);
+		uchar4 result = uchar4();
 		if (0 <= dp.x && dp.x < DEPTH_W && 0 <= dp.y && dp.y < DEPTH_H) {
 			float z = depth[dp.y * DEPTH_W + dp.x];
 			float3 pos = depthIntrinsics.deproject(dpFloat, z);
@@ -17,6 +17,23 @@ __global__ void kernelAlignProcess(uchar4* alignedColor, float* depth, uchar4* c
 			int2 cp = colorIntrinsics.translate(pos);
 			if (0 <= cp.x && cp.x < COLOR_W && 0 <= cp.y && cp.y < COLOR_H) {
 				result = color[cp.y * COLOR_W + cp.x];
+
+				for (int shift = 0; shift < (DEPTH_W >> 4); shift++) {
+					if (dp.x - shift >= 0) {
+						float sz = depth[dp.y * DEPTH_W + dp.x - shift];
+						if (sz < z) {
+							float3 spos = depthIntrinsics.deproject(make_float2((float)(x - shift) * DEPTH_W / COLOR_W, (float)y * DEPTH_H / COLOR_H), sz);
+							spos = depth2color.translate(spos);
+							int2 scp = colorIntrinsics.translate(spos);
+							if (scp.x > cp.x) {
+								result = uchar4();
+								break;
+							}
+						}
+					} else {
+						break;
+					}
+				}
 			}
 		}
 		alignedColor[y * COLOR_W + x] = result;
@@ -25,7 +42,7 @@ __global__ void kernelAlignProcess(uchar4* alignedColor, float* depth, uchar4* c
 
 extern "C"
 void cudaAlignInit(RGBQUAD*& alignedColor_device) {
-	HANDLE_ERROR(cudaMalloc(&alignedColor_device, COLOR_H * COLOR_W * sizeof(RGBQUAD)));
+	HANDLE_ERROR(cudaMalloc(&alignedColor_device, MAX_CAMERAS * COLOR_H * COLOR_W * sizeof(RGBQUAD)));
 }
 
 extern "C"

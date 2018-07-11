@@ -62,7 +62,7 @@ public:
 };
 
 class Transformation {
-private:
+public:
 	float3 rotation0;
 	float3 rotation1;
 	float3 rotation2;

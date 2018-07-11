@@ -31,25 +31,35 @@ __global__ void kernelFilterToDisparity(UINT16* source, float* target, float con
 
 	if (x < DEPTH_W && y < DEPTH_H) {
 		int id = y * DEPTH_W + x;
-		int sid = (y * 2) * (DEPTH_W * 2) + (x * 2);
-		UINT16 arr[4] = { source[sid], source[sid + 1], source[sid + DEPTH_W * 2], source[sid + DEPTH_W * 2 + 1] };
+		UINT16 arr[5] = { source[id], 0, 0, 0, 0 };
+		if (x - 1 >= 0) arr[1] = source[id - 1];
+		if (x + 1 < DEPTH_W) arr[2] = source[id + 1];
+		if (y - 1 >= 0) arr[3] = source[id - DEPTH_W];
+		if (y + 1 < DEPTH_H) arr[4] = source[id + DEPTH_W];
 		DEPTH_SORT(arr[0], arr[1]);
 		DEPTH_SORT(arr[0], arr[2]);
 		DEPTH_SORT(arr[0], arr[3]);
+		DEPTH_SORT(arr[0], arr[4]);
 		DEPTH_SORT(arr[1], arr[2]);
 		DEPTH_SORT(arr[1], arr[3]);
+		DEPTH_SORT(arr[1], arr[4]);
 		DEPTH_SORT(arr[2], arr[3]);
+		DEPTH_SORT(arr[2], arr[4]);
+		DEPTH_SORT(arr[3], arr[4]);
 		__syncthreads();
 		if (arr[0] != 0) {
-			target[id] = convertFactor * 2 / (arr[1] + arr[2]);
-		} else
-		if (arr[1] != 0) {
 			target[id] = convertFactor / arr[2];
 		} else
-		if (arr[2] != 0) {
+		if (arr[1] != 0) {
 			target[id] = convertFactor * 2 / (arr[2] + arr[3]);
+		} else
+		if (arr[2] != 0) {
+			target[id] = convertFactor / arr[3];
+		} else
+		if (arr[3] != 0) {
+			target[id] = convertFactor * 2 / (arr[3] + arr[4]);
 		} else {
-			target[id] = convertFactor / arr[3]; // If arr[3] also equals to zero, just let it be oo.
+			target[id] = convertFactor / arr[4]; // If arr[4] also equals to zero, just let it be oo.
 		}
 	}
 }
@@ -178,7 +188,7 @@ void cudaDepthFilterInit(UINT16*& depth_device, float*& depthFloat_device, float
 	dim3 threadsPerBlock = dim3(256, 1);
 	dim3 blocksPerGrid = dim3((DEPTH_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (DEPTH_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
-	HANDLE_ERROR(cudaMalloc(&depth_device, (2 * DEPTH_H) * (2 * DEPTH_W) * sizeof(UINT16)));
+	HANDLE_ERROR(cudaMalloc(&depth_device, DEPTH_H * DEPTH_W * sizeof(UINT16)));
 	HANDLE_ERROR(cudaMalloc(&depthFloat_device, MAX_CAMERAS * DEPTH_H * DEPTH_W * sizeof(float)));
 	HANDLE_ERROR(cudaMalloc(&lastFrame_device, MAX_CAMERAS * DEPTH_H * DEPTH_W * sizeof(float)));
 	for (int i = 0; i < MAX_CAMERAS; i++) {
@@ -199,7 +209,7 @@ void cudaDepthFiltering(UINT16* depthMap, UINT16* depth_device, float* depthFloa
 	dim3 threadsPerBlock = dim3(256, 1);
 	dim3 blocksPerGrid = dim3((DEPTH_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (DEPTH_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
-	HANDLE_ERROR(cudaMemcpy(depth_device, depthMap, (2 * DEPTH_H) * (2 * DEPTH_W) * sizeof(UINT16), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(depth_device, depthMap, DEPTH_H * DEPTH_W * sizeof(UINT16), cudaMemcpyHostToDevice));
 	kernelFilterToDisparity << <blocksPerGrid, threadsPerBlock >> > (depth_device, depthFloat_device, convertFactor);
 	cudaGetLastError();
 	kernelSFVertical << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);

@@ -5,7 +5,7 @@
 
 extern "C" void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
-extern "C" void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth, Transformation* world2color, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+extern "C" void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
 
 TsdfVolume::TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
@@ -25,7 +25,7 @@ void TsdfVolume::integrate(byte* result, int cameras, float* depth_device, RGBQU
 	}
 
 	Vertex* vertex = (Vertex*)(result + 4);
-	cudaIntegrate(cameras, *((int*)result), vertex, depth_device, color_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+	cudaIntegrate(cameras, *((int*)result), vertex, depth_device, color_device, world2depth, depthIntrinsics, colorIntrinsics);
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::getPointCloudFromMesh(byte* buffer)
