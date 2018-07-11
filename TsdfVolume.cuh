@@ -7,6 +7,7 @@
 #define CUDA_CALLABLE_MEMBER
 #endif 
 
+#include <iostream>
 #include "CudaHandleError.h"
 #include "Parameters.h"
 
@@ -34,8 +35,29 @@ class Intrinsics {
 public:
 	float ppx, ppy;
 	float fx, fy;
+
 	CUDA_CALLABLE_MEMBER int2 translate(float3 pos) {
 		return make_int2(floor(pos.x * fx / pos.z + ppx), floor(pos.y * fy / pos.z + ppy));
+	}
+
+	CUDA_CALLABLE_MEMBER float3 deproject(float2 pixel, float z) {
+		return make_float3((pixel.x - ppx) / fx * z, (pixel.y - ppy) / fy * z, z);
+	}
+
+	CUDA_CALLABLE_MEMBER Intrinsics zoom(float x, float y) {
+		Intrinsics result;
+		result.ppx = ppx * x;
+		result.ppy = ppy * y;
+		result.fx = fx * x;
+		result.fy = fy * y;
+		return result;
+	}
+
+	CUDA_CALLABLE_MEMBER void output() {
+		std::cout << "fx = " << fx << std::endl;
+		std::cout << "fy = " << fy << std::endl;
+		std::cout << "ppx = " << ppx << std::endl;
+		std::cout << "ppy = " << ppy << std::endl;
 	}
 };
 
@@ -100,6 +122,13 @@ public:
 		result.rotation2 = make_float3(dot(rotation2, col0), dot(rotation2, col1), dot(rotation2, col2));
 		result.translation = make_float3(dot(rotation0, trans.translation), dot(rotation1, trans.translation), dot(rotation2, trans.translation)) + translation;
 		return result;
+	}
+
+	CUDA_CALLABLE_MEMBER void output() {
+		std::cout << "[[" << rotation0.x << ", " << rotation0.y << ", " << rotation0.z << ", " << 0 << "]," << std::endl;
+		std::cout << "[" << rotation1.x << ", " << rotation1.y << ", " << rotation1.z << ", " << 0 << "]," << std::endl;
+		std::cout << "[" << rotation2.x << ", " << rotation2.y << ", " << rotation2.z << ", " << 0 << "]," << std::endl;
+		std::cout << "[" << translation.x << ", " << translation.y << ", " << translation.z << ", " << 1 << "]]" << std::endl;
 	}
 };
 

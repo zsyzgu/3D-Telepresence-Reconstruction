@@ -7,6 +7,7 @@ RealsenseGrabber::RealsenseGrabber()
 {
 	depthFilter = new DepthFilter();
 	colorFilter = new ColorFilter();
+	alignColorMap = new AlignColorMap();
 	depthImages = new UINT16*[MAX_CAMERAS];
 	colorImages = new UINT8*[MAX_CAMERAS];
 	for (int i = 0; i < MAX_CAMERAS; i++) {
@@ -19,7 +20,8 @@ RealsenseGrabber::RealsenseGrabber()
 	for (int i = 0; i < MAX_CAMERAS; i++) {
 		colorImagesRGB[i] = new RGBQUAD[COLOR_H * COLOR_W];
 	}
-	depthTrans = new Transformation[MAX_CAMERAS];
+	depth2color = new Transformation[MAX_CAMERAS];
+	color2depth = new Transformation[MAX_CAMERAS];
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
 
@@ -36,6 +38,9 @@ RealsenseGrabber::~RealsenseGrabber()
 	}
 	if (colorFilter != NULL) {
 		delete colorFilter;
+	}
+	if (alignColorMap != NULL) {
+		delete alignColorMap;
 	}
 	if (depthImages != NULL) {
 		for (int i = 0; i < MAX_CAMERAS; i++) {
@@ -61,8 +66,11 @@ RealsenseGrabber::~RealsenseGrabber()
 		}
 		delete[] colorImagesRGB;
 	}
-	if (depthTrans != NULL) {
-		delete[] depthTrans;
+	if (depth2color != NULL) {
+		delete[] depth2color;
+	}
+	if (color2depth != NULL) {
+		delete[] color2depth;
 	}
 	if (depthIntrinsics != NULL) {
 		delete[] depthIntrinsics;
@@ -121,9 +129,8 @@ void RealsenseGrabber::convertYUVtoRGBA(UINT8* src, RGBQUAD* dst) {
 	}
 }
 
-int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation*& depth2color, Transformation*& color2depth, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
-#pragma omp parallel for
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
 		rs2::frameset frameset = pipeline.wait_for_frames();
@@ -156,8 +163,10 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 				}
 			}
 
-			rs2_extrinsics extrinsics = colorProfile.get_extrinsics_to(depthProfile);
-			this->depthTrans[deviceId] = Transformation(extrinsics.rotation, extrinsics.translation);
+			rs2_extrinsics d2cExtrinsics = depthProfile.get_extrinsics_to(colorProfile);
+			this->depth2color[deviceId] = Transformation(d2cExtrinsics.rotation, d2cExtrinsics.translation);
+			rs2_extrinsics c2dExtrinsics = colorProfile.get_extrinsics_to(depthProfile);
+			this->color2depth[deviceId] = Transformation(c2dExtrinsics.rotation, c2dExtrinsics.translation);
 		}
 	}
 
@@ -175,9 +184,18 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 
 	depthImages_device = depthFilter->getCurrFrame_device();
 	colorImages_device = colorFilter->getCurrFrame_device();
-	depthTrans = this->depthTrans;
+	depth2color = this->depth2color;
+	color2depth = this->color2depth;
 	depthIntrinsics = this->depthIntrinsics;
 	colorIntrinsics = this->colorIntrinsics;
+
+	RGBQUAD* alignedColorMap = alignColorMap->getAlignedColor_device(devices.size(), depthImages_device, colorImages_device, depthIntrinsics, colorIntrinsics, depth2color);
+	colorImages_device = alignedColorMap;
+	for (int i = 0; i < devices.size(); i++) {
+		colorIntrinsics[i] = depthIntrinsics[i].zoom((float)COLOR_W / DEPTH_W, (float)COLOR_H / DEPTH_H);
+		depth2color[i] = Transformation();
+		color2depth[i] = Transformation();
+	}
 
 	return devices.size();
 }

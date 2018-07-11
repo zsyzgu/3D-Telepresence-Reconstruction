@@ -15,14 +15,14 @@ RealsenseGrabber* grabber = NULL;
 TsdfVolume* volume = NULL;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
-Transformation* colorTrans = NULL;
+Transformation* world2color = NULL;
 
 #ifdef TRANSMISSION
 Transmission* transmission = NULL;
 #endif
 
 void registration() {
-	SceneRegistration::align(grabber, colorTrans);
+	SceneRegistration::align(grabber, world2color);
 }
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
@@ -60,9 +60,9 @@ void start() {
 	
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-	volume = new TsdfVolume(2, 2, 2, 0, 0, 1);
+	volume = new TsdfVolume(2.5, 2.5, 2.5, 0, 0, 1.25);
 	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
-	colorTrans = new Transformation[MAX_CAMERAS];
+	world2color = new Transformation[MAX_CAMERAS];
 
 #ifdef TRANSMISSION
 	transmission = new Transmission(true);
@@ -73,15 +73,16 @@ void start() {
 void update() {
 	float* depthImages_device;
 	RGBQUAD* colorImages_device;
-	Transformation* depthTrans;
+	Transformation* depth2color;
+	Transformation* color2depth;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
-	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, depthTrans, depthIntrinsics, colorIntrinsics);
+	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, depth2color, color2depth, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
 	// TODO
 #else
-	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, depthTrans, colorTrans, depthIntrinsics, colorIntrinsics);
+	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
 #endif
 }
 
@@ -95,8 +96,8 @@ void stop() {
 	if (buffer != NULL) {
 		delete[] buffer;
 	}
-	if (colorTrans != NULL) {
-		delete[] colorTrans;
+	if (world2color != NULL) {
+		delete[] world2color;
 	}
 #ifdef TRANSMISSION
 	if (transmission != NULL) {

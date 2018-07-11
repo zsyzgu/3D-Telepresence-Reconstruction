@@ -60,7 +60,7 @@ __global__ void kernelFilterToDepth(float* depth, float convertFactor) {
 
 	if (x < DEPTH_W && y < DEPTH_H) {
 		int id = y * DEPTH_W + x;
-		depth[id] = convertFactor / depth[id];
+		depth[id] = convertFactor / depth[id] * 0.001; //to m
 	}
 }
 

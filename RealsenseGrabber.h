@@ -11,6 +11,7 @@
 #include "TsdfVolume.cuh"
 #include "DepthFilter.h"
 #include "ColorFilter.h"
+#include "AlignColorMap.h"
 
 class RealsenseGrabber
 {
@@ -24,6 +25,7 @@ private:
 
 	DepthFilter* depthFilter;
 	ColorFilter* colorFilter;
+	AlignColorMap* alignColorMap;
 
 	void enableDevice(rs2::device device);
 	void convertYUVtoRGBA(UINT8* src, RGBQUAD* dst);
@@ -31,14 +33,15 @@ private:
 	UINT16** depthImages;
 	UINT8** colorImages;
 	RGBQUAD** colorImagesRGB;
-	Transformation* depthTrans;
+	Transformation* depth2color;
+	Transformation* color2depth;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
 
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation*& depthTrans, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics);
+	int getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation*& depth2color, Transformation*& color2depth, Intrinsics*& depthIntrinscis, Intrinsics*& colorIntrinsics);
 	int getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics);
 };
 

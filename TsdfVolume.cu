@@ -15,8 +15,8 @@ namespace tsdf {
 
 	float* volume_device;
 	UINT8* volumeBin_device;
-	Transformation* depthTrans_device;
-	Transformation* colorTrans_device;
+	Transformation* world2depth_device;
+	Transformation* world2color_device;
 	Intrinsics* depthIntrinsics_device;
 	Intrinsics* colorIntrinsics_device;
 	Vertex* vertex_device;
@@ -52,8 +52,8 @@ void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float 
 	offset = center - size * 0.5;
 	HANDLE_ERROR(cudaMalloc(&volume_device, VOLUME * VOLUME * VOLUME * sizeof(float)));
 	HANDLE_ERROR(cudaMalloc(&volumeBin_device, VOLUME * VOLUME * VOLUME * sizeof(UINT8)));
-	HANDLE_ERROR(cudaMalloc(&depthTrans_device, MAX_CAMERAS * sizeof(Transformation)));
-	HANDLE_ERROR(cudaMalloc(&colorTrans_device, MAX_CAMERAS * sizeof(Transformation)));
+	HANDLE_ERROR(cudaMalloc(&world2depth_device, MAX_CAMERAS * sizeof(Transformation)));
+	HANDLE_ERROR(cudaMalloc(&world2color_device, MAX_CAMERAS * sizeof(Transformation)));
 	HANDLE_ERROR(cudaMalloc(&depthIntrinsics_device, MAX_CAMERAS * sizeof(Intrinsics)));
 	HANDLE_ERROR(cudaMalloc(&colorIntrinsics_device, MAX_CAMERAS * sizeof(Intrinsics)));
 	HANDLE_ERROR(cudaMalloc(&vertex_device, MAX_VERTEX * sizeof(Vertex)));
@@ -65,8 +65,8 @@ extern "C"
 void cudaReleaseVolume() {
 	HANDLE_ERROR(cudaFree(volume_device));
 	HANDLE_ERROR(cudaFree(volumeBin_device));
-	HANDLE_ERROR(cudaFree(depthTrans_device));
-	HANDLE_ERROR(cudaFree(colorTrans_device));
+	HANDLE_ERROR(cudaFree(world2depth_device));
+	HANDLE_ERROR(cudaFree(world2color_device));
 	HANDLE_ERROR(cudaFree(depthIntrinsics_device));
 	HANDLE_ERROR(cudaFree(colorIntrinsics_device));
 	HANDLE_ERROR(cudaFree(vertex_device));
@@ -101,10 +101,10 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 			int2 pixel = intrinsics[i].translate(pos);
 
 			if (pos.z > 0 && 0 <= pixel.x && pixel.x < DEPTH_W && 0 <= pixel.y && pixel.y < DEPTH_H) {
-				UINT16 depth = depthMap[(i * DEPTH_H + pixel.y) * DEPTH_W + pixel.x];
+				float depth = depthMap[(i * DEPTH_H + pixel.y) * DEPTH_W + pixel.x];
 
 				if (depth != 0) {
-					float sdf = depth * 0.001 - pos.z;
+					float sdf = depth - pos.z;
 
 					if (sdf >= -TRANC_DIST_M) {
 						tsdf = sdf / TRANC_DIST_M;
@@ -182,7 +182,7 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 
 	if (x + 1 >= VOLUME || y + 1 >= VOLUME) {
 		return;
-	}	
+	}
 
 	Vertex* vtx = vertex + count[devicePid(x, y)] * 3;
 	UINT8* tri = triBin + count[devicePid(x, y)];
@@ -219,8 +219,6 @@ __global__ void kernelMarchingCubes(int cameras, float* volume, UINT8* volumeBin
 			}
 		}
 	}
-
-
 }
 
 __global__ void cudaCountAccumulation(int *count_device, int *sum_device, int *temp_device) {//一个block用1024个线程，处理2048个数。一共需要处理resx*resy = 2^18个数，分成128个block。
@@ -361,28 +359,30 @@ __global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UIN
 }
 
 extern "C"
-void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* depthTrans, Transformation* colorTrans, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
+void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth, Transformation* world2color, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
 	dim3 threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
 
-	HANDLE_ERROR(cudaMemcpy(depthTrans_device, depthTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(world2depth_device, world2depth, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, depthIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 
-	HANDLE_ERROR(cudaMemcpyAsync(colorTrans_device, colorTrans, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpyAsync(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(world2color_device, world2color, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 
-	kernelIntegrateDepth << <blocks, threads >> > (cameras, volume_device, volumeBin_device, depthTrans_device, depthIntrinsics_device, depth_device, volumeSize, offset); //1.7ms
+	kernelIntegrateDepth << <blocks, threads >> > (cameras, volume_device, volumeBin_device, world2depth_device, depthIntrinsics_device, depth_device, volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());
 
 	kernelMarchingCubesCount << <blocks, threads >> > (volume_device, count_device);
 	HANDLE_ERROR(cudaGetLastError());
 	triSize = cpu_cudaCountAccumulation();
 	if (triSize * 3 <= MAX_VERTEX) {
-		kernelMarchingCubes << <blocks, threads >> > (cameras, volume_device, volumeBin_device, count_device, vertex_device, triBin_device, volumeSize, offset); //3.6ms
+		kernelMarchingCubes << <blocks, threads >> > (cameras, volume_device, volumeBin_device, count_device, vertex_device, triBin_device, volumeSize, offset);
 		HANDLE_ERROR(cudaGetLastError());
 
-		kernelColorization << <(triSize + 255) / 256, 256 >> > (cameras, triSize, vertex_device, triBin_device, (uchar4*)color_device, colorTrans_device, colorIntrinsics_device);
-		HANDLE_ERROR(cudaGetLastError());
+		if (triSize != 0) {
+			kernelColorization << <(triSize + 255) / 256, 256 >> > (cameras, triSize, vertex_device, triBin_device, (uchar4*)color_device, world2color_device, colorIntrinsics_device);
+			HANDLE_ERROR(cudaGetLastError());
+		}
 
 		HANDLE_ERROR(cudaMemcpy(vertex, vertex_device, triSize * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost));
 	} else {

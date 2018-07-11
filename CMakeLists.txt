@@ -56,7 +56,16 @@ cuda_add_executable( 3D-Telepresence main.cpp
 	TsdfVolume.h
 	TsdfVolume.cpp
 	TsdfVolume.cuh
-	TsdfVolume.cu)
+	TsdfVolume.cu
+	DepthFilter.h
+	DepthFilter.cpp
+	DepthFilter.cu
+	ColorFilter.h
+	ColorFilter.cpp
+	ColorFilter.cu
+	AlignedColorMap.h
+	AlignedColorMap.cpp
+	AlignedColorMap.cu)
 
 # Additional Dependencies
 target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )
