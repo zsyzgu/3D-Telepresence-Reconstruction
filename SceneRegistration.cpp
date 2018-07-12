@@ -104,7 +104,7 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.028f;
-	const int ITERATION = 10;
+	const int ITERATION = 1;
 	const int CORNERS[4] = { 0, 8, 53, 45 };
 	const int RECT_DIST_THRESHOLD = 50;
 	const int RECT_AREA_THRESHOLD = 20000;

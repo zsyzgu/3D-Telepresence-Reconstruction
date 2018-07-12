@@ -40,22 +40,15 @@ void startViewer() {
 #ifdef TRANSMISSION
 DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 {
-#pragma omp parallel sections
-{
-	#pragma omp section
-	{
-		while (true) {
-			Sleep(1);
-			transmission->recvRGBD(depthList[1], colorList[1]);
-		}
+	while (true) {
+		Sleep(1);
+		transmission->recvRGBD(depthList[1], colorList[1]);
 	}
-}
 	return 0;
 }
 #endif
 
 void start() {
-	omp_set_num_threads(4);
 	cudaSetDevice(0);
 	
 	grabber = new RealsenseGrabber();

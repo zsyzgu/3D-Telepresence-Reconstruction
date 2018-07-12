@@ -4,14 +4,6 @@ set( CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH} )
 project( 3D-Telepresence )
 set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "3D-Telepresence" )
 
-# OpenMP
-FIND_PACKAGE( OpenMP REQUIRED )  
-if(OPENMP_FOUND)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")  
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")  
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")  
-endif()  
-
 # Cuda
 find_package( CUDA REQUIRED )
 set(CUDA_NVCC_FLAGS -gencode arch=compute_60,code=sm_60;-G;-g)
@@ -63,9 +55,9 @@ cuda_add_executable( 3D-Telepresence main.cpp
 	ColorFilter.h
 	ColorFilter.cpp
 	ColorFilter.cu
-	AlignedColorMap.h
-	AlignedColorMap.cpp
-	AlignedColorMap.cu)
+	AlignColorMap.h
+	AlignColorMap.cpp
+	AlignColorMap.cu)
 
 # Additional Dependencies
 target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )

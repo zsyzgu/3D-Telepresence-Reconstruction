@@ -317,8 +317,8 @@ int cpu_cudaCountAccumulation() {
 }
 
 __device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, Transformation* transformation, Intrinsics* intrinsics, uchar4* color) {
-	ushort4 colorSum = ushort4();
-	int weight = 0;
+	float4 colorSum = float4();
+	float weight = 0;
 	for (int i = 0; i < cameras; i++) {
 		if ((bin >> i) & 1) {
 			float3 pos = transformation[i].translate(ori);
@@ -326,7 +326,7 @@ __device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, 
 			if (pos.z > 0 && 0 <= pixel.x && pixel.x < COLOR_W && 0 <= pixel.y && pixel.y < COLOR_H) {
 				uchar4 tmp = color[(i * COLOR_H + pixel.y) * COLOR_W + pixel.x];
 				if (tmp.x != 0 || tmp.y != 0 || tmp.z != 0) {
-					weight++;
+					weight += 1.0f;
 					colorSum.x += tmp.x;
 					colorSum.y += tmp.y;
 					colorSum.z += tmp.z;

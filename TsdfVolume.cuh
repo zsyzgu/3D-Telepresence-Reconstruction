@@ -31,6 +31,18 @@ CUDA_CALLABLE_MEMBER __forceinline__ float dot(float3 a, float3 b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+CUDA_CALLABLE_MEMBER __forceinline__ float module2(float3 a) {
+	return dot(a, a);
+}
+
+CUDA_CALLABLE_MEMBER __forceinline__ float module(float3 a) {
+	return sqrt(dot(a, a));
+}
+
+CUDA_CALLABLE_MEMBER __forceinline__ float3 multi(float3 a, float3 b) {
+	return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
+
 class Intrinsics {
 public:
 	float ppx, ppy;
@@ -84,6 +96,10 @@ public:
 		rotation1 = make_float3(rotation[3], rotation[4], rotation[5]);
 		rotation2 = make_float3(rotation[6], rotation[7], rotation[8]);
 		this->translation = make_float3(translation[0], translation[1], translation[2]);
+	}
+
+	CUDA_CALLABLE_MEMBER float3 rotate(float3 pos) {
+		return make_float3(dot(pos, rotation0), dot(pos, rotation1), dot(pos, rotation2));
 	}
 
 	CUDA_CALLABLE_MEMBER float3 translate(float3 pos) {

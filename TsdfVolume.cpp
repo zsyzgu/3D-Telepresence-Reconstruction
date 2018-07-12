@@ -37,7 +37,6 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::getPointCloudFromMesh(byte* b
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 	cloud->resize(n * 2);
 
-#pragma omp parallel for schedule(static, 500)
 	for (int i = 0; i < n; i++) {
 		cloud->points[i].x = vertex[i].pos.x;
 		cloud->points[i].y = vertex[i].pos.y;
