@@ -3,39 +3,43 @@
 #include "Parameters.h"
 
 __global__ void kernelAlignProcess(uchar4* alignedColor, float* depth, uchar4* color, Intrinsics depthIntrinsics, Intrinsics colorIntrinsics, Transformation depth2color) {
+	const int MAX_SHIFT = DEPTH_W >> 4;
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-	if (x < COLOR_W && y < COLOR_H) {
-		float2 dpFloat = make_float2((float)x * DEPTH_W / COLOR_W, (float)y * DEPTH_H / COLOR_H);
-		int2 dp = make_int2((int)dpFloat.x, (int)dpFloat.y);
-		uchar4 result = uchar4();
-		if (0 <= dp.x && dp.x < DEPTH_W && 0 <= dp.y && dp.y < DEPTH_H) {
-			float z = depth[dp.y * DEPTH_W + dp.x];
-			float3 pos = depthIntrinsics.deproject(dpFloat, z);
-			pos = depth2color.translate(pos);
-			int2 cp = colorIntrinsics.translate(pos);
-			if (0 <= cp.x && cp.x < COLOR_W && 0 <= cp.y && cp.y < COLOR_H) {
-				result = color[cp.y * COLOR_W + cp.x];
+	__shared__ int2 colorPixel_shared[COLOR_W];
 
-				for (int shift = 0; shift < (DEPTH_W >> 4); shift++) {
-					if (dp.x - shift >= 0) {
-						float sz = depth[dp.y * DEPTH_W + dp.x - shift];
-						if (sz < z) {
-							float3 spos = depthIntrinsics.deproject(make_float2((float)(x - shift) * DEPTH_W / COLOR_W, (float)y * DEPTH_H / COLOR_H), sz);
-							spos = depth2color.translate(spos);
-							int2 scp = colorIntrinsics.translate(spos);
-							if (scp.x > cp.x) {
-								result = uchar4();
-								break;
-							}
-						}
-					} else {
-						break;
-					}
-				}
+	for (int i = threadIdx.x; i < COLOR_W; i += blockDim.x) {
+		float2 pixelFloat = make_float2((float)i * DEPTH_W / COLOR_W, (float)y * DEPTH_H / COLOR_H);
+		int2 pixel = make_int2((int)pixelFloat.x, (int)pixelFloat.y);
+
+		if (0 <= pixel.x && pixel.x < DEPTH_W && 0 <= pixel.y && pixel.y < DEPTH_H) {
+			float3 pos = depthIntrinsics.deproject(pixelFloat, depth[pixel.y * DEPTH_W + pixel.x]);
+			pos = depth2color.translate(pos);
+			int2 colorPixel = colorIntrinsics.translate(pos);
+			colorPixel_shared[i] = colorPixel;
+		} else {
+			colorPixel_shared[i] = make_int2(-1, -1);
+		}
+	}
+	__syncthreads();
+
+	if (x < COLOR_W && y < COLOR_H) {
+		uchar4 result = uchar4();
+		int2 colorPixel = colorPixel_shared[x];
+
+		if (0 <= colorPixel.x && colorPixel.x < COLOR_W && 0 <= colorPixel.y && colorPixel.y < COLOR_H) {
+			result = color[colorPixel.y * COLOR_W + colorPixel.x];
+		}
+
+		for (int shift = 1; shift <= MAX_SHIFT; shift++) {
+			if (x - shift >= 0 && colorPixel_shared[x - shift].x > colorPixel.x) {
+				result = uchar4();
+				break;
 			}
 		}
+
+		__syncthreads();
 		alignedColor[y * COLOR_W + x] = result;
 	}
 }
@@ -52,7 +56,7 @@ void cudaAlignClean(RGBQUAD*& alignedColor_device) {
 
 extern "C"
 void cudaAlignProcess(int cameras, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* color_device, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color) {
-	dim3 threadsPerBlock = dim3(256, 1);
+	dim3 threadsPerBlock = dim3(512, 1);
 	dim3 blocksPerGrid = dim3((COLOR_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (COLOR_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
 	
 	for (int i = 0; i < cameras; i++) {
