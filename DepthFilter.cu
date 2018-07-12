@@ -4,8 +4,8 @@
 #include "Timer.h"
 
 namespace FilterNamespace {
-	__constant__ int SF_RADIUS = 8;
-	__constant__ float SF_ALPHA = 0.65f;
+	__constant__ int SF_RADIUS = 10;
+	__constant__ float SF_ALPHA = 0.75f;
 	__constant__ float SF_THRESHOLD = 20.0f;
 	__constant__ float TF_ALPHA = 0.5f;
 	__constant__ float TF_THRESHOLD = 20.0f;
