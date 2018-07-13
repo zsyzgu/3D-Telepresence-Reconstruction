@@ -10,7 +10,7 @@ class AlignColorMap {
 public:
 	AlignColorMap();
 	~AlignColorMap();
-	RGBQUAD* getAlignedColor_device(int cameras, float* depth_device, RGBQUAD* color_device, Intrinsics * depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color);
+	RGBQUAD* getAlignedColor_device(int cameras, bool* check, float* depth_device, RGBQUAD* color_device, Intrinsics * depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color);
 };
 
 #endif
