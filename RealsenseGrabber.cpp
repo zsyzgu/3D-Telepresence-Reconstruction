@@ -133,7 +133,10 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 {
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
-		rs2::frameset frameset = pipeline.wait_for_frames();
+		rs2::frameset frameset;
+		while (!pipeline.poll_for_frames(&frameset)) {
+			Sleep(1);
+		}
 
 		if (frameset.size() > 0) {
 			rs2::stream_profile depthProfile;
@@ -202,7 +205,11 @@ int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsic
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
 		rs2::frameset frameset;
-		if (pipeline.poll_for_frames(&frameset) && frameset.size() > 0) {
+		while (!pipeline.poll_for_frames(&frameset)) {
+			Sleep(1);
+		}
+
+		if (frameset.size() > 0) {
 			for (int i = 0; i < frameset.size(); i++) {
 				rs2::frame frame = frameset[i];
 				rs2::stream_profile profile = frame.get_profile();

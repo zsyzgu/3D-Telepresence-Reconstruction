@@ -104,7 +104,6 @@ int main(int argc, char *argv[]) {
 	start();
 	startViewer();
 
-
 	Timer timer;
 
 	while (!viewer->wasStopped()) {
