@@ -4,11 +4,15 @@
 #include "Timer.h"
 
 namespace FilterNamespace {
-	__constant__ int SF_RADIUS = 10;
+	__constant__ int SF_RADIUS = 5;
 	__constant__ float SF_ALPHA = 0.75f;
-	__constant__ float SF_THRESHOLD = 20.0f;
+	__constant__ float SF_THRESHOLD = 40.0f;
 	__constant__ float TF_ALPHA = 0.5f;
-	__constant__ float TF_THRESHOLD = 20.0f;
+	__constant__ float TF_THRESHOLD = 40.0f;
+	__constant__ int HF_RADIUS = 5;		//领域半径（圆形）
+	__constant__ float HF_TC = 0.75;	//领域有效数量阈值，即领域内75%有效值时填洞
+	__constant__ float HF_TR = 40.0f;	//领域极差限制
+
 	float* lastFrame;
 };
 using namespace FilterNamespace;
@@ -146,18 +150,45 @@ __global__ void kernelFillHoles(float* depth) {
 		int id = y * DEPTH_W + x;
 		float result = depth[id];
 		if (result == 0) {
-			if (x - 1 >= 0) {
-				result = max(result, depth[id - 1]);
-				if (y - 1 >= 0) result = max(result, depth[id - 1 - DEPTH_W]);
-				if (y + 1 < DEPTH_H) result = max(result, depth[id - 1 + DEPTH_W]);
+			if ((x >= HF_RADIUS - 1) && (y >= HF_RADIUS - 1) && (x <= DEPTH_W - HF_RADIUS) && (y <= DEPTH_H - HF_RADIUS))
+			{
+				float maxnear = -1.0f;
+				float minnear = 1e9f;
+				int sum_avi = 0;
+				int sum_all = 0;
+
+				float* array = new float[(HF_RADIUS * 2 - 1) * (HF_RADIUS * 2 - 1)];
+
+				for (int dx = x + 1 - HF_RADIUS; dx <= x - 1 + HF_RADIUS; dx++)
+					for (int dy = y + 1 - HF_RADIUS; dy <= y - 1 + HF_RADIUS; dy++)
+					{
+						if ((dx - x) * (dx - x) + (dy - y) * (dy - y) > HF_RADIUS * HF_RADIUS)   //不在圆形领域
+							continue;
+						sum_all++;
+						float currDepth = depth[dy * DEPTH_W + dx];
+						if (currDepth > 0)
+						{
+							array[sum_avi++] = currDepth;
+							maxnear = max(maxnear, currDepth);
+							minnear = min(minnear, currDepth);
+						}
+					}
+				if (!((sum_avi < sum_all * HF_TC) || (maxnear - minnear > HF_TR)))
+				{
+					for (int i = 0; i < sum_avi - 1; i++)     //排序
+					{
+						int minn = i;
+						for (int j = i + 1; i < sum_avi; i++)
+							if (array[j] < array[minn]) minn = j;
+						float temp = array[i];
+						array[i] = array[minn];
+						array[minn] = temp;
+					}
+
+					result = array[sum_avi / 2];
+				}
+				delete[] array;
 			}
-			if (x + 1 < DEPTH_W) {
-				result = max(result, depth[id + 1]);
-				if (y - 1 >= 0) result = max(result, depth[id + 1 - DEPTH_W]);
-				if (y + 1 < DEPTH_H) result = max(result, depth[id + 1 + DEPTH_W]);
-			}
-			if (y - 1 >= 0) result = max(result, depth[id - DEPTH_W]);
-			if (y + 1 < DEPTH_H) result = max(result, depth[id + DEPTH_H]);
 		}
 		__syncthreads();
 		depth[id] = result;
@@ -212,12 +243,16 @@ void cudaDepthFiltering(UINT16* depthMap, UINT16* depth_device, float* depthFloa
 	HANDLE_ERROR(cudaMemcpy(depth_device, depthMap, DEPTH_H * DEPTH_W * sizeof(UINT16), cudaMemcpyHostToDevice));
 	kernelFilterToDisparity << <blocksPerGrid, threadsPerBlock >> > (depth_device, depthFloat_device, convertFactor);
 	cudaGetLastError();
-	kernelSFVertical << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
-	cudaGetLastError();
-	kernelSFHorizontal << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
-	cudaGetLastError();
-	kernelFillHoles << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
-	cudaGetLastError();
+	for (int i = 0; i < 2; i++) {
+		kernelSFVertical << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
+		cudaGetLastError();
+		kernelSFHorizontal << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
+		cudaGetLastError();
+	}
+	for (int i = 0; i < 3; i++) {
+		kernelFillHoles << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device);
+		cudaGetLastError();
+	}
 	kernelTemporalFilter << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device, lastFrame_device);
 	cudaGetLastError();
 	kernelFilterToDepth << <blocksPerGrid, threadsPerBlock >> > (depthFloat_device, convertFactor);
