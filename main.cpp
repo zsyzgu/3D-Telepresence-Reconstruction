@@ -4,6 +4,7 @@
 #include "Transmission.h"
 #include "RealsenseGrabber.h"
 #include "Parameters.h"
+#include "Configuration.h"
 #include <pcl/visualization/cloud_viewer.h>
 #include <windows.h>
 
@@ -25,9 +26,16 @@ void registration() {
 	SceneRegistration::align(grabber, world2color);
 }
 
+void saveExtrinsics() {
+	Configuration::saveExtrinsics(world2color);
+}
+
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "r" && event.keyDown()) {
 		registration();
+	}
+	if (event.getKeySym() == "s" && event.keyDown()) {
+		saveExtrinsics();
 	}
 }
 
@@ -56,6 +64,7 @@ void start() {
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 1.);
 	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
 	world2color = new Transformation[MAX_CAMERAS];
+	Configuration::loadExtrinsics(world2color);
 
 #ifdef TRANSMISSION
 	transmission = new Transmission(true);

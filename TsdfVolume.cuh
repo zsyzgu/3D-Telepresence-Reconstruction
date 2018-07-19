@@ -141,10 +141,10 @@ public:
 	}
 
 	CUDA_CALLABLE_MEMBER void output() {
-		std::cout << "[[" << rotation0.x << ", " << rotation0.y << ", " << rotation0.z << ", " << 0 << "]," << std::endl;
-		std::cout << "[" << rotation1.x << ", " << rotation1.y << ", " << rotation1.z << ", " << 0 << "]," << std::endl;
-		std::cout << "[" << rotation2.x << ", " << rotation2.y << ", " << rotation2.z << ", " << 0 << "]," << std::endl;
-		std::cout << "[" << translation.x << ", " << translation.y << ", " << translation.z << ", " << 1 << "]]" << std::endl;
+		std::cout << rotation0.x << " " << rotation0.y << " " << rotation0.z << " " << 0 << std::endl;
+		std::cout << rotation1.x << " " << rotation1.y << " " << rotation1.z << " " << 0 << std::endl;
+		std::cout << rotation2.x << " " << rotation2.y << " " << rotation2.z << " " << 0 << std::endl;
+		std::cout << translation.x << " " << translation.y << " " << translation.z << " " << 1 << std::endl;
 	}
 };
 
