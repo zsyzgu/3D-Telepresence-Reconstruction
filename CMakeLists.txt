@@ -57,7 +57,9 @@ cuda_add_executable( 3D-Telepresence main.cpp
 	ColorFilter.cu
 	AlignColorMap.h
 	AlignColorMap.cpp
-	AlignColorMap.cu)
+	AlignColorMap.cu
+	Configuration.h
+	Configuration.cpp)
 
 # Additional Dependencies
 target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )
