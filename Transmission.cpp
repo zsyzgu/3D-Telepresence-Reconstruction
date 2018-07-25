@@ -6,9 +6,7 @@ char* Transmission::getHostIP()
 	char hostName[256];
 	gethostname(hostName, sizeof(hostName));
 	HOSTENT* host = gethostbyname(hostName);
-	char* hostIP;
-	strcpy(hostIP, inet_ntoa(*(in_addr*)*host->h_addr_list));
-	return hostIP;
+	return inet_ntoa(((in_addr*)*host->h_addr_list)[0]);
 }
 
 void Transmission::sendData(char* data, int tot)
@@ -41,7 +39,7 @@ Transmission::Transmission(bool isServer)
 	sockAddr.sin_port = htons(port);
 
 	if (isServer) {
-		//-- Server
+		std::cout << "server" << std::endl;
 		SOCKET sockSrv = socket(PF_INET, SOCK_STREAM, 0);
 		bind(sockSrv, (SOCKADDR*)&sockAddr, sizeof(SOCKADDR));
 		listen(sockSrv, 20);
@@ -49,13 +47,10 @@ Transmission::Transmission(bool isServer)
 		sock = accept(sockSrv, (SOCKADDR*)&sockAddr, &len);
 	}
 	else {
-		//-- Client
+		std::cout << "client" << std::endl;
 		sock = socket(AF_INET, SOCK_STREAM, 0);
 		connect(sock, (SOCKADDR*)&sockAddr, sizeof(sockAddr));
 	}
-
-	storedDepth = new UINT16[LEN];
-	storedColor = new RGBQUAD[LEN];
 }
 
 Transmission::Transmission()
@@ -69,26 +64,4 @@ Transmission::~Transmission()
 {
 	closesocket(sock);
 	WSACleanup();
-
-	if (storedDepth != NULL) {
-		delete[] storedDepth;
-	}
-	if (storedColor != NULL) {
-		delete[] storedColor;
-	}
-}
-
-void Transmission::sendRGBD(UINT16* sendDepth, RGBQUAD* sendColor)
-{
-	sendData((char*)sendDepth, LEN * sizeof(UINT16));
-	sendData((char*)sendColor, LEN * sizeof(RGBQUAD));
-}
-
-
-void Transmission::recvRGBD(UINT16*& recvDepth, RGBQUAD*& recvColor)
-{
-	recvDepth = this->storedDepth;
-	recvColor = this->storedColor;
-	recvData((char*)recvDepth, LEN * sizeof(UINT16));
-	recvData((char*)recvColor, LEN * sizeof(RGBQUAD));
 }

@@ -4,7 +4,6 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 
 #include <Windows.h>
 #define BUFF_SIZE 1024
-#define LEN 424 * 512
 
 class Transmission {
 private:
@@ -15,9 +14,6 @@ private:
 	sockaddr_in sockAddr;
 	SOCKET sock;
 
-	UINT16* storedDepth;
-	RGBQUAD* storedColor;
-
 	char* getHostIP();
 	void sendData(char* data, int tot);
 	void recvData(char* data, int tot);
@@ -26,8 +22,6 @@ public:
 	Transmission(bool isServer);
 	Transmission();
 	~Transmission();
-	void sendRGBD(UINT16* sendDepth, RGBQUAD* sendCoor);
-	void recvRGBD(UINT16*& recvDepth, RGBQUAD*& recvColor);
 };
 
 #endif

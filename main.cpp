@@ -9,7 +9,7 @@
 #include <windows.h>
 
 #define CREATE_EXE
-//#define TRANSMISSION
+#define TRANSMISSION
 
 byte* buffer = NULL;
 RealsenseGrabber* grabber = NULL;
@@ -57,7 +57,6 @@ DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 {
 	while (true) {
 		Sleep(1);
-		transmission->recvRGBD(depthList[1], colorList[1]);
 	}
 	return 0;
 }
@@ -75,7 +74,7 @@ void start() {
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION
-	transmission = new Transmission(true);
+	transmission = new Transmission();
 	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
 #endif
 }
@@ -89,7 +88,7 @@ void update() {
 	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, color2depth, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
-	// TODO
+	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
 #else
 	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
 #endif
