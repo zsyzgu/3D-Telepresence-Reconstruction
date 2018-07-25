@@ -1,6 +1,8 @@
 #include "Configuration.h"
 #include <fstream>
 #include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
 
 void Configuration::saveExtrinsics(Transformation* transformation)
 {
@@ -15,6 +17,7 @@ void Configuration::saveExtrinsics(Transformation* transformation)
 		transformation++;
 	}
 
+	fout.close();
 	std::cout << "Extrinsics saved." << std::endl;
 }
 
@@ -34,10 +37,75 @@ void Configuration::loadExtrinsics(Transformation* transformation)
 			fin >> transformation->translation.x >> transformation->translation.y >> transformation->translation.z;
 			transformation++;
 		}
+
+		fin.close();
 	} else {
 		for (int i = 0; i < MAX_CAMERAS; i++) {
 			transformation->setIdentity();
 			transformation++;
 		}
+	}
+}
+
+void Configuration::saveBackground(AlignColorMap* alignColorMap)
+{
+	const char* BACKGROUND_FILE = "Background.cfg";
+	FILE* fout = fopen(BACKGROUND_FILE, "w");
+	
+	float* depth = new float[MAX_CAMERAS * DEPTH_W * DEPTH_H];
+	int* color = new int[MAX_CAMERAS * COLOR_W * COLOR_H];
+
+	if (alignColorMap->isBackgroundOn()) {
+		fprintf(fout, "1\n");
+
+		alignColorMap->copyBackground_device2host(depth, (RGBQUAD*)color);
+		for (int i = 0; i < MAX_CAMERAS * DEPTH_W * DEPTH_H; i++) {
+			fprintf(fout, "%f\n", depth[i]);
+		}
+		for (int i = 0; i < MAX_CAMERAS * COLOR_W * COLOR_H; i++) {
+			fprintf(fout, "%d\n", color[i]);
+		}
+	} else {
+		fprintf(fout, "0\n");
+	}
+
+	delete[] depth;
+	delete[] color;
+
+	std::cout << "Background saved." << std::endl;
+}
+
+void Configuration::loadBackground(AlignColorMap* alignColorMap)
+{
+	const char* BACKGROUND_FILE = "Background.cfg";
+	std::fstream file;
+	file.open(BACKGROUND_FILE, std::ios::in);
+
+	if (file) {
+		FILE* fin = fopen(BACKGROUND_FILE, "r");
+
+		bool isRemoveBackground;
+		fscanf(fin, "%d", &isRemoveBackground);
+
+		if (isRemoveBackground) {
+			float* depth = new float[MAX_CAMERAS * DEPTH_W * DEPTH_H];
+			int* color = new int[MAX_CAMERAS * COLOR_W * COLOR_H];
+
+			for (int i = 0; i < MAX_CAMERAS * DEPTH_W * DEPTH_H; i++) {
+				fscanf(fin, "%f", &depth[i]);
+			}
+			for (int i = 0; i < MAX_CAMERAS * COLOR_W * COLOR_H; i++) {
+				fscanf(fin, "%d", &color[i]);
+			}
+			alignColorMap->enableBackground();
+			alignColorMap->copyBackground_host2device(depth, (RGBQUAD*)color);
+
+			delete[] depth;
+			delete[] color;
+		} else {
+			alignColorMap->disableBackground();
+		}
+	} else {
+		alignColorMap->disableBackground();
 	}
 }

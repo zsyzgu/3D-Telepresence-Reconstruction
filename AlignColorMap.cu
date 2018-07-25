@@ -2,6 +2,12 @@
 #include "CudaHandleError.h"
 #include "Parameters.h"
 
+namespace BackgroundNamespace {
+	__constant__ float COLOR_THRESHOLD = 50.0f;
+	__constant__ float DEPTH_THRESHOLD = 0.05f;
+};
+using namespace BackgroundNamespace;
+
 __global__ void kernelAlignProcess(uchar4* alignedColor, float* depth, uchar4* color, Intrinsics depthIntrinsics, Intrinsics colorIntrinsics, Transformation depth2color) {
 	const int MAX_SHIFT = DEPTH_W >> 4;
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -44,14 +50,40 @@ __global__ void kernelAlignProcess(uchar4* alignedColor, float* depth, uchar4* c
 	}
 }
 
-extern "C"
-void cudaAlignInit(RGBQUAD*& alignedColor_device) {
-	HANDLE_ERROR(cudaMalloc(&alignedColor_device, MAX_CAMERAS * COLOR_H * COLOR_W * sizeof(RGBQUAD)));
+__global__ void kernelRemoveBackground(uchar4* color, float* depth, uchar4* colorBackground, float* depthBackground) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < DEPTH_W && y < DEPTH_H) {
+		int id = y * DEPTH_W + x;
+		if (depth[id] != 0 && depthBackground[id] != 0 && fabs(depth[id] - depthBackground[id]) < DEPTH_THRESHOLD) {
+			int cx = x * COLOR_W / DEPTH_W;
+			int cy = y * COLOR_H / DEPTH_H;
+			if (cx < COLOR_W && cy < COLOR_H) {
+				int cid = cy * COLOR_W + cx;
+				uchar4 c0 = color[cid];
+				uchar4 c1 = colorBackground[cid];
+				float colorDiff = (float)(abs(c0.x - c1.x) + abs(c0.y - c1.y) + abs(c0.z - c1.z)) / 3;
+				if (colorDiff < COLOR_THRESHOLD) {
+					depth[id] = 0;
+				}
+			}
+		}
+	}
 }
 
 extern "C"
-void cudaAlignClean(RGBQUAD*& alignedColor_device) {
+void cudaAlignInit(RGBQUAD *& alignedColor_device, float *& depthBackground_device, RGBQUAD *& colorBackground_device) {
+	HANDLE_ERROR(cudaMalloc(&alignedColor_device, MAX_CAMERAS * COLOR_H * COLOR_W * sizeof(RGBQUAD)));
+	HANDLE_ERROR(cudaMalloc(&depthBackground_device, MAX_CAMERAS * DEPTH_H * DEPTH_W * sizeof(float)));
+	HANDLE_ERROR(cudaMalloc(&colorBackground_device, MAX_CAMERAS * COLOR_H * COLOR_W * sizeof(RGBQUAD)));
+}
+
+extern "C"
+void cudaAlignClean(RGBQUAD *& alignedColor_device, float *& depthBackground_device, RGBQUAD *& colorBackground_device) {
 	HANDLE_ERROR(cudaFree(alignedColor_device));
+	HANDLE_ERROR(cudaFree(depthBackground_device));
+	HANDLE_ERROR(cudaFree(colorBackground_device));
 }
 
 extern "C"
@@ -65,5 +97,19 @@ void cudaAlignProcess(int cameras, bool* check, RGBQUAD* alignedColor_device, fl
 			cudaGetLastError();
 		}
 	}
+
 	cudaThreadSynchronize();
+}
+
+extern "C"
+void cudaRemoveBackground(int cameras, bool* check, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* colorBackground_device, float* depthBackground_device) {
+	dim3 threadsPerBlock = dim3(256, 1);
+	dim3 blocksPerGrid = dim3((DEPTH_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (DEPTH_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
+
+	for (int i = 0; i < cameras; i++) {
+		if (check[i]) {
+			kernelRemoveBackground << <blocksPerGrid, threadsPerBlock >> > ((uchar4*)alignedColor_device + i * COLOR_H * COLOR_W, depth_device + i * DEPTH_H * DEPTH_W, (uchar4*)colorBackground_device + i * COLOR_H * COLOR_W, depthBackground_device + i * DEPTH_H * DEPTH_W);
+			cudaGetLastError();
+		}
+	}
 }

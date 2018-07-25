@@ -30,12 +30,19 @@ void saveExtrinsics() {
 	Configuration::saveExtrinsics(world2color);
 }
 
+void saveBackground() {
+	grabber->saveBackground();
+}
+
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "r" && event.keyDown()) {
 		registration();
 	}
 	if (event.getKeySym() == "s" && event.keyDown()) {
 		saveExtrinsics();
+	}
+	if (event.getKeySym() == "b" && event.keyDown()) {
+		saveBackground();
 	}
 }
 
@@ -65,6 +72,7 @@ void start() {
 	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
 	world2color = new Transformation[MAX_CAMERAS];
 	Configuration::loadExtrinsics(world2color);
+	grabber->loadBackground();
 
 #ifdef TRANSMISSION
 	transmission = new Transmission(true);
@@ -145,6 +153,14 @@ extern "C" {
 
 	__declspec(dllexport) void callRegistration() {
 		registration();
+	}
+
+	__declspec(dllexport) void callSaveExtrinsics() {
+		saveExtrinsics();
+	}
+
+	__declspec(dllexport) void callSaveBackground() {
+		saveBackground();
 	}
 
 	__declspec(dllexport) void callStop() {

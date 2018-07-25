@@ -43,6 +43,8 @@ public:
 	~RealsenseGrabber();
 	int getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation*& color2depth, Intrinsics*& depthIntrinscis, Intrinsics*& colorIntrinsics);
 	int getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics);
+	void saveBackground();
+	void loadBackground();
 };
 
 #endif

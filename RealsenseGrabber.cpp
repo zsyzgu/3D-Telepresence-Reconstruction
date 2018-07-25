@@ -1,5 +1,6 @@
 #include "RealsenseGrabber.h"
 #include "Timer.h"
+#include "Configuration.h"
 #include "librealsense2/hpp/rs_sensor.hpp"
 #include "librealsense2/hpp/rs_processing.hpp"
 
@@ -237,4 +238,18 @@ int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsic
 	colorImages = this->colorImagesRGB;
 	colorIntrinsics = this->colorIntrinsics;
 	return devices.size();
+}
+
+void RealsenseGrabber::saveBackground() {
+	if (alignColorMap->isBackgroundOn()) {
+		alignColorMap->disableBackground();
+	} else {
+		alignColorMap->enableBackground(depthFilter->getCurrFrame_device());
+	}
+	Configuration::saveBackground(alignColorMap);
+}
+
+void RealsenseGrabber::loadBackground()
+{
+	Configuration::loadBackground(alignColorMap);
 }
