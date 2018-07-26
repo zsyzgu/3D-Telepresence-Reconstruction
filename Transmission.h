@@ -23,8 +23,6 @@ private:
 	int delayFrames;
 	char** buffer;
 	char* sendBuffer;
-	int sentFrameCnt;
-	int recvFrameCnt;
 
 public:
 	Transmission(int delayFrames);

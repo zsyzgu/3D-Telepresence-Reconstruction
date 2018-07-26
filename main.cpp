@@ -62,7 +62,7 @@ void start() {
 	
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-	volume = new TsdfVolume(2, 2, 2, 0, 0, 1.);
+	volume = new TsdfVolume(2, 2, 2, 0, 0, 1);
 	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
 	world2color = new Transformation[MAX_CAMERAS];
 	Configuration::loadExtrinsics(world2color);
@@ -86,7 +86,6 @@ void update() {
 	if (transmission != NULL) {
 		int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, color2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
 		cameras += remoteCameras;
-		transmission->endFrame();
 	}
 
 	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
