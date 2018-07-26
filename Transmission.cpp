@@ -62,8 +62,11 @@ Transmission::Transmission(int delayFrames)
 	start(isServer());
 	
 	this->delayFrames = delayFrames;
-	buffer = new char*[delayFrames + 1];
-	for (int i = 0; i <= delayFrames; i++) {
+	localFrames = 0;
+	remoteFrames = 0;
+
+	buffer = new char*[MAX_DELAY_FRAME];
+	for (int i = 0; i < MAX_DELAY_FRAME; i++) {
 		buffer[i] = new char[FRAME_BUFFER_SIZE];
 		memset(buffer[i], 0, FRAME_BUFFER_SIZE);
 	}
@@ -77,7 +80,7 @@ Transmission::~Transmission()
 	WSACleanup();
 
 	if (buffer != NULL) {
-		for (int i = 0; i <= delayFrames; i++) {
+		for (int i = 0; i < MAX_DELAY_FRAME; i++) {
 			if (buffer[i] != NULL) {
 				delete[] buffer[i];
 			}
@@ -93,7 +96,8 @@ void Transmission::recvFrame()
 {
 	int len = 0;
 	recvData((char*)(&len), sizeof(int));
-	recvData(buffer[0], len);
+	recvData(buffer[remoteFrames % MAX_DELAY_FRAME], len);
+	remoteFrames++;
 }
 
 void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
@@ -124,9 +128,19 @@ void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device
 
 int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
 {
+	if (localFrames - delayFrames < 0) {
+		localFrames++;
+		return 0;
+	}
+
+	while ((localFrames - delayFrames < remoteFrames) == false) {
+		Sleep(1);
+	}
+
 	int cameras = 0;
 	bool check[MAX_CAMERAS];
-	char* recvBuffer = buffer[delayFrames];
+	char* recvBuffer = buffer[(localFrames - delayFrames) % MAX_DELAY_FRAME];
+	localFrames++;
 	int offset = 0;
 	memcpy(&cameras, recvBuffer + offset, sizeof(int));
 	offset += sizeof(int);
@@ -146,11 +160,6 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 			offset += sizeof(Intrinsics);
 		}
 	}
-
-	for (int i = delayFrames; i >= 1; i--) {
-		buffer[i] = buffer[i - 1];
-	}
-	buffer[0] = recvBuffer;
 
 	return cameras;
 }

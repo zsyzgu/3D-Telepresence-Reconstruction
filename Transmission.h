@@ -23,10 +23,13 @@ private:
 	int delayFrames;
 	char** buffer;
 	char* sendBuffer;
+	int localFrames;
+	int remoteFrames;
 
 public:
 	Transmission(int delayFrames);
 	~Transmission();
+	void setDelayFrames(int delayFrames) { this->delayFrames = delayFrames; }
 	void recvFrame();
 	void sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
 	int getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
