@@ -69,6 +69,9 @@ Transmission::Transmission(int delayFrames)
 	}
 	sendBuffer = new char[FRAME_BUFFER_SIZE];
 	memset(sendBuffer, 0, FRAME_BUFFER_SIZE);
+
+	sentFrameCnt = 0;
+	recvFrameCnt = 0;
 }	
 
 Transmission::~Transmission()
@@ -117,8 +120,13 @@ void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device
 			offset += sizeof(Intrinsics);
 		}
 	}
+
+	while (sentFrameCnt - recvFrameCnt >= delayFrames) {
+		Sleep(1);
+	}
 	sendData((char*)(&offset), sizeof(int));
 	sendData(sendBuffer, offset);
+	sentFrameCnt++;
 }
 
 int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
@@ -145,14 +153,12 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 			offset += sizeof(Intrinsics);
 		}
 	}
-	return cameras;
-}
 
-void Transmission::endFrame()
-{
-	char* lastBuffer = buffer[delayFrames];
+	recvFrameCnt++;
 	for (int i = delayFrames; i >= 1; i--) {
 		buffer[i] = buffer[i - 1];
 	}
-	buffer[0] = lastBuffer;
+	buffer[0] = recvBuffer;
+
+	return cameras;
 }

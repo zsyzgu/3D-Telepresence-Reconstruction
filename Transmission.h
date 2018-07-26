@@ -5,6 +5,7 @@
 #include <Windows.h>
 #include "TsdfVolume.cuh"
 
+
 class Transmission {
 private:
 	const char* IP = "192.168.1.1";
@@ -22,6 +23,8 @@ private:
 	int delayFrames;
 	char** buffer;
 	char* sendBuffer;
+	int sentFrameCnt;
+	int recvFrameCnt;
 
 public:
 	Transmission(int delayFrames);
@@ -29,7 +32,6 @@ public:
 	void recvFrame();
 	void sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
 	int getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
-	void endFrame();
 };
 
 #endif
