@@ -30,6 +30,8 @@ RealsenseGrabber::RealsenseGrabber()
 	for (auto&& device : context.query_devices()) {
 		enableDevice(device);
 	}
+
+	transmission = NULL;
 }
 
 RealsenseGrabber::~RealsenseGrabber()
@@ -196,6 +198,10 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 		if (check[i]) {
 			colorIntrinsics[i] = depthIntrinsics[i].zoom((float)COLOR_W / DEPTH_W, (float)COLOR_H / DEPTH_H);
 		}
+	}
+
+	if (transmission != NULL) {
+		transmission->sendFrame(devices.size(), check, depthImages_device, colorImages_device, color2depth, depthIntrinsics, colorIntrinsics);
 	}
 
 	return devices.size();

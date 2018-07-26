@@ -12,6 +12,7 @@
 #include "DepthFilter.h"
 #include "ColorFilter.h"
 #include "AlignColorMap.h"
+#include "Transmission.h"
 
 class RealsenseGrabber
 {
@@ -38,6 +39,8 @@ private:
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
 
+	Transmission* transmission;
+
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
@@ -45,6 +48,7 @@ public:
 	int getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics);
 	void saveBackground();
 	void loadBackground();
+	void setTransmission(Transmission* transmission) { this->transmission = transmission; }
 };
 
 #endif

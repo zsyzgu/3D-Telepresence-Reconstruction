@@ -65,8 +65,10 @@ Transmission::Transmission(int delayFrames)
 	buffer = new char*[delayFrames + 1];
 	for (int i = 0; i <= delayFrames; i++) {
 		buffer[i] = new char[FRAME_BUFFER_SIZE];
+		memset(buffer[i], 0, FRAME_BUFFER_SIZE);
 	}
 	sendBuffer = new char[FRAME_BUFFER_SIZE];
+	memset(sendBuffer, 0, FRAME_BUFFER_SIZE);
 }	
 
 Transmission::~Transmission()

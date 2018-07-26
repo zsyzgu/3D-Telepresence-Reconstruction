@@ -49,15 +49,13 @@ void startViewer() {
 	viewer->registerKeyboardCallback(keyboardEventOccurred);
 }
 
-#ifdef TRANSMISSION
 DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 {
-	while (true) {
+	while (transmission != NULL) {
 		Sleep(1);
 	}
 	return 0;
 }
-#endif
 
 void start() {
 	cudaSetDevice(0);
@@ -73,6 +71,7 @@ void start() {
 #ifdef TRANSMISSION
 	transmission = new Transmission(2);
 	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
+	grabber->setTransmission(transmission);
 #endif
 }
 
@@ -84,23 +83,22 @@ void update() {
 	Intrinsics* colorIntrinsics;
 	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, color2depth, depthIntrinsics, colorIntrinsics);
 
-#ifdef TRANSMISSION
-	#pragma omp parallel sections
-	{
-		#pragma omp section
+	if (transmission != NULL) {
+		#pragma omp parallel sections
 		{
-			bool check[MAX_CAMERAS] = { true };
-			transmission->sendFrame(cameras, check, depthImages_device, colorImages_device,color2depth, depthIntrinsics, colorIntrinsics);
-			int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, color2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
-			cameras += remoteCameras;
+			#pragma omp section
+			{
+				int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, color2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
+				cameras += remoteCameras;
+			}
+			#pragma omp section
+			{
+				transmission->recvFrame();
+			}
 		}
-		#pragma omp section
-		{
-			transmission->recvFrame();
-		}
+		transmission->endFrame();
 	}
-	transmission->endFrame();
-#endif
+	
 
 	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
 }
@@ -118,11 +116,9 @@ void stop() {
 	if (world2color != NULL) {
 		delete[] world2color;
 	}
-#ifdef TRANSMISSION
 	if (transmission != NULL) {
 		delete transmission;
 	}
-#endif
 }
 
 #ifdef CREATE_EXE
