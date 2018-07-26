@@ -17,10 +17,7 @@ TsdfVolume* volume = NULL;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 Transformation* world2color = NULL;
-
-#ifdef TRANSMISSION
 Transmission* transmission = NULL;
-#endif
 
 void registration() {
 	SceneRegistration::align(grabber, world2color);
@@ -74,7 +71,7 @@ void start() {
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION
-	transmission = new Transmission();
+	transmission = new Transmission(2);
 	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
 #endif
 }
@@ -88,10 +85,24 @@ void update() {
 	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, color2depth, depthIntrinsics, colorIntrinsics);
 
 #ifdef TRANSMISSION
-	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
-#else
-	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
+	#pragma omp parallel sections
+	{
+		#pragma omp section
+		{
+			bool check[MAX_CAMERAS] = { true };
+			transmission->sendFrame(cameras, check, depthImages_device, colorImages_device,color2depth, depthIntrinsics, colorIntrinsics);
+			int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, color2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
+			cameras += remoteCameras;
+		}
+		#pragma omp section
+		{
+			transmission->recvFrame();
+		}
+	}
+	transmission->endFrame();
 #endif
+
+	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
 }
 
 void stop() {

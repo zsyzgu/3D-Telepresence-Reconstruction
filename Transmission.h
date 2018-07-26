@@ -3,7 +3,7 @@
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 
 #include <Windows.h>
-#define BUFF_SIZE 1024
+#include "TsdfVolume.cuh"
 
 class Transmission {
 private:
@@ -14,14 +14,22 @@ private:
 	sockaddr_in sockAddr;
 	SOCKET sock;
 
-	char* getHostIP();
+	bool isServer();
+	void start(bool isServer);
 	void sendData(char* data, int tot);
 	void recvData(char* data, int tot);
 
+	int delayFrames;
+	char** buffer;
+	char* sendBuffer;
+
 public:
-	Transmission(bool isServer);
-	Transmission();
+	Transmission(int delayFrames);
 	~Transmission();
+	void recvFrame();
+	void sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+	int getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+	void endFrame();
 };
 
 #endif
