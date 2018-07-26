@@ -17,6 +17,7 @@ TsdfVolume* volume = NULL;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 Transformation* world2color = NULL;
+Transformation* world2depth = NULL;
 Transmission* transmission = NULL;
 
 void registration() {
@@ -65,11 +66,12 @@ void start() {
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 1);
 	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
 	world2color = new Transformation[MAX_CAMERAS];
+	world2depth = new Transformation[MAX_CAMERAS];
 	Configuration::loadExtrinsics(world2color);
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION
-	transmission = new Transmission(5);
+	transmission = new Transmission(10);
 	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
 	grabber->setTransmission(transmission);
 #endif
@@ -78,17 +80,16 @@ void start() {
 void update() {
 	float* depthImages_device;
 	RGBQUAD* colorImages_device;
-	Transformation* color2depth;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
-	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, color2depth, depthIntrinsics, colorIntrinsics);
+	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 
 	if (transmission != NULL) {
-		int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, color2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
+		int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
 		cameras += remoteCameras;
 	}
 
-	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, color2depth, world2color, depthIntrinsics, colorIntrinsics);
+	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
 }
 
 void stop() {
@@ -103,6 +104,9 @@ void stop() {
 	}
 	if (world2color != NULL) {
 		delete[] world2color;
+	}
+	if (world2depth != NULL) {
+		delete[] world2depth;
 	}
 	if (transmission != NULL) {
 		delete transmission;

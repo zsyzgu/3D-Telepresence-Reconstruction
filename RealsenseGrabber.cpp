@@ -132,7 +132,7 @@ void RealsenseGrabber::convertYUVtoRGBA(UINT8* src, RGBQUAD* dst) {
 	}
 }
 
-int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation*& color2depth, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
 	bool check[MAX_CAMERAS];
 
@@ -189,19 +189,19 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 
 	depthImages_device = depthFilter->getCurrFrame_device();
 	colorImages_device = colorFilter->getCurrFrame_device();
-	color2depth = this->color2depth;
 	depthIntrinsics = this->depthIntrinsics;
 	colorIntrinsics = this->colorIntrinsics;
 
 	colorImages_device = alignColorMap->getAlignedColor_device(devices.size(), check, depthImages_device, colorImages_device, depthIntrinsics, colorIntrinsics, depth2color);
 	for (int i = 0; i < devices.size(); i++) {
 		if (check[i]) {
+			world2depth[i] = color2depth[i] * world2color[i];
 			colorIntrinsics[i] = depthIntrinsics[i].zoom((float)COLOR_W / DEPTH_W, (float)COLOR_H / DEPTH_H);
 		}
 	}
 
 	if (transmission != NULL) {
-		transmission->sendFrame(devices.size(), check, depthImages_device, colorImages_device, color2depth, depthIntrinsics, colorIntrinsics);
+		transmission->sendFrame(devices.size(), check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
 	}
 
 	return devices.size();

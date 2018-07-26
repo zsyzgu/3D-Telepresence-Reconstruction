@@ -100,7 +100,7 @@ void Transmission::recvFrame()
 	remoteFrames++;
 }
 
-void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
+void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
 {
 	int offset = 0;
 	memcpy(sendBuffer + offset, &cameras, sizeof(int));
@@ -113,7 +113,7 @@ void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device
 			offset += DEPTH_H * DEPTH_W * sizeof(float);
 			cudaMemcpy(sendBuffer + offset, colorImages_device + i * COLOR_H * COLOR_W, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
 			offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(sendBuffer + offset, color2depth + i, sizeof(Transmission));
+			memcpy(sendBuffer + offset, world2depth + i, sizeof(Transmission));
 			offset += sizeof(Transmission);
 			memcpy(sendBuffer + offset, depthIntrinsics + i, sizeof(Intrinsics));
 			offset += sizeof(Intrinsics);
@@ -126,7 +126,7 @@ void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device
 	sendData(sendBuffer, offset);
 }
 
-int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* color2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
+int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
 {
 	if (localFrames - delayFrames < 0) {
 		localFrames++;
@@ -152,7 +152,7 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 			offset += DEPTH_H * DEPTH_W * sizeof(float);
 			cudaMemcpy(colorImages_device + i * COLOR_H * COLOR_W, recvBuffer + offset, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyHostToDevice);
 			offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(color2depth + i, recvBuffer + offset, sizeof(Transmission));
+			memcpy(world2depth + i, recvBuffer + offset, sizeof(Transmission));
 			offset += sizeof(Transmission);
 			memcpy(depthIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
 			offset += sizeof(Intrinsics);

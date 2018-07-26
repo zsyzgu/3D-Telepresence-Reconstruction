@@ -17,13 +17,8 @@ TsdfVolume::~TsdfVolume()
 	cudaReleaseVolume();
 }
 
-void TsdfVolume::integrate(byte* result, int cameras, float* depth_device, RGBQUAD* color_device,Transformation* color2depth, Transformation* world2color, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
+void TsdfVolume::integrate(byte* result, int cameras, float* depth_device, RGBQUAD* color_device,Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
 {
-	Transformation world2depth[MAX_CAMERAS];
-	for (int i = 0; i < cameras; i++) {
-		world2depth[i] = color2depth[i] * world2color[i];
-	}
-
 	Vertex* vertex = (Vertex*)(result + 4);
 	cudaIntegrate(cameras, *((int*)result), vertex, depth_device, color_device, world2depth, depthIntrinsics, colorIntrinsics);
 }
