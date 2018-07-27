@@ -1,5 +1,6 @@
 #include "Transmission.h"
 #include "Parameters.h"
+#include "Timer.h"
 #include <iostream>
 
 bool Transmission::isServer()
@@ -137,10 +138,6 @@ void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device
 		}
 	}
 
-	while (isConnected && localFrames > remoteFrames) {
-		Sleep(1);
-	}
-
 	sendData((char*)(&offset), sizeof(int));
 	sendData(sendBuffer, offset);
 }
@@ -151,15 +148,11 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 		localFrames++;
 		return 0;
 	}
-
-	while (isConnected && (localFrames - delayFrames < remoteFrames) == false) {
-		Sleep(1);
-	}
-
 	int cameras = 0;
 	bool check[MAX_CAMERAS];
 	char* recvBuffer = buffer[(localFrames - delayFrames) % MAX_DELAY_FRAME];
 	localFrames++;
+
 	int offset = 0;
 	memcpy(&cameras, recvBuffer + offset, sizeof(int));
 	offset += sizeof(int);
@@ -167,7 +160,6 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 	offset += cameras * sizeof(bool);
 	for (int i = 0; i < cameras; i++) {
 		if (check[i]) {
-			
 			cudaMemcpy(depthImages_device + i * DEPTH_H * DEPTH_W, recvBuffer + offset, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyHostToDevice);
 			offset += DEPTH_H * DEPTH_W * sizeof(float);
 			cudaMemcpy(colorImages_device + i * COLOR_H * COLOR_W, recvBuffer + offset, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyHostToDevice);
@@ -183,3 +175,4 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 
 	return cameras;
 }
+

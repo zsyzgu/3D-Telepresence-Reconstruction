@@ -5,7 +5,6 @@
 #include <Windows.h>
 #include "TsdfVolume.cuh"
 
-
 class Transmission {
 private:
 	const char* IP = "192.168.1.1";

@@ -55,6 +55,8 @@ DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 	while (transmission != NULL && transmission->isConnected) {
 		transmission->recvFrame();
 	}
+
+	std::cout << "Thread 1 stopped" << std::endl;
 	return 0;
 }
 
@@ -71,26 +73,42 @@ void start() {
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION
-	transmission = new Transmission(2);
-	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
+	transmission = new Transmission(1);
+	//CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
 	grabber->setTransmission(transmission);
 #endif
 }
 
 void update() {
+	Timer timer;
+
 	float* depthImages_device;
 	RGBQUAD* colorImages_device;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
 
-	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+#pragma omp parallel sections
+	{
+#pragma omp section
+		{
+			int cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 
-	if (transmission != NULL && transmission->isConnected) {
-		int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
-		cameras += remoteCameras;
+			if (transmission != NULL && transmission->isConnected) {
+				int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
+				cameras += remoteCameras;
+			}
+
+			volume->integrate(buffer, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+		}
+#pragma omp section
+		{
+			transmission->recvFrame();
+		}
 	}
 
-	volume->integrate(buffer, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+	while (timer.getTime() < 0.02) {
+		Sleep(1);
+	}
 }
 
 void stop() {
@@ -112,7 +130,7 @@ void stop() {
 	if (transmission != NULL) {
 		delete transmission;
 	}
-	std::cout << "Stopped" << std::endl;
+	std::cout << "Thread 0 stopped" << std::endl;
 }
 
 #ifdef CREATE_EXE
