@@ -9,7 +9,7 @@
 class Transmission {
 private:
 	const char* IP = "192.168.1.1";
-	const int port = 1234;
+	const int port = 1288;
 
 	WSADATA wsaData;
 	sockaddr_in sockAddr;

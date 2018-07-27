@@ -33,6 +33,11 @@ void Transmission::start(bool isServer)
 		sock = socket(AF_INET, SOCK_STREAM, 0);
 		connect(sock, (SOCKADDR*)&sockAddr, sizeof(sockAddr));
 	}
+
+	int nSendBuf = 32 * 1024;
+	std::cout << setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (const char*)&nSendBuf, sizeof(int));
+	int nRecvBuf = 32 * 1024;
+	std::cout << setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (const char*)&nRecvBuf, sizeof(int));
 }
 
 void Transmission::sendData(char* data, int tot)
@@ -40,19 +45,21 @@ void Transmission::sendData(char* data, int tot)
 	int offset = 0;
 	while (offset != tot) {
 		int len = min(BUFF_SIZE, tot - offset);
-		send(sock, data + offset, len, 0);
-		offset += len;
+		int ret = send(sock, data + offset, len, 0);
+		if (ret > 0) {
+			offset += ret;
+		}
 	}
 }
 
 void Transmission::recvData(char* data, int tot)
 {
-	int len = 0;
 	int offset = 0;
-	while (len = recv(sock, data + offset, min(BUFF_SIZE, tot - offset), 0)) {
-		offset += len;
-		if (offset == tot) {
-			break;
+	while (offset != tot) {
+		int len = min(BUFF_SIZE, tot - offset);
+		int ret = recv(sock, data + offset, len, 0);
+		if (ret > 0) {
+			offset += ret;
 		}
 	}
 }
@@ -98,6 +105,7 @@ void Transmission::recvFrame()
 	recvData((char*)(&len), sizeof(int));
 	recvData(buffer[remoteFrames % MAX_DELAY_FRAME], len);
 	remoteFrames++;
+	//std::cout << "remote frame = " << remoteFrames << std::endl;
 }
 
 void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
@@ -122,6 +130,10 @@ void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device
 		}
 	}
 
+	while (localFrames > remoteFrames) {
+		Sleep(1);
+	}
+
 	sendData((char*)(&offset), sizeof(int));
 	sendData(sendBuffer, offset);
 }
@@ -141,6 +153,7 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 	bool check[MAX_CAMERAS];
 	char* recvBuffer = buffer[(localFrames - delayFrames) % MAX_DELAY_FRAME];
 	localFrames++;
+	//std::cout << "local frame = " << localFrames << std::endl;
 	int offset = 0;
 	memcpy(&cameras, recvBuffer + offset, sizeof(int));
 	offset += sizeof(int);

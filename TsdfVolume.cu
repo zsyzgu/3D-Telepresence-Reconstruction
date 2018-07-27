@@ -383,6 +383,6 @@ void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_devic
 
 		HANDLE_ERROR(cudaMemcpy(vertex, vertex_device, triSize * 3 * sizeof(Vertex), cudaMemcpyDeviceToHost));
 	} else {
-		std::cout << "vertex size limit exceeded" << std::endl;
+		std::cout << "vertex size limit exceeded (size = " << triSize * 3 << ")" << std::endl;
 	}
 }

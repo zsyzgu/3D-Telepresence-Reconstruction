@@ -71,7 +71,7 @@ void start() {
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION
-	transmission = new Transmission(10);
+	transmission = new Transmission(2);
 	CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
 	grabber->setTransmission(transmission);
 #endif
@@ -82,6 +82,7 @@ void update() {
 	RGBQUAD* colorImages_device;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
+
 	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 
 	if (transmission != NULL) {
@@ -111,6 +112,7 @@ void stop() {
 	if (transmission != NULL) {
 		delete transmission;
 	}
+	std::cout << "Stopped" << std::endl;
 }
 
 #ifdef CREATE_EXE

@@ -140,12 +140,15 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 		rs2::pipeline pipeline = devices[deviceId];
 		rs2::frameset frameset;
 		check[deviceId] = pipeline.poll_for_frames(&frameset);
+		if (frameset.size() != 2) {
+			check[deviceId] = false;
+		}
 
 		if (check[deviceId] == false) {
 			std::cout << deviceId << " Failed" << std::endl;
 		}
 
-		if (check[deviceId] && frameset.size() > 0) {
+		if (check[deviceId]) {
 			rs2::stream_profile depthProfile;
 			rs2::stream_profile colorProfile;
 
@@ -215,8 +218,11 @@ int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsic
 		rs2::pipeline pipeline = devices[deviceId];
 		rs2::frameset frameset;
 		check[deviceId] = pipeline.poll_for_frames(&frameset);
+		if (frameset.size() != 2) {
+			check[deviceId] = false;
+		}
 
-		if (check[deviceId] && frameset.size() > 0) {
+		if (check[deviceId]) {
 			for (int i = 0; i < frameset.size(); i++) {
 				rs2::frame frame = frameset[i];
 				rs2::stream_profile profile = frame.get_profile();
