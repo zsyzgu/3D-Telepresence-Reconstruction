@@ -203,7 +203,7 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 		}
 	}
 
-	if (transmission != NULL) {
+	if (transmission != NULL && transmission->isConnected) {
 		transmission->sendFrame(devices.size(), check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
 	}
 

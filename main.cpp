@@ -52,7 +52,7 @@ void startViewer() {
 
 DWORD WINAPI TransmissionRecvThread(LPVOID pM)
 {
-	while (transmission != NULL) {
+	while (transmission != NULL && transmission->isConnected) {
 		transmission->recvFrame();
 	}
 	return 0;
@@ -85,7 +85,7 @@ void update() {
 
 	int cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 
-	if (transmission != NULL) {
+	if (transmission != NULL && transmission->isConnected) {
 		int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
 		cameras += remoteCameras;
 	}

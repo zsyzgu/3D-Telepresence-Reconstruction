@@ -29,6 +29,7 @@ private:
 public:
 	Transmission(int delayFrames);
 	~Transmission();
+	bool isConnected;
 	void setDelayFrames(int delayFrames) { this->delayFrames = delayFrames; }
 	void recvFrame();
 	void sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);

@@ -34,6 +34,8 @@ void Transmission::start(bool isServer)
 		connect(sock, (SOCKADDR*)&sockAddr, sizeof(sockAddr));
 	}
 
+	isConnected = true;
+
 	/*int nSendBuf = 128 * 1024 * 1024;
 	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (const char*)&nSendBuf, sizeof(int));
 	int nRecvBuf = 128 * 1024 * 1024;
@@ -49,6 +51,9 @@ void Transmission::sendData(char* data, int tot)
 		if (ret > 0) {
 			offset += ret;
 		}
+		else if (ret == -1) {
+			isConnected = false;
+		}
 	}
 }
 
@@ -60,6 +65,9 @@ void Transmission::recvData(char* data, int tot)
 		int ret = recv(sock, data + offset, len, 0);
 		if (ret > 0) {
 			offset += ret;
+		}
+		else if (ret == -1) {
+			isConnected = false;
 		}
 	}
 }
@@ -129,7 +137,7 @@ void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device
 		}
 	}
 
-	while (localFrames > remoteFrames) {
+	while (isConnected && localFrames > remoteFrames) {
 		Sleep(1);
 	}
 
@@ -144,7 +152,7 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 		return 0;
 	}
 
-	while ((localFrames - delayFrames < remoteFrames) == false) {
+	while (isConnected && (localFrames - delayFrames < remoteFrames) == false) {
 		Sleep(1);
 	}
 
