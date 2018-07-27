@@ -34,10 +34,10 @@ void Transmission::start(bool isServer)
 		connect(sock, (SOCKADDR*)&sockAddr, sizeof(sockAddr));
 	}
 
-	int nSendBuf = 32 * 1024;
-	std::cout << setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (const char*)&nSendBuf, sizeof(int));
-	int nRecvBuf = 32 * 1024;
-	std::cout << setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (const char*)&nRecvBuf, sizeof(int));
+	/*int nSendBuf = 128 * 1024 * 1024;
+	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (const char*)&nSendBuf, sizeof(int));
+	int nRecvBuf = 128 * 1024 * 1024;
+	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (const char*)&nRecvBuf, sizeof(int));*/
 }
 
 void Transmission::sendData(char* data, int tot)
@@ -105,7 +105,6 @@ void Transmission::recvFrame()
 	recvData((char*)(&len), sizeof(int));
 	recvData(buffer[remoteFrames % MAX_DELAY_FRAME], len);
 	remoteFrames++;
-	//std::cout << "remote frame = " << remoteFrames << std::endl;
 }
 
 void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
@@ -121,8 +120,8 @@ void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device
 			offset += DEPTH_H * DEPTH_W * sizeof(float);
 			cudaMemcpy(sendBuffer + offset, colorImages_device + i * COLOR_H * COLOR_W, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
 			offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(sendBuffer + offset, world2depth + i, sizeof(Transmission));
-			offset += sizeof(Transmission);
+			memcpy(sendBuffer + offset, world2depth + i, sizeof(Transformation));
+			offset += sizeof(Transformation);
 			memcpy(sendBuffer + offset, depthIntrinsics + i, sizeof(Intrinsics));
 			offset += sizeof(Intrinsics);
 			memcpy(sendBuffer + offset, colorIntrinsics + i, sizeof(Intrinsics));
@@ -153,7 +152,6 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 	bool check[MAX_CAMERAS];
 	char* recvBuffer = buffer[(localFrames - delayFrames) % MAX_DELAY_FRAME];
 	localFrames++;
-	//std::cout << "local frame = " << localFrames << std::endl;
 	int offset = 0;
 	memcpy(&cameras, recvBuffer + offset, sizeof(int));
 	offset += sizeof(int);
@@ -161,12 +159,13 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 	offset += cameras * sizeof(bool);
 	for (int i = 0; i < cameras; i++) {
 		if (check[i]) {
+			
 			cudaMemcpy(depthImages_device + i * DEPTH_H * DEPTH_W, recvBuffer + offset, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyHostToDevice);
 			offset += DEPTH_H * DEPTH_W * sizeof(float);
 			cudaMemcpy(colorImages_device + i * COLOR_H * COLOR_W, recvBuffer + offset, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyHostToDevice);
 			offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(world2depth + i, recvBuffer + offset, sizeof(Transmission));
-			offset += sizeof(Transmission);
+			memcpy(world2depth + i, recvBuffer + offset, sizeof(Transformation));
+			offset += sizeof(Transformation);
 			memcpy(depthIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
 			offset += sizeof(Intrinsics);
 			memcpy(colorIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
