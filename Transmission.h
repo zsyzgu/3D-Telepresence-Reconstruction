@@ -6,7 +6,7 @@
 #include "TsdfVolume.cuh"
 
 class Transmission {
-private:
+public:
 	const char* IP = "192.168.1.1";
 	const int port = 1288;
 

@@ -50,18 +50,9 @@ void startViewer() {
 	viewer->registerKeyboardCallback(keyboardEventOccurred);
 }
 
-DWORD WINAPI TransmissionRecvThread(LPVOID pM)
-{
-	while (transmission != NULL && transmission->isConnected) {
-		transmission->recvFrame();
-	}
-
-	std::cout << "Thread 1 stopped" << std::endl;
-	return 0;
-}
-
 void start() {
 	cudaSetDevice(0);
+	omp_set_num_threads(2);
 	
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
@@ -73,24 +64,20 @@ void start() {
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION
-	transmission = new Transmission(1);
-	//CreateThread(NULL, 0, TransmissionRecvThread, NULL, 0, NULL);
+	transmission = new Transmission(5);
 	grabber->setTransmission(transmission);
 #endif
 }
 
 void update() {
-	Timer timer;
-
-	float* depthImages_device;
-	RGBQUAD* colorImages_device;
-	Intrinsics* depthIntrinsics;
-	Intrinsics* colorIntrinsics;
-
-#pragma omp parallel sections
+	#pragma omp parallel sections
 	{
-#pragma omp section
+		#pragma omp section
 		{
+			float* depthImages_device;
+			RGBQUAD* colorImages_device;
+			Intrinsics* depthIntrinsics;
+			Intrinsics* colorIntrinsics;
 			int cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 
 			if (transmission != NULL && transmission->isConnected) {
@@ -100,14 +87,12 @@ void update() {
 
 			volume->integrate(buffer, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
 		}
-#pragma omp section
+		#pragma omp section
 		{
-			transmission->recvFrame();
+			if (transmission != NULL && transmission->isConnected) {
+				transmission->recvFrame();
+			}
 		}
-	}
-
-	while (timer.getTime() < 0.02) {
-		Sleep(1);
 	}
 }
 
@@ -140,13 +125,12 @@ int main(int argc, char *argv[]) {
 	startViewer();
 
 	Timer timer;
-
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce();
 
 		timer.reset();
 		update();
-		timer.outputTime();
+		timer.outputTime(5);
 
 		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
