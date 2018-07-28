@@ -70,19 +70,23 @@ void start() {
 }
 
 void update() {
+	float* depthImages_device;
+	RGBQUAD* colorImages_device;
+	Intrinsics* depthIntrinsics;
+	Intrinsics* colorIntrinsics;
+	bool* check;
+	int cameras = grabber->getRGBD(check, depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+
+	if (transmission != NULL && transmission->isConnected) {
+		transmission->prepareSendFrame(cameras, check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+	}
+
 	#pragma omp parallel sections
 	{
 		#pragma omp section
 		{
-			float* depthImages_device;
-			RGBQUAD* colorImages_device;
-			Intrinsics* depthIntrinsics;
-			Intrinsics* colorIntrinsics;
-			bool* check;
-			int cameras = grabber->getRGBD(check, depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
-
 			if (transmission != NULL && transmission->isConnected) {
-				transmission->sendFrame(cameras, check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+				transmission->sendFrame();
 				int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
 				cameras += remoteCameras;
 			}

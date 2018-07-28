@@ -123,30 +123,32 @@ void Transmission::recvFrame()
 	remoteFrames++;
 }
 
-void Transmission::sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
+void Transmission::prepareSendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
 {
-	int offset = 0;
-	memcpy(sendBuffer + offset, &cameras, sizeof(int));
-	offset += sizeof(int);
-	memcpy(sendBuffer + offset, check, cameras * sizeof(bool));
-	offset += cameras * sizeof(bool);
+	sendOffset = 0;
+	memcpy(sendBuffer + sendOffset, &cameras, sizeof(int));
+	sendOffset += sizeof(int);
+	memcpy(sendBuffer + sendOffset, check, cameras * sizeof(bool));
+	sendOffset += cameras * sizeof(bool);
 	for (int i = 0; i < cameras; i++) {
 		if (check[i]) {
-			cudaMemcpy(sendBuffer + offset, depthImages_device + i * DEPTH_H * DEPTH_W, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyDeviceToHost);
-			offset += DEPTH_H * DEPTH_W * sizeof(float);
-			cudaMemcpy(sendBuffer + offset, colorImages_device + i * COLOR_H * COLOR_W, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
-			offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(sendBuffer + offset, world2depth + i, sizeof(Transformation));
-			offset += sizeof(Transformation);
-			memcpy(sendBuffer + offset, depthIntrinsics + i, sizeof(Intrinsics));
-			offset += sizeof(Intrinsics);
-			memcpy(sendBuffer + offset, colorIntrinsics + i, sizeof(Intrinsics));
-			offset += sizeof(Intrinsics);
+			cudaMemcpy(sendBuffer + sendOffset, depthImages_device + i * DEPTH_H * DEPTH_W, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyDeviceToHost);
+			sendOffset += DEPTH_H * DEPTH_W * sizeof(float);
+			cudaMemcpy(sendBuffer + sendOffset, colorImages_device + i * COLOR_H * COLOR_W, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
+			sendOffset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
+			memcpy(sendBuffer + sendOffset, world2depth + i, sizeof(Transformation));
+			sendOffset += sizeof(Transformation);
+			memcpy(sendBuffer + sendOffset, depthIntrinsics + i, sizeof(Intrinsics));
+			sendOffset += sizeof(Intrinsics);
+			memcpy(sendBuffer + sendOffset, colorIntrinsics + i, sizeof(Intrinsics));
+			sendOffset += sizeof(Intrinsics);
 		}
 	}
+}
 
-	sendData((char*)(&offset), sizeof(int));
-	sendData(sendBuffer, offset);
+void Transmission::sendFrame() {
+	sendData((char*)(&sendOffset), sizeof(int));
+	sendData(sendBuffer, sendOffset);
 }
 
 int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)

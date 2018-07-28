@@ -21,6 +21,7 @@ public:
 
 	int delayFrames;
 	char** buffer;
+	int sendOffset;
 	char* sendBuffer;
 	int localFrames;
 	int remoteFrames;
@@ -31,7 +32,8 @@ public:
 	bool isConnected;
 	void setDelayFrames(int delayFrames) { this->delayFrames = delayFrames; }
 	void recvFrame();
-	void sendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+	void prepareSendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+	void sendFrame();
 	int getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
 };
 
