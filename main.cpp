@@ -9,7 +9,7 @@
 #include <windows.h>
 
 #define CREATE_EXE
-#define TRANSMISSION
+//#define TRANSMISSION
 #define IS_SERVER true
 
 byte* buffer = NULL;
@@ -69,16 +69,20 @@ void start() {
 #endif
 }
 
-void update() {
-	float* depthImages_device;
-	RGBQUAD* colorImages_device;
-	Intrinsics* depthIntrinsics;
-	Intrinsics* colorIntrinsics;
-	bool* check;
-	int cameras = grabber->getRGBD(check, depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+float* depthImages_device = NULL;
+RGBQUAD* colorImages_device;
+Intrinsics* depthIntrinsics;
+Intrinsics* colorIntrinsics;
+bool* check;
+int cameras;
 
-	if (transmission != NULL && transmission->isConnected) {
-		transmission->prepareSendFrame(cameras, check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+void update() {
+	if (depthImages_device == NULL) {
+		cameras = grabber->getRGBD(check, depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+
+		if (transmission != NULL && transmission->isConnected) {
+			transmission->prepareSendFrame(cameras, check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+		}
 	}
 
 	#pragma omp parallel sections
@@ -92,6 +96,12 @@ void update() {
 			}
 
 			volume->integrate(buffer, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+
+			cameras = grabber->getRGBD(check, depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+
+			if (transmission != NULL && transmission->isConnected) {
+				transmission->prepareSendFrame(cameras, check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+			}
 		}
 		#pragma omp section
 		{
@@ -121,7 +131,7 @@ void stop() {
 	if (transmission != NULL) {
 		delete transmission;
 	}
-	std::cout << "Thread 0 stopped" << std::endl;
+	std::cout << "stopped" << std::endl;
 }
 
 #ifdef CREATE_EXE
@@ -136,7 +146,7 @@ int main(int argc, char *argv[]) {
 
 		timer.reset();
 		update();
-		timer.outputTime(5);
+		timer.outputTime();
 
 		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
@@ -144,32 +154,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	stop();
-
-	/*transmission = new Transmission(IS_SERVER, 1);
-
-	const int SIZE = 20000000;
-
-	char* sendBuffer = new char[SIZE];
-	char* recvBuffer = new char[SIZE];
-
-	Timer timer;
-	for (int i = 0; i < 1000; i++) {
-		timer.reset();
-		#pragma omp parallel sections
-		{
-			#pragma omp section
-			{
-				transmission->sendData(sendBuffer, SIZE);
-			}
-			#pragma omp section
-			{
-				transmission->recvData(recvBuffer, SIZE);
-			}
-		}
-		timer.outputTime(20);
-	}
-
-	delete transmission;*/
 
 	return 0;
 }
