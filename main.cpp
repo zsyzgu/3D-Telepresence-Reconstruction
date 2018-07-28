@@ -10,6 +10,7 @@
 
 #define CREATE_EXE
 #define TRANSMISSION
+#define IS_SERVER true
 
 byte* buffer = NULL;
 RealsenseGrabber* grabber = NULL;
@@ -64,7 +65,7 @@ void start() {
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION
-	transmission = new Transmission(5);
+	transmission = new Transmission(IS_SERVER, 5);
 	grabber->setTransmission(transmission);
 #endif
 }
@@ -121,7 +122,7 @@ void stop() {
 #ifdef CREATE_EXE
 
 int main(int argc, char *argv[]) {
-	start();
+	/*start();
 	startViewer();
 
 	Timer timer;
@@ -137,7 +138,23 @@ int main(int argc, char *argv[]) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
 	}
-	stop();
+	stop();*/
+
+	transmission = new Transmission(IS_SERVER, 1);
+
+	const int SIZE = 10000000;
+
+	char* sendBuffer = new char[SIZE];
+	char* recvBuffer = new char[SIZE];
+
+	Timer timer;
+	for (int i = 0; i < 100; i++) {
+		timer.reset();
+		transmission->sendData(sendBuffer, SIZE);
+		timer.outputTime();
+	}
+
+	delete transmission;
 
 	return 0;
 }

@@ -3,14 +3,21 @@
 #include "Timer.h"
 #include <iostream>
 
-bool Transmission::isServer()
+/*bool Transmission::isServer()
 {
-	char hostName[256];
-	gethostname(hostName, sizeof(hostName));
-	HOSTENT* host = gethostbyname(hostName);
-	char* hostIP = inet_ntoa(((in_addr*)*host->h_addr_list)[0]);
+	char hostname[260];
+	int ret = gethostname(hostname, sizeof(hostname));
+	if (ret == -1) {
+		return false;
+	}
+	struct hostent *host = gethostbyname(hostname);
+	if (NULL == host) {
+		return false;
+	}
+	in_addr* addr_list = (in_addr*)*host->h_addr_list;
+	char* hostIP = inet_ntoa(addr_list[0]);
 	return strcmp(hostIP, IP) == 0;
-}
+}*/
 
 void Transmission::start(bool isServer)
 {
@@ -73,9 +80,9 @@ void Transmission::recvData(char* data, int tot)
 	}
 }
 
-Transmission::Transmission(int delayFrames)
+Transmission::Transmission(bool isServer, int delayFrames)
 {
-	start(isServer());
+	start(isServer);
 	
 	this->delayFrames = delayFrames;
 	localFrames = 0;

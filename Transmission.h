@@ -14,7 +14,7 @@ public:
 	sockaddr_in sockAddr;
 	SOCKET sock;
 
-	bool isServer();
+	//bool isServer();
 	void start(bool isServer);
 	void sendData(char* data, int tot);
 	void recvData(char* data, int tot);
@@ -26,7 +26,7 @@ public:
 	int remoteFrames;
 
 public:
-	Transmission(int delayFrames);
+	Transmission(bool isServer, int delayFrames);
 	~Transmission();
 	bool isConnected;
 	void setDelayFrames(int delayFrames) { this->delayFrames = delayFrames; }
