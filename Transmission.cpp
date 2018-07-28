@@ -53,7 +53,7 @@ void Transmission::start(bool isServer)
 void Transmission::sendData(char* data, int tot)
 {
 	int offset = 0;
-	while (offset != tot) {
+	while (isConnected && offset != tot) {
 		int len = min(BUFF_SIZE, tot - offset);
 		int ret = send(sock, data + offset, len, 0);
 		if (ret > 0) {
@@ -68,7 +68,7 @@ void Transmission::sendData(char* data, int tot)
 void Transmission::recvData(char* data, int tot)
 {
 	int offset = 0;
-	while (offset != tot) {
+	while (isConnected && offset != tot) {
 		int len = min(BUFF_SIZE, tot - offset);
 		int ret = recv(sock, data + offset, len, 0);
 		if (ret > 0) {

@@ -66,6 +66,7 @@ void start() {
 
 #ifdef TRANSMISSION
 	transmission = new Transmission(IS_SERVER, 5);
+	grabber->setTransmission(transmission);
 #endif
 }
 
@@ -127,23 +128,23 @@ void stop() {
 
 int main(int argc, char *argv[]) {
 	start();
-	startViewer();
 
 	Timer timer;
+	startViewer();
 	while (!viewer->wasStopped()) {
-		//viewer->spinOnce();
+		viewer->spinOnce();
 
 		timer.reset();
 		update();
 		timer.outputTime();
 
-		/*cloud = volume->getPointCloudFromMesh(buffer);
+		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
-		}*/
+		}
 	}
-	stop();
 
+	stop();
 	return 0;
 }
 
