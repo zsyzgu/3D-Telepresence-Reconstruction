@@ -38,15 +38,16 @@ private:
 	Transformation* color2depth;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
-	bool* check;
+	Transmission* transmission;
 
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(bool*& check, float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinscis, Intrinsics*& colorIntrinsics);
+	int getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinscis, Intrinsics*& colorIntrinsics);
 	int getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics);
 	void saveBackground();
 	void loadBackground();
+	void setTransmission(Transmission* transmission) { this->transmission = transmission; }
 };
 
 #endif

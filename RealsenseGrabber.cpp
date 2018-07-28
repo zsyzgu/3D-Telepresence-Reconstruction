@@ -25,7 +25,7 @@ RealsenseGrabber::RealsenseGrabber()
 	color2depth = new Transformation[MAX_CAMERAS];
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
-	check = new bool[MAX_CAMERAS];
+	transmission = NULL;
 
 	rs2::context context;
 	for (auto&& device : context.query_devices()) {
@@ -80,9 +80,6 @@ RealsenseGrabber::~RealsenseGrabber()
 	if (colorIntrinsics != NULL) {
 		delete[] colorIntrinsics;
 	}
-	if (check != NULL) {
-		delete[] check;
-	}
 	for (int i = 0; i < devices.size(); i++) {
 		devices[i].stop();
 	}
@@ -134,21 +131,18 @@ void RealsenseGrabber::convertYUVtoRGBA(UINT8* src, RGBQUAD* dst) {
 	}
 }
 
-int RealsenseGrabber::getRGBD(bool*& check, float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
 	depthImages_device = depthFilter->getCurrFrame_device();
 	colorImages_device = colorFilter->getCurrFrame_device();
 	depthIntrinsics = this->depthIntrinsics;
 	colorIntrinsics = this->colorIntrinsics;
-	check = this->check;
+	bool check[MAX_CAMERAS] = { false };
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
-		rs2::frameset frameset;
-		check[deviceId] = pipeline.poll_for_frames(&frameset);
-		if (frameset.size() != 2) {
-			check[deviceId] = false;
-		}
+		rs2::frameset frameset = pipeline.wait_for_frames();
+		check[deviceId] = (frameset.size() == 2);
 
 		if (check[deviceId] == false) {
 			std::cout << deviceId << " Failed" << std::endl;
@@ -204,6 +198,10 @@ int RealsenseGrabber::getRGBD(bool*& check, float*& depthImages_device, RGBQUAD*
 		}
 	}
 
+	if (transmission != NULL && transmission->isConnected) {
+		transmission->prepareSendFrame(devices.size(), check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+	}
+
 	return devices.size();
 }
 
@@ -213,11 +211,8 @@ int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsic
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
-		rs2::frameset frameset;
-		check[deviceId] = pipeline.poll_for_frames(&frameset);
-		if (frameset.size() != 2) {
-			check[deviceId] = false;
-		}
+		rs2::frameset frameset = pipeline.wait_for_frames();
+		check[deviceId] = (frameset.size() == 2);
 
 		if (check[deviceId]) {
 			for (int i = 0; i < frameset.size(); i++) {

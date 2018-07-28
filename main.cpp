@@ -9,7 +9,7 @@
 #include <windows.h>
 
 #define CREATE_EXE
-//#define TRANSMISSION
+#define TRANSMISSION
 #define IS_SERVER true
 
 byte* buffer = NULL;
@@ -69,20 +69,15 @@ void start() {
 #endif
 }
 
-float* depthImages_device = NULL;
+int cameras = 0;
+float* depthImages_device;
 RGBQUAD* colorImages_device;
 Intrinsics* depthIntrinsics;
 Intrinsics* colorIntrinsics;
-bool* check;
-int cameras;
 
 void update() {
-	if (depthImages_device == NULL) {
-		cameras = grabber->getRGBD(check, depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
-
-		if (transmission != NULL && transmission->isConnected) {
-			transmission->prepareSendFrame(cameras, check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
-		}
+	if (cameras == 0) {
+		cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 	}
 
 	#pragma omp parallel sections
@@ -91,17 +86,11 @@ void update() {
 		{
 			if (transmission != NULL && transmission->isConnected) {
 				transmission->sendFrame();
-				int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
-				cameras += remoteCameras;
+				cameras += transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
 			}
 
 			volume->integrate(buffer, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
-
-			cameras = grabber->getRGBD(check, depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
-
-			if (transmission != NULL && transmission->isConnected) {
-				transmission->prepareSendFrame(cameras, check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
-			}
+			cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 		}
 		#pragma omp section
 		{
@@ -142,16 +131,16 @@ int main(int argc, char *argv[]) {
 
 	Timer timer;
 	while (!viewer->wasStopped()) {
-		viewer->spinOnce();
+		//viewer->spinOnce();
 
 		timer.reset();
 		update();
 		timer.outputTime();
 
-		cloud = volume->getPointCloudFromMesh(buffer);
+		/*cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
-		}
+		}*/
 	}
 	stop();
 
