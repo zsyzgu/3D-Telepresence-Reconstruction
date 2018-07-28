@@ -25,13 +25,12 @@ RealsenseGrabber::RealsenseGrabber()
 	color2depth = new Transformation[MAX_CAMERAS];
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
+	check = new bool[MAX_CAMERAS];
 
 	rs2::context context;
 	for (auto&& device : context.query_devices()) {
 		enableDevice(device);
 	}
-
-	transmission = NULL;
 }
 
 RealsenseGrabber::~RealsenseGrabber()
@@ -80,6 +79,9 @@ RealsenseGrabber::~RealsenseGrabber()
 	}
 	if (colorIntrinsics != NULL) {
 		delete[] colorIntrinsics;
+	}
+	if (check != NULL) {
+		delete[] check;
 	}
 	for (int i = 0; i < devices.size(); i++) {
 		devices[i].stop();
@@ -132,9 +134,13 @@ void RealsenseGrabber::convertYUVtoRGBA(UINT8* src, RGBQUAD* dst) {
 	}
 }
 
-int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGBD(bool*& check, float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
 {
-	bool check[MAX_CAMERAS];
+	depthImages_device = depthFilter->getCurrFrame_device();
+	colorImages_device = colorFilter->getCurrFrame_device();
+	depthIntrinsics = this->depthIntrinsics;
+	colorIntrinsics = this->colorIntrinsics;
+	check = this->check;
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
@@ -159,41 +165,36 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 
 				if (profile.stream_type() == RS2_STREAM_DEPTH) {
 					depthProfile = profile;
-					this->depthIntrinsics[deviceId].fx = intrinsics.fx;
-					this->depthIntrinsics[deviceId].fy = intrinsics.fy;
-					this->depthIntrinsics[deviceId].ppx = intrinsics.ppx;
-					this->depthIntrinsics[deviceId].ppy = intrinsics.ppy;
-					memcpy(this->depthImages[deviceId], frame.get_data(), DEPTH_H * DEPTH_W * sizeof(UINT16));
+					depthIntrinsics[deviceId].fx = intrinsics.fx;
+					depthIntrinsics[deviceId].fy = intrinsics.fy;
+					depthIntrinsics[deviceId].ppx = intrinsics.ppx;
+					depthIntrinsics[deviceId].ppy = intrinsics.ppy;
+					memcpy(depthImages[deviceId], frame.get_data(), DEPTH_H * DEPTH_W * sizeof(UINT16));
 				}
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
 					colorProfile = profile;
-					this->colorIntrinsics[deviceId].fx = intrinsics.fx;
-					this->colorIntrinsics[deviceId].fy = intrinsics.fy;
-					this->colorIntrinsics[deviceId].ppx = intrinsics.ppx;
-					this->colorIntrinsics[deviceId].ppy = intrinsics.ppy;
-					memcpy(this->colorImages[deviceId], frame.get_data(), 2 * COLOR_H * COLOR_W * sizeof(UINT8));
+					colorIntrinsics[deviceId].fx = intrinsics.fx;
+					colorIntrinsics[deviceId].fy = intrinsics.fy;
+					colorIntrinsics[deviceId].ppx = intrinsics.ppx;
+					colorIntrinsics[deviceId].ppy = intrinsics.ppy;
+					memcpy(colorImages[deviceId], frame.get_data(), 2 * COLOR_H * COLOR_W * sizeof(UINT8));
 				}
 			}
 
 			rs2_extrinsics d2cExtrinsics = depthProfile.get_extrinsics_to(colorProfile);
-			this->depth2color[deviceId] = Transformation(d2cExtrinsics.rotation, d2cExtrinsics.translation);
+			depth2color[deviceId] = Transformation(d2cExtrinsics.rotation, d2cExtrinsics.translation);
 			rs2_extrinsics c2dExtrinsics = colorProfile.get_extrinsics_to(depthProfile);
-			this->color2depth[deviceId] = Transformation(c2dExtrinsics.rotation, c2dExtrinsics.translation);
+			color2depth[deviceId] = Transformation(c2dExtrinsics.rotation, c2dExtrinsics.translation);
 		}
 	}
 	
 	for (int i = 0; i < devices.size(); i++) {
 		if (check[i]) {
-			depthFilter->setConvertFactor(i, this->depthIntrinsics[i].fx * convertFactors[i]);
-			depthFilter->process(i, this->depthImages[i]);
-			colorFilter->process(i, this->colorImages[i]);
+			depthFilter->setConvertFactor(i, depthIntrinsics[i].fx * convertFactors[i]);
+			depthFilter->process(i, depthImages[i]);
+			colorFilter->process(i, colorImages[i]);
 		}
 	}
-
-	depthImages_device = depthFilter->getCurrFrame_device();
-	colorImages_device = colorFilter->getCurrFrame_device();
-	depthIntrinsics = this->depthIntrinsics;
-	colorIntrinsics = this->colorIntrinsics;
 
 	colorImages_device = alignColorMap->getAlignedColor_device(devices.size(), check, depthImages_device, colorImages_device, depthIntrinsics, colorIntrinsics, depth2color);
 	for (int i = 0; i < devices.size(); i++) {
@@ -201,10 +202,6 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 			world2depth[i] = color2depth[i] * world2color[i];
 			colorIntrinsics[i] = depthIntrinsics[i].zoom((float)COLOR_W / DEPTH_W, (float)COLOR_H / DEPTH_H);
 		}
-	}
-
-	if (transmission != NULL && transmission->isConnected) {
-		transmission->sendFrame(devices.size(), check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
 	}
 
 	return devices.size();

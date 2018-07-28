@@ -66,7 +66,6 @@ void start() {
 
 #ifdef TRANSMISSION
 	transmission = new Transmission(IS_SERVER, 5);
-	grabber->setTransmission(transmission);
 #endif
 }
 
@@ -79,9 +78,11 @@ void update() {
 			RGBQUAD* colorImages_device;
 			Intrinsics* depthIntrinsics;
 			Intrinsics* colorIntrinsics;
-			int cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+			bool* check;
+			int cameras = grabber->getRGBD(check, depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 
 			if (transmission != NULL && transmission->isConnected) {
+				transmission->sendFrame(cameras, check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
 				int remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
 				cameras += remoteCameras;
 			}
@@ -122,7 +123,7 @@ void stop() {
 #ifdef CREATE_EXE
 
 int main(int argc, char *argv[]) {
-	/*start();
+	start();
 	startViewer();
 
 	Timer timer;
@@ -138,23 +139,33 @@ int main(int argc, char *argv[]) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
 	}
-	stop();*/
+	stop();
 
-	transmission = new Transmission(IS_SERVER, 1);
+	/*transmission = new Transmission(IS_SERVER, 1);
 
-	const int SIZE = 10000000;
+	const int SIZE = 20000000;
 
 	char* sendBuffer = new char[SIZE];
 	char* recvBuffer = new char[SIZE];
 
 	Timer timer;
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 1000; i++) {
 		timer.reset();
-		transmission->sendData(sendBuffer, SIZE);
-		timer.outputTime();
+		#pragma omp parallel sections
+		{
+			#pragma omp section
+			{
+				transmission->sendData(sendBuffer, SIZE);
+			}
+			#pragma omp section
+			{
+				transmission->recvData(recvBuffer, SIZE);
+			}
+		}
+		timer.outputTime(20);
 	}
 
-	delete transmission;
+	delete transmission;*/
 
 	return 0;
 }
