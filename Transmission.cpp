@@ -35,6 +35,7 @@ void Transmission::start(bool isServer)
 		listen(sockSrv, 20);
 		int len = sizeof(SOCKADDR);
 		sock = accept(sockSrv, (SOCKADDR*)&sockAddr, &len);
+		closesocket(sockSrv);
 	}
 	else {
 		std::cout << "client" << std::endl;
