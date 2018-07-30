@@ -9,8 +9,9 @@
 #include <windows.h>
 
 #define CREATE_EXE
-#define TRANSMISSION
+//#define TRANSMISSION
 #define IS_SERVER true
+//Define CALIBRATION in Parameters.h
 
 byte* buffer = NULL;
 RealsenseGrabber* grabber = NULL;
@@ -23,9 +24,6 @@ Transmission* transmission = NULL;
 
 void registration() {
 	SceneRegistration::align(grabber, world2color);
-}
-
-void saveExtrinsics() {
 	Configuration::saveExtrinsics(world2color);
 }
 
@@ -36,9 +34,6 @@ void saveBackground() {
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "r" && event.keyDown()) {
 		registration();
-	}
-	if (event.getKeySym() == "s" && event.keyDown()) {
-		saveExtrinsics();
 	}
 	if (event.getKeySym() == "b" && event.keyDown()) {
 		saveBackground();
@@ -161,10 +156,6 @@ extern "C" {
 
 	__declspec(dllexport) void callRegistration() {
 		registration();
-	}
-
-	__declspec(dllexport) void callSaveExtrinsics() {
-		saveExtrinsics();
 	}
 
 	__declspec(dllexport) void callSaveBackground() {

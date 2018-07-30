@@ -45,6 +45,8 @@ void Configuration::loadExtrinsics(Transformation* transformation)
 			transformation++;
 		}
 	}
+
+	file.close();
 }
 
 void Configuration::saveBackground(AlignColorMap* alignColorMap)
@@ -71,6 +73,8 @@ void Configuration::saveBackground(AlignColorMap* alignColorMap)
 
 	delete[] depth;
 	delete[] color;
+
+	fclose(fout);
 
 	std::cout << "Background saved." << std::endl;
 }
@@ -105,7 +109,11 @@ void Configuration::loadBackground(AlignColorMap* alignColorMap)
 		} else {
 			alignColorMap->disableBackground();
 		}
+
+		fclose(fin);
 	} else {
 		alignColorMap->disableBackground();
 	}
+
+	file.close();
 }

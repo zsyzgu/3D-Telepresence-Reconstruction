@@ -104,7 +104,11 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.028f;
+#if CALIBRATION == true
+	const int ITERATION = 10;
+#else
 	const int ITERATION = 1;
+#endif
 	const int CORNERS[4] = { 0, 8, 53, 45 };
 	const int RECT_DIST_THRESHOLD = 50;
 	const int RECT_AREA_THRESHOLD = 20000;
@@ -125,6 +129,7 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 
 	int cameras = -1;
 
+	colorTrans[0].setIdentity();
 	for (int targetId = 1; cameras == -1 || targetId < cameras; targetId++) {
 		std::vector<std::vector<cv::Point2f> > sourcePointsArray;
 		std::vector<std::vector<cv::Point2f> > targetPointsArray;
@@ -190,6 +195,9 @@ void SceneRegistration::align(RealsenseGrabber* grabber, Transformation* colorTr
 			}
 
 			cv::hconcat(sourceColorMat, targetColorMat, mergeImage);
+#if CALIBRATION == true
+			cv::pyrDown(mergeImage, mergeImage, cv::Size(mergeImage.cols / 2, mergeImage.rows / 2));
+#endif
 			cv::imshow("Calibration", mergeImage);
 
 			char ch = cv::waitKey(1);

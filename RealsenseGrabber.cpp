@@ -95,8 +95,8 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 
 	rs2::config cfg;
 	cfg.enable_device(serialNumber);
-	cfg.enable_stream(RS2_STREAM_DEPTH, DEPTH_W, DEPTH_H, RS2_FORMAT_Z16, 60);
-	cfg.enable_stream(RS2_STREAM_COLOR, COLOR_W, COLOR_H, RS2_FORMAT_YUYV, 60);
+	cfg.enable_stream(RS2_STREAM_DEPTH, DEPTH_W, DEPTH_H, RS2_FORMAT_Z16, CAMERA_FPS);
+	cfg.enable_stream(RS2_STREAM_COLOR, COLOR_W, COLOR_H, RS2_FORMAT_YUYV, CAMERA_FPS);
 
 	rs2::pipeline pipeline;
 	pipeline.start(cfg);
