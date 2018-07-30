@@ -106,28 +106,18 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	std::vector<rs2::sensor> sensors = device.query_sensors();
 	for (int i = 0; i < sensors.size(); i++) {
 		if (strcmp(sensors[i].get_info(RS2_CAMERA_INFO_NAME), "Stereo Module") == 0) {
+			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, 0);
 			float depth_unit = sensors[i].get_option(RS2_OPTION_DEPTH_UNITS);
 			float stereo_baseline = sensors[i].get_option(RS2_OPTION_STEREO_BASELINE) * 0.001;
 			convertFactors.push_back(stereo_baseline * (1 << 5) / depth_unit);
-			break;
 		}
-	}
-}
-
-void RealsenseGrabber::convertYUVtoRGBA(UINT8* src, RGBQUAD* dst) {
-	INT16 U, V;
-	for (int i = 0; i < COLOR_H * COLOR_W; i++) {
-		if ((i & 1) == 0) {
-			U = src[i * 2 + 1];
-			V = src[i * 2 + 3];
+		if (strcmp(sensors[i].get_info(RS2_CAMERA_INFO_NAME), "RGB Camera") == 0) {
+			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, 0);
+			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE, 0);
+			sensors[i].set_option(RS2_OPTION_GAIN, 128);
+			sensors[i].set_option(RS2_OPTION_SHARPNESS, 100);
+			sensors[i].set_option(RS2_OPTION_EXPOSURE, 150);
 		}
-		INT16 Y = src[i * 2];
-		INT16 C = Y - 16;
-		INT16 D = U - 128;
-		INT16 E = V - 128;
-		dst[i].rgbBlue = max(0, min(255, (298 * C + 409 * E + 128) >> 8));
-		dst[i].rgbGreen = max(0, min(255, (298 * C - 100 * D - 208 * E + 128) >> 8));
-		dst[i].rgbRed = max(0, min(255, (298 * C + 516 * D + 128) >> 8));
 	}
 }
 
@@ -207,6 +197,8 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 
 int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics)
 {
+	colorImages = this->colorImagesRGB;
+	colorIntrinsics = this->colorIntrinsics;
 	bool check[MAX_CAMERAS];
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
@@ -221,26 +213,24 @@ int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsic
 				rs2_intrinsics intrinsics = profile.as<rs2::video_stream_profile>().get_intrinsics();
 
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
-					this->colorIntrinsics[deviceId].fx = intrinsics.fx;
-					this->colorIntrinsics[deviceId].fy = intrinsics.fy;
-					this->colorIntrinsics[deviceId].ppx = intrinsics.ppx;
-					this->colorIntrinsics[deviceId].ppy = intrinsics.ppy;
+					colorIntrinsics[deviceId].fx = intrinsics.fx;
+					colorIntrinsics[deviceId].fy = intrinsics.fy;
+					colorIntrinsics[deviceId].ppx = intrinsics.ppx;
+					colorIntrinsics[deviceId].ppy = intrinsics.ppy;
 					memcpy(this->colorImages[deviceId], frame.get_data(), 2 * COLOR_W * COLOR_H * sizeof(UINT8));
 				}
 			}
 		}
 	}
 
+	RGBQUAD* colorImages_device = colorFilter->getCurrFrame_device();
 	for (int i = 0; i < devices.size(); i++) {
 		if (check[i]) {
-			convertYUVtoRGBA(this->colorImages[i], this->colorImagesRGB[i]);
-		} else {
-			std::cout << "Disconnected!" << std::endl;
+			colorFilter->process(i, this->colorImages[i]);
+			cudaMemcpy(this->colorImagesRGB[i], colorImages_device + i * COLOR_W * COLOR_H, COLOR_W * COLOR_H * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
 		}
 	}
 
-	colorImages = this->colorImagesRGB;
-	colorIntrinsics = this->colorIntrinsics;
 	return devices.size();
 }
 

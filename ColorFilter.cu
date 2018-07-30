@@ -15,10 +15,14 @@ __global__ void kernelColorFiltering(UINT8* data, uchar4* color) {
 		INT16 C = Y - 16;
 		INT16 D = U - 128;
 		INT16 E = V - 128;
+		INT16 R = (298 * C + 409 * E + 128) >> 8;
+		INT16 G = (298 * C - 100 * D - 208 * E + 128) >> 8;
+		INT16 B = (298 * C + 516 * D + 128) >> 8;
+
 		color[id] = make_uchar4(
-			max(0, min(255, (298 * C + 409 * E + 128) >> 8)),
-			max(0, min(255, (298 * C - 100 * D - 208 * E + 128) >> 8)),
-			max(0, min(255, (298 * C + 516 * D + 128) >> 8)),
+			max(0, min(255, INT16(R * 1.358))),
+			max(0, min(255, INT16(G * 1.160))),
+			max(0, min(255, INT16(B * 1.000))),
 			0);
 	}
 }
