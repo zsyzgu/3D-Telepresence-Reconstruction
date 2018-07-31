@@ -84,8 +84,8 @@ __global__ void kernelIntegrateDepth(int cameras, int localCameras, float* volum
 	struct VolumePara {
 		float tsdf = 0;
 		float weight = 0;
-		float tsdf2 = 0;
-		float weight2 = 0;
+		float remoteTsdf = 0;
+		float remoteWeight = 0;
 		UINT8 bin = 0;
 	} volumePara[VOLUME];
 
@@ -117,26 +117,42 @@ __global__ void kernelIntegrateDepth(int cameras, int localCameras, float* volum
 					volumePara[z].tsdf += tsdf * w;
 					volumePara[z].weight += w;
 				} else {
-					volumePara[z].tsdf2 += tsdf * w;
-					volumePara[z].weight2 += w;
+					volumePara[z].remoteTsdf += tsdf * w;
+					volumePara[z].remoteWeight += w;
 				}
 				volumePara[z].bin |= (1 << i);
 			}
 		}
 	}
 
+	UINT8 localBin = (1 << localCameras) - 1;
+	UINT8 remoteBin = (1 << cameras) - (1 << localCameras);
 	for (int z = 0; z < VOLUME; z++) {
 		int id = deviceVid(x, y, z);
 		if (volumePara[z].bin != 0) {
-			if (cameras == localCameras) {
+			if (volumePara[z].remoteWeight == 0) {
 				volume[id] = volumePara[z].tsdf / volumePara[z].weight;
+				volumeBin[id] = volumePara[z].bin;
 			} else {
-				volume[id] = max(volumePara[z].tsdf / volumePara[z].weight, volumePara[z].tsdf2 / volumePara[z].weight2);
+				float remoteTsdf = volumePara[z].remoteTsdf / volumePara[z].remoteWeight;
+				if (volumePara[z].weight == 0) {
+					volume[id] = remoteTsdf;
+					volumeBin[id] = volumePara[z].bin;
+				} else {
+					float localTsdf = volumePara[z].tsdf / volumePara[z].weight;
+					if (localTsdf < remoteTsdf) {
+						volume[id] = localTsdf;
+						volumeBin[id] = volumePara[z].bin & localBin;
+					} else {
+						volume[id] = remoteTsdf;
+						volumeBin[id] = volumePara[z].bin & remoteBin;
+					}
+				}
 			}
 		} else {
 			volume[id] = -1;
+			volumeBin[id] = 0;
 		}
-		volumeBin[id] = volumePara[z].bin;
 	}
 }
 

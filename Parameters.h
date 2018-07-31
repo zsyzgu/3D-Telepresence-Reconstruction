@@ -3,7 +3,7 @@
 
 // Compile Options
 #define CREATE_EXE
-//#define TRANSMISSION
+#define TRANSMISSION
 #define IS_SERVER true
 #define CALIBRATION false
 // Camera Parameters
@@ -13,7 +13,7 @@
 	#define DEPTH_H 480
 	#define COLOR_W 960
 	#define COLOR_H 540
-	#define CAMERA_FPS 60
+	#define CAMERA_FPS 30
 #else
 	#define DEPTH_W 640
 	#define DEPTH_H 480
