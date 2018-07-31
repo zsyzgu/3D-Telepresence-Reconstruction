@@ -71,7 +71,7 @@ void cudaReleaseVolume() {
 	HANDLE_ERROR(cudaFree(triBin_device));
 }
 
-__global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBin, Transformation* transformation, Intrinsics* intrinsics, float* depthMap, float3 volumeSize, float3 offset) {
+__global__ void kernelIntegrateDepth(int cameras, int localCameras, float* volume, UINT8* volumeBin, Transformation* transformation, Intrinsics* intrinsics, float* depthMap, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -83,7 +83,9 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 
 	struct VolumePara {
 		float tsdf = 0;
-		UINT8 cnt = 0;
+		float weight = 0;
+		float tsdf2 = 0;
+		float weight2 = 0;
 		UINT8 bin = 0;
 	} volumePara[VOLUME];
 
@@ -110,9 +112,15 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 			}
 
 			if (tsdf != -1) {
-				volumePara[z].tsdf += tsdf;
+				float w = 1.0 / module(pos);
+				if (i < localCameras) {
+					volumePara[z].tsdf += tsdf * w;
+					volumePara[z].weight += w;
+				} else {
+					volumePara[z].tsdf2 += tsdf * w;
+					volumePara[z].weight2 += w;
+				}
 				volumePara[z].bin |= (1 << i);
-				volumePara[z].cnt++;
 			}
 		}
 	}
@@ -120,7 +128,11 @@ __global__ void kernelIntegrateDepth(int cameras, float* volume, UINT8* volumeBi
 	for (int z = 0; z < VOLUME; z++) {
 		int id = deviceVid(x, y, z);
 		if (volumePara[z].bin != 0) {
-			volume[id] = volumePara[z].tsdf / volumePara[z].cnt;
+			if (cameras == localCameras) {
+				volume[id] = volumePara[z].tsdf / volumePara[z].weight;
+			} else {
+				volume[id] = max(volumePara[z].tsdf / volumePara[z].weight, volumePara[z].tsdf2 / volumePara[z].weight2);
+			}
 		} else {
 			volume[id] = -1;
 		}
@@ -360,7 +372,7 @@ __global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UIN
 	}
 }
 extern "C"
-void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
+void cudaIntegrate(int cameras, int localCameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
 	dim3 threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
 
@@ -368,7 +380,7 @@ void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_devic
 	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, depthIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 
-	kernelIntegrateDepth << <blocks, threads >> > (cameras, volume_device, volumeBin_device, world2depth_device, depthIntrinsics_device, depth_device, volumeSize, offset);
+	kernelIntegrateDepth << <blocks, threads >> > (cameras, localCameras, volume_device, volumeBin_device, world2depth_device, depthIntrinsics_device, depth_device, volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());
 
 	kernelMarchingCubesCount << <blocks, threads >> > (volume_device, count_device);

@@ -75,12 +75,13 @@ void update() {
 	{
 		#pragma omp section
 		{
+			int remoteCameras = 0;
 			if (transmission != NULL && transmission->isConnected) {
 				transmission->sendFrame();
-				cameras += transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
+				remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
 			}
 
-			volume->integrate(buffer, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+			volume->integrate(buffer, cameras + remoteCameras, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
 			cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 		}
 		#pragma omp section
@@ -126,7 +127,7 @@ int main(int argc, char *argv[]) {
 
 		timer.reset();
 		update();
-		timer.outputTime();
+		timer.outputTime(10);
 
 		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
