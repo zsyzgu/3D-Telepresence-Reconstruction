@@ -316,7 +316,7 @@ int cpu_cudaCountAccumulation() {
 	return tris_size;
 }
 
-__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, Transformation* transformation, Intrinsics* intrinsics, uchar4* color) {
+__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, Transformation* transformation, Intrinsics* intrinsics, uchar4* color, float3 normal) {
 	float4 colorSum = float4();
 	float weight = 0;
 	for (int i = 0; i < cameras; i++) {
@@ -326,10 +326,11 @@ __device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, 
 			if (pos.z > 0 && 0 <= pixel.x && pixel.x < COLOR_W && 0 <= pixel.y && pixel.y < COLOR_H) {
 				uchar4 tmp = color[(i * COLOR_H + pixel.y) * COLOR_W + pixel.x];
 				if (tmp.x != 0 || tmp.y != 0 || tmp.z != 0) {
-					weight += 1.0f;
-					colorSum.x += tmp.x;
-					colorSum.y += tmp.y;
-					colorSum.z += tmp.z;
+					float w = min(fabs(dot(pos, normal)) / module(pos) / module(normal), 1.0f);
+					weight += w;
+					colorSum.x += tmp.x * w;
+					colorSum.y += tmp.y * w;
+					colorSum.z += tmp.z * w;
 				}
 			}
 		}
@@ -343,6 +344,7 @@ __device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, 
 __global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UINT8* triBin, uchar4* color, Transformation* transformation, Intrinsics* intrinsics) {
 	int id = threadIdx.x + blockIdx.x * blockDim.x;
 	if (id < triSize) {
+
 		float3 pos[6];
 		pos[0] = vertex[id * 3 + 0].pos;
 		pos[1] = vertex[id * 3 + 1].pos;
@@ -350,13 +352,13 @@ __global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UIN
 		pos[3] = (pos[0] + pos[1]) * 0.5f;
 		pos[4] = (pos[1] + pos[2]) * 0.5f;
 		pos[5] = (pos[2] + pos[0]) * 0.5f;
+		float3 normal = multi(pos[1] - pos[0], pos[2] - pos[0]);
 		for (int j = 0; j < 3; j++) {
-			vertex[id * 3 + j].color = calnColor(cameras, triBin[id], pos[j], transformation, intrinsics, color);
-			vertex[id * 3 + j].color2 = calnColor(cameras, triBin[id], pos[j + 3], transformation, intrinsics, color);
+			vertex[id * 3 + j].color = calnColor(cameras, triBin[id], pos[j], transformation, intrinsics, color, normal);
+			vertex[id * 3 + j].color2 = calnColor(cameras, triBin[id], pos[j + 3], transformation, intrinsics, color, normal);
 		}
 	}
 }
-
 extern "C"
 void cudaIntegrate(int cameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
