@@ -12,9 +12,9 @@
 class SceneRegistration {
 private:
 public:
-	static std::vector<std::vector<float> > getDepth(int cameras, RealsenseGrabber* grabber);
-	static void align(int cameras, RealsenseGrabber* grabber, Transformation* colorTrans, int targetId);
-	static void align(int cameras, RealsenseGrabber* grabber, Transformation* colorTrans);
+	static void setOrigin(int cameras, RealsenseGrabber* grabber, Transformation* world2color);
+	static void align(int cameras, RealsenseGrabber* grabber, Transformation* world2color, int targetId);
+	static void align(int cameras, RealsenseGrabber* grabber, Transformation* world2color);
 };
 
 #endif

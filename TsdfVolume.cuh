@@ -84,14 +84,14 @@ public:
 		setIdentity();
 	}
 
-	CUDA_CALLABLE_MEMBER Transformation(float* rotation, float* translation) {
+	CUDA_CALLABLE_MEMBER Transformation(float* rotation, float* translation) { // Realsense Format
 		rotation0 = make_float3(rotation[0], rotation[3], rotation[6]);
 		rotation1 = make_float3(rotation[1], rotation[4], rotation[7]);
 		rotation2 = make_float3(rotation[2], rotation[5], rotation[8]);
 		this->translation = make_float3(translation[0], translation[1], translation[2]);
 	}
 
-	CUDA_CALLABLE_MEMBER Transformation(double* rotation, double* translation) {
+	CUDA_CALLABLE_MEMBER Transformation(double* rotation, double* translation) { // Opencv Format
 		rotation0 = make_float3(rotation[0], rotation[1], rotation[2]);
 		rotation1 = make_float3(rotation[3], rotation[4], rotation[5]);
 		rotation2 = make_float3(rotation[6], rotation[7], rotation[8]);

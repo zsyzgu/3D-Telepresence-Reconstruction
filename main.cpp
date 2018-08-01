@@ -32,16 +32,7 @@ void registration(int targetId = 0) {
 }
 
 void setOrigin() {
-	std::vector<std::vector<float> > arr = SceneRegistration::getDepth(cameras, grabber);
-	for (int i = 0; i < arr.size(); i++) {
-		std::cout << "device " << i << ": ";
-		float sum = 0;
-		for (int j = 0; j < arr[i].size(); j++) {
-			sum += arr[i][j];
-		}
-		sum /= arr[i].size();
-		std::cout << sum << std::endl;
-	}
+	SceneRegistration::setOrigin(cameras, grabber, world2color);
 }
 
 void saveBackground() {
@@ -81,7 +72,7 @@ void start() {
 	
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-	volume = new TsdfVolume(2, 2, 2, 0, 0, 1);
+	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
 	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
 	world2color = new Transformation[MAX_CAMERAS];
 	world2depth = new Transformation[MAX_CAMERAS];

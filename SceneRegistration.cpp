@@ -2,7 +2,7 @@
 #include "Timer.h"
 #include "Parameters.h"
 
-std::vector<std::vector<float> > SceneRegistration::getDepth(int cameras, RealsenseGrabber* grabber) {
+void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transformation* world2color) {
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.028f;
@@ -19,54 +19,62 @@ std::vector<std::vector<float> > SceneRegistration::getDepth(int cameras, Realse
 	std::vector<cv::Point2f> sourcePoints;
 	cv::Mat sourceColorMat(COLOR_H, COLOR_W, CV_8UC3);
 
-	std::vector<std::vector<float> > depths;
-	for (int id = 0; id < cameras; id++) {
-		do {
-			grabber->getRGB(colorImages, colorIntrinsics);
-			RGBQUAD* source = colorImages[id];
-			for (int i = 0; i < COLOR_H; i++) {
-				for (int j = 0; j < COLOR_W; j++) {
-					RGBQUAD color = source[i * COLOR_W + j];
-					sourceColorMat.at<cv::Vec3b>(i, j) = cv::Vec3b(color.rgbRed, color.rgbGreen, color.rgbBlue);
-				}
+	do {
+		grabber->getRGB(colorImages, colorIntrinsics);
+		RGBQUAD* source = colorImages[0];
+		for (int i = 0; i < COLOR_H; i++) {
+			for (int j = 0; j < COLOR_W; j++) {
+				RGBQUAD color = source[i * COLOR_W + j];
+				sourceColorMat.at<cv::Vec3b>(i, j) = cv::Vec3b(color.rgbRed, color.rgbGreen, color.rgbBlue);
 			}
-			sourcePoints.clear();
-			findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
+		}
+		sourcePoints.clear();
+		findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
 
-			cv::Scalar color = cv::Scalar(0, 0, 255);
-			if (sourcePoints.size() == BOARD_NUM) {
-				color = cv::Scalar(0, 255, 255);
-			}
-			for (int i = 0; i < sourcePoints.size(); i++) {
-				cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
-			}
-			cv::imshow("Get Depth", sourceColorMat);
-			cv::waitKey(1);
-		} while (sourcePoints.size() != BOARD_NUM);
+		cv::Scalar color = cv::Scalar(0, 0, 255);
+		if (sourcePoints.size() == BOARD_NUM) {
+			color = cv::Scalar(0, 255, 255);
+		}
+		for (int i = 0; i < sourcePoints.size(); i++) {
+			cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
+		}
+		cv::imshow("Get Depth", sourceColorMat);
+		cv::waitKey(1);
+	} while (sourcePoints.size() != BOARD_NUM);
 
-		cv::Mat sourceCameraMatrix(cv::Size(3, 3), CV_32F);
-		sourceCameraMatrix.at<float>(0, 0) = colorIntrinsics[0].fx;
-		sourceCameraMatrix.at<float>(1, 1) = colorIntrinsics[0].fy;
-		sourceCameraMatrix.at<float>(0, 2) = colorIntrinsics[0].ppx;
-		sourceCameraMatrix.at<float>(1, 2) = colorIntrinsics[0].ppy;
+	cv::Mat sourceCameraMatrix(cv::Size(3, 3), CV_32F);
+	sourceCameraMatrix.at<float>(0, 0) = colorIntrinsics[0].fx;
+	sourceCameraMatrix.at<float>(1, 1) = colorIntrinsics[0].fy;
+	sourceCameraMatrix.at<float>(0, 2) = colorIntrinsics[0].ppx;
+	sourceCameraMatrix.at<float>(1, 2) = colorIntrinsics[0].ppy;
 
-		cv::Mat distCoeffs;
-		cv::Mat rv(3, 1, CV_64FC1);
-		cv::Mat tv(3, 1, CV_64FC1);
-		solvePnP(objectPoints, sourcePoints, sourceCameraMatrix, distCoeffs, rv, tv);
+	cv::Mat distCoeffs;
+	cv::Mat rv(3, 1, CV_64FC1);
+	cv::Mat tv(3, 1, CV_64FC1);
+	solvePnP(objectPoints, sourcePoints, sourceCameraMatrix, distCoeffs, rv, tv);
+	cv::Rodrigues(rv, rv);
+	Transformation world2camera((double*)rv.data, (double*)tv.data);
 
-		std::vector<float> depth;
-		for (int i = 0; i < objectPoints.size(); i++)
-			depth.push_back(cv::norm(objectPoints[i] - cv::Point3f(tv)));
-		depths.push_back(depth);
+	//Caln Inv of Camera 0
+	double* rvData = (double*)rv.data;
+	rvData[0] = world2color[0].rotation0.x, rvData[1] = world2color[0].rotation0.y, rvData[2] = world2color[0].rotation0.z;
+	rvData[3] = world2color[0].rotation1.x, rvData[4] = world2color[0].rotation1.y, rvData[5] = world2color[0].rotation1.z;
+	rvData[6] = world2color[0].rotation2.x, rvData[7] = world2color[0].rotation2.y, rvData[8] = world2color[0].rotation2.z;
+	double* tvData = (double*)tv.data;
+	tvData[0] = world2color[0].translation.x, tvData[1] = world2color[0].translation.y, tvData[2] = world2color[0].translation.z;
+	rv = rv.inv();
+	tv = -rv * tv;
+	Transformation camera0Inv = Transformation((double*)rv.data, (double*)tv.data);
 
-		cv::destroyAllWindows();
+	for (int i = 0; i < cameras; i++) {
+		world2color[i] = (world2color[i] * camera0Inv) * world2camera;
 	}
-	return depths;
+
+	cv::destroyAllWindows();
 }
 
 
-void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transformation* colorTrans, int targetId)
+void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transformation* world2color, int targetId)
 {
 	if (targetId <= 0 || targetId >= cameras) {
 		return;
@@ -219,14 +227,14 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 	);
 	std::cout << "RMS [" << targetId << "]= " << rms << std::endl;
 
-	colorTrans[targetId] = Transformation((double*)rotation.data, (double*)translation.data);
+	world2color[targetId] = Transformation((double*)rotation.data, (double*)translation.data);
 	cv::destroyAllWindows();
 }
 
-void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transformation* colorTrans)
+void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transformation* world2color)
 {
-	colorTrans[0].setIdentity();
+	world2color[0].setIdentity();
 	for (int targetId = 1; targetId < cameras; targetId++) {
-		align(cameras, grabber, colorTrans, targetId);
+		align(cameras, grabber, world2color, targetId);
 	}
 }
