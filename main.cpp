@@ -16,9 +16,18 @@ boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 Transformation* world2color = NULL;
 Transformation* world2depth = NULL;
 Transmission* transmission = NULL;
+int cameras = 0;
+float* depthImages_device;
+RGBQUAD* colorImages_device;
+Intrinsics* depthIntrinsics;
+Intrinsics* colorIntrinsics;
 
-void registration() {
-	SceneRegistration::align(grabber, world2color);
+void registration(int targetId = 0) {
+	if (targetId == 0) {
+		SceneRegistration::align(cameras, grabber, world2color);
+	} else {
+		SceneRegistration::align(cameras, grabber, world2color, targetId);
+	}
 	Configuration::saveExtrinsics(world2color);
 }
 
@@ -32,6 +41,15 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	}
 	if (event.getKeySym() == "b" && event.keyDown()) {
 		saveBackground();
+	}
+	if (event.getKeySym() == "1" && event.keyUp()) {
+		registration(1);
+	}
+	if (event.getKeySym() == "2" && event.keyUp()) {
+		registration(2);
+	}
+	if (event.getKeySym() == "3" && event.keyUp()) {
+		registration(3);
 	}
 }
 
@@ -58,19 +76,11 @@ void start() {
 	transmission = new Transmission(IS_SERVER, 5);
 	grabber->setTransmission(transmission);
 #endif
+
+	cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
 }
 
-int cameras = 0;
-float* depthImages_device;
-RGBQUAD* colorImages_device;
-Intrinsics* depthIntrinsics;
-Intrinsics* colorIntrinsics;
-
 void update() {
-	if (cameras == 0) {
-		cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
-	}
-
 	#pragma omp parallel sections
 	{
 		#pragma omp section
@@ -127,7 +137,9 @@ int main(int argc, char *argv[]) {
 
 		timer.reset();
 		update();
+#if CALIBRATION == false
 		timer.outputTime(10);
+#endif
 
 		cloud = volume->getPointCloudFromMesh(buffer);
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
