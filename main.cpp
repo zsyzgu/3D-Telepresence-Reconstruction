@@ -31,6 +31,19 @@ void registration(int targetId = 0) {
 	Configuration::saveExtrinsics(world2color);
 }
 
+void setOrigin() {
+	std::vector<std::vector<float> > arr = SceneRegistration::getDepth(cameras, grabber);
+	for (int i = 0; i < arr.size(); i++) {
+		std::cout << "device " << i << ": ";
+		float sum = 0;
+		for (int j = 0; j < arr[i].size(); j++) {
+			sum += arr[i][j];
+		}
+		sum /= arr[i].size();
+		std::cout << sum << std::endl;
+	}
+}
+
 void saveBackground() {
 	grabber->saveBackground();
 }
@@ -38,6 +51,9 @@ void saveBackground() {
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (event.getKeySym() == "r" && event.keyDown()) {
 		registration();
+	}
+	if (event.getKeySym() == "o" && event.keyDown()) {
+		setOrigin();
 	}
 	if (event.getKeySym() == "b" && event.keyDown()) {
 		saveBackground();

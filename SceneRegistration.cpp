@@ -2,11 +2,10 @@
 #include "Timer.h"
 #include "Parameters.h"
 
-std::vector<std::vector<float> > SceneRegistration::getDepth(RealsenseGrabber* grabber) {
+std::vector<std::vector<float> > SceneRegistration::getDepth(int cameras, RealsenseGrabber* grabber) {
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.028f;
-	const int ITERATION = 10;
 
 	std::vector<cv::Point3f> objectPoints;
 	for (int r = 0; r < BOARD_SIZE.height; r++) {
@@ -21,16 +20,13 @@ std::vector<std::vector<float> > SceneRegistration::getDepth(RealsenseGrabber* g
 	cv::Mat sourceColorMat(COLOR_H, COLOR_W, CV_8UC3);
 
 	std::vector<std::vector<float> > depths;
-	int cameras = grabber->getRGB(colorImages, colorIntrinsics);
 	for (int id = 0; id < cameras; id++) {
-		std::vector<std::vector<cv::Point2f> > sourcePointsArray;
-		for (int iter = 0; iter < ITERATION;) {
-
+		do {
+			grabber->getRGB(colorImages, colorIntrinsics);
 			RGBQUAD* source = colorImages[id];
 			for (int i = 0; i < COLOR_H; i++) {
 				for (int j = 0; j < COLOR_W; j++) {
-					RGBQUAD color;
-					color = source[i * COLOR_W + j];
+					RGBQUAD color = source[i * COLOR_W + j];
 					sourceColorMat.at<cv::Vec3b>(i, j) = cv::Vec3b(color.rgbRed, color.rgbGreen, color.rgbBlue);
 				}
 			}
@@ -45,42 +41,8 @@ std::vector<std::vector<float> > SceneRegistration::getDepth(RealsenseGrabber* g
 				cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
 			}
 			cv::imshow("Get Depth", sourceColorMat);
-
-			char ch = cv::waitKey(1);
-			if (int(ch) != -1) {
-				iter = 0;
-			}
-
-			if (iter != -1 && sourcePoints.size() == BOARD_NUM) {
-				iter++;
-				sourcePointsArray.push_back(sourcePoints);
-			}
-		}
-
-		std::vector<std::vector<cv::Point3f> > objectPointsArray;
-		for (int i = 0; i < sourcePointsArray.size(); i++) {
-			objectPointsArray.push_back(objectPoints);
-		}
-
-		cv::Mat cameraMatrix, distCoeffs;
-		std::vector<cv::Mat> rvec, tvec;
-		std::vector<float> reprojError;
-
-		double rms = calibrateCamera(objectPointsArray,
-			sourcePointsArray,
-			sourceColorMat.size(),
-			cameraMatrix,
-			distCoeffs,
-			rvec,
-			tvec,
-			CV_CALIB_FIX_K4 | CV_CALIB_FIX_K5);
-
-		if (!(cv::checkRange(cameraMatrix) && cv::checkRange(distCoeffs))) {
-			std::cout << "Calibration failed\n";
-		}
-
-		cv::Mat rv(3, 1, CV_64FC1);
-		cv::Mat tv(3, 1, CV_64FC1);
+			cv::waitKey(1);
+		} while (sourcePoints.size() != BOARD_NUM);
 
 		cv::Mat sourceCameraMatrix(cv::Size(3, 3), CV_32F);
 		sourceCameraMatrix.at<float>(0, 0) = colorIntrinsics[0].fx;
@@ -88,12 +50,17 @@ std::vector<std::vector<float> > SceneRegistration::getDepth(RealsenseGrabber* g
 		sourceCameraMatrix.at<float>(0, 2) = colorIntrinsics[0].ppx;
 		sourceCameraMatrix.at<float>(1, 2) = colorIntrinsics[0].ppy;
 
-		solvePnP(objectPointsArray[0], sourcePointsArray[0], sourceCameraMatrix, distCoeffs, rv, tv);
+		cv::Mat distCoeffs;
+		cv::Mat rv(3, 1, CV_64FC1);
+		cv::Mat tv(3, 1, CV_64FC1);
+		solvePnP(objectPoints, sourcePoints, sourceCameraMatrix, distCoeffs, rv, tv);
 
 		std::vector<float> depth;
 		for (int i = 0; i < objectPoints.size(); i++)
 			depth.push_back(cv::norm(objectPoints[i] - cv::Point3f(tv)));
 		depths.push_back(depth);
+
+		cv::destroyAllWindows();
 	}
 	return depths;
 }
