@@ -61,7 +61,7 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	}
 }
 
-void startViewer() {
+void startViewer() {	
 	viewer = boost::shared_ptr<pcl::visualization::PCLVisualizer>(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
 	viewer->registerKeyboardCallback(keyboardEventOccurred);
@@ -70,7 +70,7 @@ void startViewer() {
 void start() {
 	cudaSetDevice(0);
 	omp_set_num_threads(2);
-	
+
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
@@ -78,6 +78,7 @@ void start() {
 	world2color = new Transformation[MAX_CAMERAS];
 	world2depth = new Transformation[MAX_CAMERAS];
 	Configuration::loadExtrinsics(world2color);
+
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION

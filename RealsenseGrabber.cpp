@@ -27,9 +27,11 @@ RealsenseGrabber::RealsenseGrabber()
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
 	transmission = NULL;
 
+	int deviceId = 0;
 	rs2::context context;
 	for (auto&& device : context.query_devices()) {
 		enableDevice(device);
+		std::cout << "Device " << deviceId++ << " open." << std::endl;
 	}
 }
 
@@ -116,7 +118,7 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE, 0);
 			sensors[i].set_option(RS2_OPTION_GAIN, 128);
 			sensors[i].set_option(RS2_OPTION_SHARPNESS, 50);
-			sensors[i].set_option(RS2_OPTION_EXPOSURE, 150);
+			sensors[i].set_option(RS2_OPTION_EXPOSURE, 250);
 		}
 	}
 }

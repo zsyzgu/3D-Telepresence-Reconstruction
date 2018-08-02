@@ -19,9 +19,10 @@ void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transf
 	std::vector<cv::Point2f> sourcePoints;
 	cv::Mat sourceColorMat(COLOR_H, COLOR_W, CV_8UC3);
 
+	int mainId = 0;
 	do {
 		grabber->getRGB(colorImages, colorIntrinsics);
-		RGBQUAD* source = colorImages[0];
+		RGBQUAD* source = colorImages[mainId];
 		for (int i = 0; i < COLOR_H; i++) {
 			for (int j = 0; j < COLOR_W; j++) {
 				RGBQUAD color = source[i * COLOR_W + j];
@@ -29,7 +30,7 @@ void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transf
 			}
 		}
 		sourcePoints.clear();
-		findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
+		findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, /*cv::CALIB_CB_ADAPTIVE_THRESH | */cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
 
 		cv::Scalar color = cv::Scalar(0, 0, 255);
 		if (sourcePoints.size() == BOARD_NUM) {
@@ -39,14 +40,18 @@ void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transf
 			cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
 		}
 		cv::imshow("Get Depth", sourceColorMat);
-		cv::waitKey(1);
+		char ch = cv::waitKey(1);
+		if ('0' <= ch && ch < '4') {
+			mainId = ch - '0';
+		}
+
 	} while (sourcePoints.size() != BOARD_NUM);
 
 	cv::Mat sourceCameraMatrix(cv::Size(3, 3), CV_32F);
-	sourceCameraMatrix.at<float>(0, 0) = colorIntrinsics[0].fx;
-	sourceCameraMatrix.at<float>(1, 1) = colorIntrinsics[0].fy;
-	sourceCameraMatrix.at<float>(0, 2) = colorIntrinsics[0].ppx;
-	sourceCameraMatrix.at<float>(1, 2) = colorIntrinsics[0].ppy;
+	sourceCameraMatrix.at<float>(0, 0) = colorIntrinsics[mainId].fx;
+	sourceCameraMatrix.at<float>(1, 1) = colorIntrinsics[mainId].fy;
+	sourceCameraMatrix.at<float>(0, 2) = colorIntrinsics[mainId].ppx;
+	sourceCameraMatrix.at<float>(1, 2) = colorIntrinsics[mainId].ppy;
 
 	cv::Mat distCoeffs;
 	cv::Mat rv(3, 1, CV_64FC1);
@@ -55,13 +60,14 @@ void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transf
 	cv::Rodrigues(rv, rv);
 	Transformation world2camera((double*)rv.data, (double*)tv.data);
 
-	//Caln Inv of Camera 0
+	//Caln Inv of Main Camera
+	Transformation* mainTrans = &world2color[mainId];
 	double* rvData = (double*)rv.data;
-	rvData[0] = world2color[0].rotation0.x, rvData[1] = world2color[0].rotation0.y, rvData[2] = world2color[0].rotation0.z;
-	rvData[3] = world2color[0].rotation1.x, rvData[4] = world2color[0].rotation1.y, rvData[5] = world2color[0].rotation1.z;
-	rvData[6] = world2color[0].rotation2.x, rvData[7] = world2color[0].rotation2.y, rvData[8] = world2color[0].rotation2.z;
+	rvData[0] = mainTrans->rotation0.x, rvData[1] = mainTrans->rotation0.y, rvData[2] = mainTrans->rotation0.z;
+	rvData[3] = mainTrans->rotation1.x, rvData[4] = mainTrans->rotation1.y, rvData[5] = mainTrans->rotation1.z;
+	rvData[6] = mainTrans->rotation2.x, rvData[7] = mainTrans->rotation2.y, rvData[8] = mainTrans->rotation2.z;
 	double* tvData = (double*)tv.data;
-	tvData[0] = world2color[0].translation.x, tvData[1] = world2color[0].translation.y, tvData[2] = world2color[0].translation.z;
+	tvData[0] = mainTrans->translation.x, tvData[1] = mainTrans->translation.y, tvData[2] = mainTrans->translation.z;
 	rv = rv.inv();
 	tv = -rv * tv;
 	Transformation camera0Inv = Transformation((double*)rv.data, (double*)tv.data);
@@ -125,8 +131,8 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 
 		sourcePoints.clear();
 		targetPoints.clear();
-		findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
-		findChessboardCorners(targetColorMat, BOARD_SIZE, targetPoints, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
+		findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, /*cv::CALIB_CB_ADAPTIVE_THRESH | */cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
+		findChessboardCorners(targetColorMat, BOARD_SIZE, targetPoints, /*cv::CALIB_CB_ADAPTIVE_THRESH | */cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
 		cv::Scalar color = cv::Scalar(0, 0, 255);
 		if (sourcePoints.size() == BOARD_NUM) {
 			color = cv::Scalar(0, 255, 0);
