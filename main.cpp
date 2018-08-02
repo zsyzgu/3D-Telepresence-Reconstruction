@@ -33,6 +33,7 @@ void registration(int targetId = 0) {
 
 void setOrigin() {
 	SceneRegistration::setOrigin(cameras, grabber, world2color);
+	Configuration::saveExtrinsics(world2color);
 }
 
 void saveBackground() {
