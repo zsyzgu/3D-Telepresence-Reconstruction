@@ -118,7 +118,7 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE, 0);
 			sensors[i].set_option(RS2_OPTION_GAIN, 128);
 			sensors[i].set_option(RS2_OPTION_SHARPNESS, 50);
-			sensors[i].set_option(RS2_OPTION_EXPOSURE, 250);
+			sensors[i].set_option(RS2_OPTION_EXPOSURE, 312);
 		}
 	}
 }

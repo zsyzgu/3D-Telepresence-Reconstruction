@@ -3,9 +3,9 @@
 
 // Compile Options
 #define CREATE_EXE
-#define TRANSMISSION
+//#define TRANSMISSION
 #define IS_SERVER true
-#define CALIBRATION false
+#define CALIBRATION true
 // Camera Parameters
 #define MAX_CAMERAS 8
 #if CALIBRATION == false
@@ -19,7 +19,7 @@
 	#define DEPTH_H 480
 	#define COLOR_W 1920
 	#define COLOR_H 1080
-	#define CAMERA_FPS 15
+	#define CAMERA_FPS 30
 #endif
 // CUDA Parameters
 #define BLOCK_SIZE 16

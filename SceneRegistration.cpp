@@ -5,7 +5,7 @@
 void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transformation* world2color) {
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
-	const float GRID_SIZE = 0.028f;
+	const float GRID_SIZE = 0.02513f;
 
 	std::vector<cv::Point3f> objectPoints;
 	for (int r = 0; r < BOARD_SIZE.height; r++) {
@@ -88,7 +88,7 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
-	const float GRID_SIZE = 0.028f;
+	const float GRID_SIZE = 0.02513f;
 #if CALIBRATION == true
 	const int ITERATION = 10;
 #else
