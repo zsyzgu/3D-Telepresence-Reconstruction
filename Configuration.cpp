@@ -117,3 +117,23 @@ void Configuration::loadBackground(AlignColorMap* alignColorMap)
 
 	file.close();
 }
+
+int Configuration::loadDelayFrame()
+{
+	const char* DELAY_FILE = "Delay.cfg";
+	std::fstream file;
+	file.open(DELAY_FILE, std::ios::in);
+
+	int result = 1;
+	if (file) {
+		FILE* fin = fopen(DELAY_FILE, "r");
+		fscanf(fin, "%d", &result);
+		if (result <= 0 || result >= MAX_DELAY_FRAME) {
+			result = 1;
+		}
+		fclose(fin);
+	}
+	file.close();
+
+	return result;
+}

@@ -11,6 +11,7 @@ public:
 	static void loadExtrinsics(Transformation* transformation);
 	static void saveBackground(AlignColorMap* alignColorMap);
 	static void loadBackground(AlignColorMap* alignColorMap);
+	static int loadDelayFrame();
 };
 
 #endif

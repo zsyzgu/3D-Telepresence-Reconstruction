@@ -82,7 +82,8 @@ void start() {
 	grabber->loadBackground();
 
 #ifdef TRANSMISSION
-	transmission = new Transmission(IS_SERVER, 5);
+	int delayFrame = Configuration::loadDelayFrame();
+	transmission = new Transmission(IS_SERVER, delayFrame);
 	grabber->setTransmission(transmission);
 #endif
 
