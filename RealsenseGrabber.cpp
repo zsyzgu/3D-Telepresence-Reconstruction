@@ -27,11 +27,11 @@ RealsenseGrabber::RealsenseGrabber()
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
 	transmission = NULL;
 
-	int deviceId = 0;
 	rs2::context context;
-	for (auto&& device : context.query_devices()) {
-		enableDevice(device);
-		std::cout << "Device " << deviceId++ << " open." << std::endl;
+	rs2::device_list deviceList = context.query_devices();
+	for (int i = 0; i < deviceList.size(); i++) {
+		enableDevice(deviceList[i]);
+		std::cout << "Device " << i << " open." << std::endl;
 	}
 }
 
@@ -99,12 +99,9 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	cfg.enable_device(serialNumber);
 	cfg.enable_stream(RS2_STREAM_DEPTH, DEPTH_W, DEPTH_H, RS2_FORMAT_Z16, CAMERA_FPS);
 	cfg.enable_stream(RS2_STREAM_COLOR, COLOR_W, COLOR_H, RS2_FORMAT_YUYV, CAMERA_FPS);
-
-	rs2::pipeline pipeline;
-	pipeline.start(cfg);
-
-	devices.push_back(pipeline);
-
+	cfg.disable_stream(RS2_STREAM_INFRARED, 1);
+	cfg.disable_stream(RS2_STREAM_INFRARED, 2);
+	
 	std::vector<rs2::sensor> sensors = device.query_sensors();
 	for (int i = 0; i < sensors.size(); i++) {
 		if (strcmp(sensors[i].get_info(RS2_CAMERA_INFO_NAME), "Stereo Module") == 0) {
@@ -121,6 +118,11 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 			sensors[i].set_option(RS2_OPTION_EXPOSURE, 312);
 		}
 	}
+
+	rs2::pipeline pipeline;
+	pipeline.start(cfg);
+
+	devices.push_back(pipeline);
 }
 
 int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)

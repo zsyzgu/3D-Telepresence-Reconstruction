@@ -29,7 +29,6 @@ private:
 	AlignColorMap* alignColorMap;
 
 	void enableDevice(rs2::device device);
-	void convertYUVtoRGBA(UINT8* src, RGBQUAD* dst);
 
 	UINT16** depthImages;
 	UINT8** colorImages;
