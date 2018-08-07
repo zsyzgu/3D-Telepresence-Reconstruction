@@ -79,7 +79,9 @@ void start() {
 	world2depth = new Transformation[MAX_CAMERAS];
 	Configuration::loadExtrinsics(world2color);
 
+#if CALIBRATION == false
 	grabber->loadBackground();
+#endif
 
 #ifdef TRANSMISSION
 	int delayFrame = Configuration::loadDelayFrame();
