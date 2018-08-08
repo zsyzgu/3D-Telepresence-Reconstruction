@@ -37,7 +37,11 @@ void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transf
 			color = cv::Scalar(0, 255, 255);
 		}
 		for (int i = 0; i < sourcePoints.size(); i++) {
-			cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
+			if (i == 0) {
+				cv::circle(sourceColorMat, sourcePoints[i], 3, cv::Scalar(255, 0, 0), 2);
+			} else {
+				cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
+			}
 		}
 		cv::imshow("Get Depth", sourceColorMat);
 		char ch = cv::waitKey(1);
@@ -138,7 +142,11 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 			color = cv::Scalar(0, 255, 0);
 		}
 		for (int i = 0; i < sourcePoints.size(); i++) {
-			cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
+			if (i == 0) {
+				cv::circle(sourceColorMat, sourcePoints[i], 3, cv::Scalar(255, 0, 0), 2);
+			} else {
+				cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
+			}
 		}
 		for (int i = 0; i < targetPoints.size(); i++) {
 			cv::circle(targetColorMat, targetPoints[i], 3, color, 2);
