@@ -252,3 +252,8 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 		align(cameras, grabber, world2color, targetId);
 	}
 }
+
+void SceneRegistration::adjust(int cameras, RealsenseGrabber* grabber, Transformation* world2color)
+{
+
+}

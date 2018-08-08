@@ -37,7 +37,14 @@ void setOrigin() {
 }
 
 void saveBackground() {
+#if CALIBRATION == false:
 	grabber->saveBackground();
+#endif
+}
+
+void adjustTransformation() {
+	SceneRegistration::adjust(cameras, grabber, world2color);
+	Configuration::saveExtrinsics(world2color);
 }
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
@@ -46,6 +53,9 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	}
 	if (event.getKeySym() == "o" && event.keyDown()) {
 		setOrigin();
+	}
+	if (event.getKeySym() == "a" && event.keyDown()) {
+		adjustTransformation();
 	}
 	if (event.getKeySym() == "b" && event.keyDown()) {
 		saveBackground();
@@ -172,10 +182,6 @@ extern "C" {
 	__declspec(dllexport) byte* callUpdate() {
 		update();
 		return buffer;
-	}
-
-	__declspec(dllexport) void callRegistration() {
-		registration();
 	}
 
 	__declspec(dllexport) void callSaveBackground() {
