@@ -253,7 +253,61 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 	}
 }
 
-void SceneRegistration::adjust(int cameras, RealsenseGrabber* grabber, Transformation* world2color)
+void SceneRegistration::adjust(int cameras, Transformation* world2color, char cmd)
 {
+	const float T = 0.001f;
+	const float R = 3.1415926f * 0.002f;
+	Transformation trans;
 
+	if (cmd == 'z') {
+		trans.translation.y -= T;
+	}
+	if (cmd == 'x') {
+		trans.translation.y += T;
+	}
+	if (cmd == 'c') {
+		trans.translation.x -= T;
+	}
+	if (cmd == 'v') {
+		trans.translation.x += T;
+	}
+	if (cmd == 'b') {
+		trans.translation.z -= T;
+	}
+	if (cmd == 'n') {
+		trans.translation.z += T;
+	}
+	if (cmd == '5') {
+		trans.rotation0 = make_float3(cos(-R), 0, -sin(-R));
+		trans.rotation1 = make_float3(0, 1, 0);
+		trans.rotation2 = make_float3(sin(-R), 0, cos(-R));
+	}
+	if (cmd == '6') {
+		trans.rotation0 = make_float3(cos(R), 0, -sin(R));
+		trans.rotation1 = make_float3(0, 1, 0);
+		trans.rotation2 = make_float3(sin(R), 0, cos(R));
+	}
+	if (cmd == '7') {
+		trans.rotation0 = make_float3(1, 0, 0);
+		trans.rotation1 = make_float3(0, cos(-R), sin(-R));
+		trans.rotation2 = make_float3(0, -sin(-R), cos(-R));
+	}
+	if (cmd == '8') {
+		trans.rotation0 = make_float3(1, 0, 0);
+		trans.rotation1 = make_float3(0, cos(R), sin(R));
+		trans.rotation2 = make_float3(0, -sin(R), cos(R));
+	}
+	if (cmd == '9') {
+		trans.rotation0 = make_float3(cos(-R), sin(-R), 0);
+		trans.rotation1 = make_float3(-sin(-R), cos(-R), 0);
+		trans.rotation2 = make_float3(0, 0, 1);
+	}
+	if (cmd == '0') {
+		trans.rotation0 = make_float3(cos(R), sin(R), 0);
+		trans.rotation1 = make_float3(-sin(R), cos(R), 0);
+		trans.rotation2 = make_float3(0, 0, 1);
+	}
+	for (int i = 0; i < cameras; i++) {
+		world2color[i] = world2color[i] * trans;
+	}
 }

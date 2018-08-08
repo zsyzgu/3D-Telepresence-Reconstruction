@@ -42,32 +42,31 @@ void saveBackground() {
 #endif
 }
 
-void adjustTransformation() {
-	SceneRegistration::adjust(cameras, grabber, world2color);
-	Configuration::saveExtrinsics(world2color);
-}
-
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
-	if (event.getKeySym() == "r" && event.keyDown()) {
+	char cmd = event.getKeySym()[0];
+	if (cmd == 'r' && event.keyDown()) {
 		registration();
 	}
-	if (event.getKeySym() == "o" && event.keyDown()) {
+	if (cmd == 'o' && event.keyDown()) {
 		setOrigin();
 	}
-	if (event.getKeySym() == "a" && event.keyDown()) {
-		adjustTransformation();
+	if ((cmd == 'z' || cmd == 'x' || cmd == 'c' || cmd == 'v' || cmd == 'b' || cmd == 'n') && event.keyDown()) {
+		SceneRegistration::adjust(cameras, world2color, cmd);
 	}
-	if (event.getKeySym() == "b" && event.keyDown()) {
+	if ((cmd == '5' || cmd == '6' || cmd == '7' || cmd == '8' || cmd == '9' || cmd == '0') && event.keyUp()) {
+		SceneRegistration::adjust(cameras, world2color, cmd);
+	}
+	if (cmd == 's') {
+		Configuration::saveExtrinsics(world2color);
+	}
+	if (cmd == 'b' && event.keyDown()) {
 		saveBackground();
 	}
-	if (event.getKeySym() == "1" && event.keyUp()) {
+	if (cmd == '1' && event.keyUp()) {
 		registration(1);
 	}
-	if (event.getKeySym() == "2" && event.keyUp()) {
+	if (cmd == '2' && event.keyUp()) {
 		registration(2);
-	}
-	if (event.getKeySym() == "3" && event.keyUp()) {
-		registration(3);
 	}
 }
 

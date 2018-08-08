@@ -8,6 +8,7 @@
 #include <Windows.h>
 #include "TsdfVolume.cuh"
 #include "RealsenseGrabber.h"
+#include "Configuration.h"
 
 class SceneRegistration {
 private:
@@ -15,7 +16,7 @@ public:
 	static void setOrigin(int cameras, RealsenseGrabber* grabber, Transformation* world2color);
 	static void align(int cameras, RealsenseGrabber* grabber, Transformation* world2color, int targetId);
 	static void align(int cameras, RealsenseGrabber* grabber, Transformation* world2color);
-	static void adjust(int cameras, RealsenseGrabber* grabber, Transformation* world2color);
+	static void adjust(int cameras, Transformation* world2color, char cmd);
 };
 
 #endif
