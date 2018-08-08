@@ -59,7 +59,7 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (cmd == 's') {
 		Configuration::saveExtrinsics(world2color);
 	}
-	if (cmd == 'b' && event.keyDown()) {
+	if (cmd == 'p' && event.keyDown()) {
 		saveBackground();
 	}
 	if (cmd == '1' && event.keyUp()) {
