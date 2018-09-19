@@ -271,7 +271,7 @@ void SceneRegistration::adjust(int cameras, Transformation* world2color, char cm
 	if (cmd == 'v') {
 		trans.translation.x += T;
 	}
-	if (cmd == 'b') {
+	if (cmd == 'p') {
 		trans.translation.z -= T;
 	}
 	if (cmd == 'n') {

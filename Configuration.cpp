@@ -65,7 +65,16 @@ void Configuration::saveBackground(AlignColorMap* alignColorMap)
 			fprintf(fout, "%f\n", depth[i]);
 		}
 		for (int i = 0; i < MAX_CAMERAS * COLOR_W * COLOR_H; i++) {
+#if CALIBRATION == false
 			fprintf(fout, "%d\n", color[i]);
+#else
+			int id = i % (COLOR_W * COLOR_H);
+			int r = id / COLOR_W;
+			int c = id % COLOR_W;
+			if ((r & 1) == 0 && (c & 1) == 0) {
+				fprintf(fout, "%d\n", color[i]);
+			}
+#endif
 		}
 	} else {
 		fprintf(fout, "0\n");

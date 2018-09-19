@@ -37,9 +37,7 @@ void setOrigin() {
 }
 
 void saveBackground() {
-#if CALIBRATION == true:
 	grabber->saveBackground();
-#endif
 }
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
@@ -50,8 +48,7 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (cmd == 'o' && event.keyDown()) {
 		setOrigin();
 	}
-	/*
-	if ((cmd == 'z' || cmd == 'x' || cmd == 'c' || cmd == 'v' || cmd == 'b' || cmd == 'n') && event.keyDown()) {
+	if ((cmd == 'z' || cmd == 'x' || cmd == 'c' || cmd == 'v' || cmd == 'p' || cmd == 'n') && event.keyDown()) {
 		SceneRegistration::adjust(cameras, world2color, cmd);
 	}
 	if ((cmd == '5' || cmd == '6' || cmd == '7' || cmd == '8' || cmd == '9' || cmd == '0') && event.keyUp()) {
@@ -60,7 +57,6 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (cmd == 's') {
 		Configuration::saveExtrinsics(world2color);
 	}
-	*/
 	if (cmd == 'b' && event.keyDown()) {
 		saveBackground();
 	}
