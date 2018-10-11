@@ -13,7 +13,7 @@ source_group("Include" FILES ${CURRENT_HEADERS})
 source_group("Source" FILES ${CURRENT_SOURCES}) 
 
 # OpenMP
-FIND_PACKAGE( OpenMP REQUIRED )  
+FIND_PACKAGE( OpenMP REQUIRED )
 if(OPENMP_FOUND)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")  
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")  
@@ -22,14 +22,11 @@ endif()
 
 # Find Packages
 find_package( PCL 1.8 REQUIRED )
-set( KinectSDK2_FUSION TRUE )
-find_package( KinectSDK2 REQUIRED )
 # Find OpenCV, set OpenCV_DIR to the path containing OpenCVConfig.cmake (build\x64\vc14\lib)
 find_package(OpenCV REQUIRED)
 
 # Additional Include Directories
 include_directories( ${PCL_INCLUDE_DIRS} )
-include_directories( ${KinectSDK2_INCLUDE_DIRS} )
 include_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/include" )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
 
@@ -38,7 +35,6 @@ add_definitions( ${PCL_DEFINITIONS} )
 
 # Additional Library Directories
 link_directories( ${PCL_LIBRARY_DIRS} )
-link_directories( ${KinectSDK2_LIBRARY_DIRS} )
 link_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/lib/x64" )
 
 cuda_add_executable( 3D-Telepresence main.cpp
@@ -71,6 +67,5 @@ cuda_add_executable( 3D-Telepresence main.cpp
 
 # Additional Dependencies
 target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )
-target_link_libraries( 3D-Telepresence ${KinectSDK2_LIBRARIES} )
 target_link_libraries( 3D-Telepresence realsense2.lib )
 target_link_libraries( 3D-Telepresence ${OpenCV_LIBS} )

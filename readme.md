@@ -1,31 +1,56 @@
-## 项目介绍
-
-本项目通过 Realsense， G1080Ti显卡和网线直连，实现实时的3D Telepresence。
-
-## 环境设置
-
-1. 安装visual studio 2017，版本最好是v15.4。（v15.5与cuda9.1不兼容，v15.6不清楚)
-
-2. 安装Cuda9.1，注意此步骤需在安装vs以后进行，这样vs中就会被装上cuda的插件。
-
-3. 确保你的visual studio可以将一个普通工程改成CUDA工程，这个流程可以网上搜索一下。
-
-4. 安装point cloud library (pcl) 1.8.1 with GPU，需要手动编译，会遇到很多问题，建议按照网上精细教程进行。
-
-5. 安装Realsense SDK2，系统环境的path中加入(Realsense root)/bin/x64
-
-6. 安装opencv 3.2，并设置OpenCV_DIR为包含OpenCVConfig.cmake的绝对路径（参考：opencv\build\x64\vc14\lib）
-
-7. 通过cmake生成本项目的vs工程，编译器选择visual studio 2017 v15 Win64
-
-8. 在Visual Studio中对cuda+pcl进行一些配置：
-
-	* 删除CmakeList.txt，以免Cmake重新编译了
-
-	* 需选择 x64 + Release 编译模式
-
-	* 删除Object Files文件夹
+## Introduction:
     
-	* 右键项目 > 生成依赖项 > 生成自定义 > CUDA 9.1 打勾
+This project is the kernel part of TeleCP: a 3D telepresence software framework that supports high-level co-presence.
+The rendering part of TeleCP is at https://github.com/zsyzgu/3D-Telepresence-Rendering
+	
+TeleCP has two advantages:
 
-	* 右键*.cu > 属性 > 常规 > 项类型 > CUDAS C/C++
+* easy-to-deploy
+
+    * commercial hardware
+	
+	* open-source
+	
+	* Unity3D plugin for App development
+
+* supporting high-level co-presence
+
+	* temporal synchronicity: low end-to-end delay; sync assistance
+	
+	* spatial synchronicity: shared space; shared props
+
+## Hardware requirements:
+
+A 3D telepresence system consists of two capture sites. At each site, we have:
+
+* a computer with
+
+	* Intel i7-7700k CPU
+	
+	* GTX 1080Ti GPU
+	
+	* Intel X520-SR2 network cards
+
+* HTC Vive
+
+* 3 * Intel Realsense D415
+
+We used optical fiber to connect the two sites.
+
+## Environment
+
+* Install **visual studio 2017 (VS)**. Install neccessary components.
+
+* Install **Cuda 10.0**.
+
+* Install Point Cloud Library (**PCL 1.8.1**).
+
+* Install **Realsense SDK2**.
+
+* Install **Opencv 3.4.0**. Set "OpenCV_DIR" as the path with OpenCVConfig.cmake (e.g., opencv\build\x64\vc15\lib).
+
+* Use **CMake** to generate this project. The complier is "visual studio 2017 v15 win64".
+
+* In the VS project, choose "x64 + Release" complie mode.
+
+* Set the path of *.dll of opencv and realsense in the environment variable.
