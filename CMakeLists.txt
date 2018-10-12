@@ -22,8 +22,7 @@ endif()
 
 # Find Packages
 find_package( PCL 1.8 REQUIRED )
-# Find OpenCV, set OpenCV_DIR to the path containing OpenCVConfig.cmake (build\x64\vc14\lib)
-find_package(OpenCV REQUIRED)
+find_package( OpenCV REQUIRED ) # Set OpenCV_DIR as the path of OpenCVConfig.cmake (build\x64\vc14\lib)
 
 # Additional Include Directories
 include_directories( ${PCL_INCLUDE_DIRS} )
@@ -37,33 +36,9 @@ add_definitions( ${PCL_DEFINITIONS} )
 link_directories( ${PCL_LIBRARY_DIRS} )
 link_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/lib/x64" )
 
-cuda_add_executable( 3D-Telepresence main.cpp
-	CudaHandleError.h
-	Parameters.h
-	Vertex.h
-	RealsenseGrabber.h
-	RealsenseGrabber.cpp
-	SceneRegistration.h
-	SceneRegistration.cpp
-	Transmission.h
-	Transmission.cpp
-	Timer.h
-	Timer.cpp
-	TsdfVolume.h
-	TsdfVolume.cpp
-	TsdfVolume.cuh
-	TsdfVolume.cu
-	DepthFilter.h
-	DepthFilter.cpp
-	DepthFilter.cu
-	ColorFilter.h
-	ColorFilter.cpp
-	ColorFilter.cu
-	AlignColorMap.h
-	AlignColorMap.cpp
-	AlignColorMap.cu
-	Configuration.h
-	Configuration.cpp)
+file(GLOB SRCS *.cpp *.h *.cu *.cuh)
+
+cuda_add_executable( 3D-Telepresence ${SRCS} )
 
 # Additional Dependencies
 target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )
