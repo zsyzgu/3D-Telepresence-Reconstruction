@@ -14,18 +14,16 @@
 #include "AlignColorMap.h"
 #include "Transmission.h"
 
+class Transmission;
+
 class RealsenseGrabber
 {
 private:
 	std::vector<rs2::pipeline> devices;
 	std::vector<float> convertFactors;
-
 	DepthFilter* depthFilter;
 	ColorFilter* colorFilter;
 	AlignColorMap* alignColorMap;
-
-	void enableDevice(rs2::device device);
-
 	UINT16** depthImages;
 	UINT8** colorImages;
 	RGBQUAD** colorImagesRGB;
@@ -36,14 +34,17 @@ private:
 	Intrinsics* originColorIntrinsics;
 	Transmission* transmission;
 
+	void enableDevice(rs2::device device);
+
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(Transformation* extrinsics);
-	int getRGB(RGBQUAD**& colorImages);
+	void updateRGBD(Transformation* extrinsics);
+	void getRGB(RGBQUAD**& colorImages);
 	void saveBackground();
 	void loadBackground();
 	void setTransmission(Transmission* transmission) { this->transmission = transmission; }
+	int getCameras() { return devices.size(); }
 	Intrinsics* getDepthIntrinsics() { return depthIntrinsics; }
 	Intrinsics* getColorIntrinsics() { return colorIntrinsics; }
 	Intrinsics* getOriginColorIntrinsics() { return originColorIntrinsics; }

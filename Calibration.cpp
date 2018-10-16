@@ -23,7 +23,8 @@ Calibration::~Calibration() {
 	}
 }
 
-void Calibration::setOrigin(int cameras, RealsenseGrabber* grabber) {
+void Calibration::setOrigin(RealsenseGrabber* grabber) {
+	int cameras = grabber->getCameras();
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.02513f;
@@ -106,8 +107,10 @@ void Calibration::setOrigin(int cameras, RealsenseGrabber* grabber) {
 }
 
 
-void Calibration::align(int cameras, RealsenseGrabber* grabber, int targetId)
+void Calibration::align(RealsenseGrabber* grabber, int targetId)
 {
+	int cameras = grabber->getCameras();
+
 	if (targetId <= 0 || targetId >= cameras) {
 		return;
 	}
@@ -268,9 +271,10 @@ void Calibration::align(int cameras, RealsenseGrabber* grabber, int targetId)
 	cv::destroyAllWindows();
 }
 
-void Calibration::align(int cameras, RealsenseGrabber* grabber) {
+void Calibration::align(RealsenseGrabber* grabber) {
+	int cameras = grabber->getCameras();
 	world2color[0].setIdentity();
 	for (int targetId = 1; targetId < cameras; targetId++) {
-		align(cameras, grabber, targetId);
+		align(grabber, targetId);
 	}
 }

@@ -12,7 +12,7 @@ class TsdfVolume {
 public:
 	TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 	~TsdfVolume();
-	void integrate(byte* result, RealsenseGrabber* grabber, int cameras, int localCameras, Transformation* world2depth);
+	void integrate(byte* result, RealsenseGrabber* grabber, int remoteCameras, Transformation* world2depth);
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloudFromMesh(byte* buffer);
 };
 

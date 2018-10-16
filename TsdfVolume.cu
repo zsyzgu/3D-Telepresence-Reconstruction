@@ -389,7 +389,7 @@ __global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UIN
 	}
 }
 extern "C"
-void cudaIntegrate(int cameras, RealsenseGrabber* grabber, int localCameras, int& triSize, Vertex* vertex, Transformation* world2depth) {
+void cudaIntegrate(RealsenseGrabber* grabber, int remoteCameras, int& triSize, Vertex* vertex, Transformation* world2depth) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
 	dim3 threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
 
@@ -397,6 +397,8 @@ void cudaIntegrate(int cameras, RealsenseGrabber* grabber, int localCameras, int
 	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, grabber->getDepthIntrinsics(), MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, grabber->getColorIntrinsics(), MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 
+	int localCameras = grabber->getCameras();
+	int cameras = localCameras + remoteCameras;
 	kernelIntegrateDepth << <blocks, threads >> > (cameras, localCameras, volume_device, volumeBin_device, world2depth_device, depthIntrinsics_device, grabber->getDepthImages_device(), volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());
 

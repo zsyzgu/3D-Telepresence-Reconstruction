@@ -4,6 +4,9 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 
 #include <Windows.h>
 #include "TsdfVolume.cuh"
+#include "RealsenseGrabber.h"
+
+class RealsenseGrabber;
 
 class Transmission {
 public:
@@ -32,9 +35,9 @@ public:
 	bool isConnected;
 	void setDelayFrames(int delayFrames) { this->delayFrames = delayFrames; }
 	void recvFrame();
-	void prepareSendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+	void prepareSendFrame(bool* check, RealsenseGrabber* grabber, Transformation* extrinsics);
 	void sendFrame();
-	int getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+	int getFrame(RealsenseGrabber* grabber, Transformation* extrinsics);
 };
 
 #endif

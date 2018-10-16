@@ -163,7 +163,7 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	devices.push_back(pipeline);
 }
 
-int RealsenseGrabber::getRGBD(Transformation* extrinsics)
+void RealsenseGrabber::updateRGBD(Transformation* extrinsics)
 {
 	bool check[MAX_CAMERAS] = { false };
 
@@ -202,13 +202,11 @@ int RealsenseGrabber::getRGBD(Transformation* extrinsics)
 	alignColorMap->alignColor2Depth(devices.size(), check, depthFilter->getCurrFrame_device(), colorFilter->getCurrFrame_device(), depthIntrinsics, originColorIntrinsics, depth2color);
 
 	if (transmission != NULL && transmission->isConnected) {
-		transmission->prepareSendFrame(devices.size(), check, depthFilter->getCurrFrame_device(), alignColorMap->getAlignedColor_device(), extrinsics, depthIntrinsics, colorIntrinsics);
+		transmission->prepareSendFrame(check, this, extrinsics);
 	}
-
-	return devices.size();
 }
 
-int RealsenseGrabber::getRGB(RGBQUAD**& colorImages)
+void RealsenseGrabber::getRGB(RGBQUAD**& colorImages)
 {
 	colorImages = this->colorImagesRGB;
 	bool check[MAX_CAMERAS];
@@ -238,8 +236,6 @@ int RealsenseGrabber::getRGB(RGBQUAD**& colorImages)
 			cudaMemcpy(this->colorImagesRGB[i], colorImages_device + i * COLOR_W * COLOR_H, COLOR_W * COLOR_H * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
 		}
 	}
-
-	return devices.size();
 }
 
 void RealsenseGrabber::saveBackground() {

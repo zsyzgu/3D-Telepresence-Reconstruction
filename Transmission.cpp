@@ -44,11 +44,6 @@ void Transmission::start(bool isServer)
 	}
 
 	isConnected = true;
-
-	/*int nSendBuf = 128 * 1024 * 1024;
-	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (const char*)&nSendBuf, sizeof(int));
-	int nRecvBuf = 128 * 1024 * 1024;
-	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (const char*)&nRecvBuf, sizeof(int));*/
 }
 
 void Transmission::sendData(char* data, int tot)
@@ -124,8 +119,14 @@ void Transmission::recvFrame()
 	remoteFrames++;
 }
 
-void Transmission::prepareSendFrame(int cameras, bool* check, float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
+void Transmission::prepareSendFrame(bool* check, RealsenseGrabber* grabber, Transformation* extrinsics)
 {
+	int cameras = grabber->getCameras();
+	float* depthImages_device = grabber->getDepthImages_device();
+	RGBQUAD* colorImages_device = grabber->getColorImages_device();
+	Intrinsics* depthIntrinsics = grabber->getDepthIntrinsics();
+	Intrinsics* colorIntrinsics = grabber->getColorIntrinsics();
+
 	sendOffset = 0;
 	memcpy(sendBuffer + sendOffset, &cameras, sizeof(int));
 	sendOffset += sizeof(int);
@@ -137,7 +138,7 @@ void Transmission::prepareSendFrame(int cameras, bool* check, float* depthImages
 			sendOffset += DEPTH_H * DEPTH_W * sizeof(float);
 			cudaMemcpy(sendBuffer + sendOffset, colorImages_device + i * COLOR_H * COLOR_W, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
 			sendOffset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(sendBuffer + sendOffset, world2depth + i, sizeof(Transformation));
+			memcpy(sendBuffer + sendOffset, extrinsics + i, sizeof(Transformation));
 			sendOffset += sizeof(Transformation);
 			memcpy(sendBuffer + sendOffset, depthIntrinsics + i, sizeof(Intrinsics));
 			sendOffset += sizeof(Intrinsics);
@@ -152,8 +153,14 @@ void Transmission::sendFrame() {
 	sendData(sendBuffer, sendOffset);
 }
 
-int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics)
+int Transmission::getFrame(RealsenseGrabber* grabber, Transformation* extrinsics)
 {
+	int localCameras = grabber->getCameras();
+	float* depthImages_device = grabber->getDepthImages_device() + localCameras * DEPTH_H * DEPTH_W;
+	RGBQUAD* colorImages_device = grabber->getColorImages_device() + localCameras * COLOR_H * COLOR_W;
+	Intrinsics* depthIntrinsics = grabber->getDepthIntrinsics() + localCameras;
+	Intrinsics* colorIntrinsics = grabber->getColorIntrinsics() + localCameras;
+
 	if (localFrames - delayFrames < 0) {
 		localFrames++;
 		return 0;
@@ -174,7 +181,7 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 			offset += DEPTH_H * DEPTH_W * sizeof(float);
 			cudaMemcpy(colorImages_device + i * COLOR_H * COLOR_W, recvBuffer + offset, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyHostToDevice);
 			offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(world2depth + i, recvBuffer + offset, sizeof(Transformation));
+			memcpy(extrinsics + i, recvBuffer + offset, sizeof(Transformation));
 			offset += sizeof(Transformation);
 			memcpy(depthIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
 			offset += sizeof(Intrinsics);
@@ -185,4 +192,3 @@ int Transmission::getFrame(float* depthImages_device, RGBQUAD* colorImages_devic
 
 	return cameras;
 }
-

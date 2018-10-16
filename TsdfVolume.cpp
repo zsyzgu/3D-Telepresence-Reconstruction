@@ -5,7 +5,7 @@
 
 extern "C" void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
-extern "C" void cudaIntegrate(int cameras, RealsenseGrabber* grabber, int localCameras, int& triSize, Vertex* vertex, Transformation* world2depth);
+extern "C" void cudaIntegrate(RealsenseGrabber* grabber, int remoteCameras, int& triSize, Vertex* vertex, Transformation* world2depth);
 
 TsdfVolume::TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
@@ -17,10 +17,10 @@ TsdfVolume::~TsdfVolume()
 	cudaReleaseVolume();
 }
 
-void TsdfVolume::integrate(byte* result, RealsenseGrabber* grabber, int cameras, int localCameras, Transformation* world2depth)
+void TsdfVolume::integrate(byte* result, RealsenseGrabber* grabber, int remoteCameras, Transformation* world2depth)
 {
 	Vertex* vertex = (Vertex*)(result + 4);
-	cudaIntegrate(cameras, grabber, localCameras, *((int*)result), vertex, world2depth);
+	cudaIntegrate(grabber, remoteCameras, *((int*)result), vertex, world2depth);
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr TsdfVolume::getPointCloudFromMesh(byte* buffer)

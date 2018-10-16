@@ -30,9 +30,9 @@ private:
 public:
 	Calibration();
 	~Calibration();
-	void setOrigin(int cameras, RealsenseGrabber* grabber);
-	void align(int cameras, RealsenseGrabber* grabber, int targetId);
-	void align(int cameras, RealsenseGrabber* grabber);
+	void setOrigin(RealsenseGrabber* grabber);
+	void align(RealsenseGrabber* grabber, int targetId);
+	void align(RealsenseGrabber* grabber);
 	Transformation* getExtrinsics() { return world2depth; }
 };
 
