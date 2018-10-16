@@ -25,6 +25,7 @@ RealsenseGrabber::RealsenseGrabber()
 	color2depth = new Transformation[MAX_CAMERAS];
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
+	originColorIntrinsics = new Intrinsics[MAX_CAMERAS];
 	transmission = NULL;
 
 	rs2::context context;
@@ -82,6 +83,9 @@ RealsenseGrabber::~RealsenseGrabber()
 	if (colorIntrinsics != NULL) {
 		delete[] colorIntrinsics;
 	}
+	if (originColorIntrinsics != NULL) {
+		delete[] originColorIntrinsics;
+	}
 	for (int i = 0; i < devices.size(); i++) {
 		devices[i].stop();
 	}
@@ -105,6 +109,8 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	std::vector<rs2::sensor> sensors = device.query_sensors();
 	for (int i = 0; i < sensors.size(); i++) {
 		if (strcmp(sensors[i].get_info(RS2_CAMERA_INFO_NAME), "Stereo Module") == 0) {
+
+
 			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, 0);
 			float depth_unit = sensors[i].get_option(RS2_OPTION_DEPTH_UNITS);
 			float stereo_baseline = sensors[i].get_option(RS2_OPTION_STEREO_BASELINE) * 0.001;
@@ -122,15 +128,45 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	rs2::pipeline pipeline;
 	pipeline.start(cfg);
 
+	std::vector<rs2::stream_profile> streamProfiles = pipeline.get_active_profile().get_streams();
+	rs2::stream_profile depthProfile;
+	rs2::stream_profile colorProfile;
+	for (int i = 0; i < streamProfiles.size(); i++) {
+		rs2::stream_profile profile = streamProfiles[i];
+
+		if (profile.is<rs2::video_stream_profile>()) {
+			if (profile.stream_type() == RS2_STREAM_DEPTH) {
+				depthProfile = profile;
+			}
+			if (profile.stream_type() == RS2_STREAM_COLOR) {
+				colorProfile = profile;
+			}
+		}
+	}
+	int id = devices.size();
+	rs2_intrinsics dIntrinsics = depthProfile.as<rs2::video_stream_profile>().get_intrinsics();
+	depthIntrinsics[id].fx = dIntrinsics.fx;
+	depthIntrinsics[id].fy = dIntrinsics.fy;
+	depthIntrinsics[id].ppx = dIntrinsics.ppx;
+	depthIntrinsics[id].ppy = dIntrinsics.ppy;
+	rs2_intrinsics cIntrinsics = colorProfile.as<rs2::video_stream_profile>().get_intrinsics();
+	originColorIntrinsics[id].fx = cIntrinsics.fx;
+	originColorIntrinsics[id].fy = cIntrinsics.fy;
+	originColorIntrinsics[id].ppx = cIntrinsics.ppx;
+	originColorIntrinsics[id].ppy = cIntrinsics.ppy;
+	colorIntrinsics[id] = depthIntrinsics[id].zoom((float)COLOR_W / DEPTH_W, (float)COLOR_H / DEPTH_H);
+	rs2_extrinsics d2cExtrinsics = depthProfile.get_extrinsics_to(colorProfile);
+	depth2color[id] = Transformation(d2cExtrinsics.rotation, d2cExtrinsics.translation);
+	rs2_extrinsics c2dExtrinsics = colorProfile.get_extrinsics_to(depthProfile);
+	color2depth[id] = Transformation(c2dExtrinsics.rotation, c2dExtrinsics.translation);
+
 	devices.push_back(pipeline);
 }
 
-int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinsics, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* extrinsics)
 {
 	depthImages_device = depthFilter->getCurrFrame_device();
 	colorImages_device = colorFilter->getCurrFrame_device();
-	depthIntrinsics = this->depthIntrinsics;
-	colorIntrinsics = this->colorIntrinsics;
 	bool check[MAX_CAMERAS] = { false };
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
@@ -143,36 +179,17 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 		}
 
 		if (check[deviceId]) {
-			rs2::stream_profile depthProfile;
-			rs2::stream_profile colorProfile;
-
 			for (int i = 0; i < frameset.size(); i++) {
 				rs2::frame frame = frameset[i];
 				rs2::stream_profile profile = frame.get_profile();
-				rs2_intrinsics intrinsics = profile.as<rs2::video_stream_profile>().get_intrinsics();
 
 				if (profile.stream_type() == RS2_STREAM_DEPTH) {
-					depthProfile = profile;
-					depthIntrinsics[deviceId].fx = intrinsics.fx;
-					depthIntrinsics[deviceId].fy = intrinsics.fy;
-					depthIntrinsics[deviceId].ppx = intrinsics.ppx;
-					depthIntrinsics[deviceId].ppy = intrinsics.ppy;
 					memcpy(depthImages[deviceId], frame.get_data(), DEPTH_H * DEPTH_W * sizeof(UINT16));
 				}
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
-					colorProfile = profile;
-					colorIntrinsics[deviceId].fx = intrinsics.fx;
-					colorIntrinsics[deviceId].fy = intrinsics.fy;
-					colorIntrinsics[deviceId].ppx = intrinsics.ppx;
-					colorIntrinsics[deviceId].ppy = intrinsics.ppy;
 					memcpy(colorImages[deviceId], frame.get_data(), 2 * COLOR_H * COLOR_W * sizeof(UINT8));
 				}
 			}
-
-			rs2_extrinsics d2cExtrinsics = depthProfile.get_extrinsics_to(colorProfile);
-			depth2color[deviceId] = Transformation(d2cExtrinsics.rotation, d2cExtrinsics.translation);
-			rs2_extrinsics c2dExtrinsics = colorProfile.get_extrinsics_to(depthProfile);
-			color2depth[deviceId] = Transformation(c2dExtrinsics.rotation, c2dExtrinsics.translation);
 		}
 	}
 	
@@ -184,25 +201,18 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 		}
 	}
 
-	colorImages_device = alignColorMap->getAlignedColor_device(devices.size(), check, depthImages_device, colorImages_device, depthIntrinsics, colorIntrinsics, depth2color);
-	for (int i = 0; i < devices.size(); i++) {
-		if (check[i]) {
-			world2depth[i] = color2depth[i] * world2color[i];
-			colorIntrinsics[i] = depthIntrinsics[i].zoom((float)COLOR_W / DEPTH_W, (float)COLOR_H / DEPTH_H);
-		}
-	}
+	colorImages_device = alignColorMap->getAlignedColor_device(devices.size(), check, depthImages_device, colorImages_device, depthIntrinsics, originColorIntrinsics, depth2color);
 
 	if (transmission != NULL && transmission->isConnected) {
-		transmission->prepareSendFrame(devices.size(), check, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
+		transmission->prepareSendFrame(devices.size(), check, depthImages_device, colorImages_device, extrinsics, depthIntrinsics, colorIntrinsics);
 	}
 
 	return devices.size();
 }
 
-int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics)
+int RealsenseGrabber::getRGB(RGBQUAD**& colorImages)
 {
 	colorImages = this->colorImagesRGB;
-	colorIntrinsics = this->colorIntrinsics;
 	bool check[MAX_CAMERAS];
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
@@ -217,10 +227,6 @@ int RealsenseGrabber::getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsic
 				rs2_intrinsics intrinsics = profile.as<rs2::video_stream_profile>().get_intrinsics();
 
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
-					colorIntrinsics[deviceId].fx = intrinsics.fx;
-					colorIntrinsics[deviceId].fy = intrinsics.fy;
-					colorIntrinsics[deviceId].ppx = intrinsics.ppx;
-					colorIntrinsics[deviceId].ppy = intrinsics.ppy;
 					memcpy(this->colorImages[deviceId], frame.get_data(), 2 * COLOR_W * COLOR_H * sizeof(UINT8));
 				}
 			}

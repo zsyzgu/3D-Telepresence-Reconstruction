@@ -1,5 +1,5 @@
 #include "Timer.h"
-#include "SceneRegistration.h"
+#include "Calibration.h"
 #include "TsdfVolume.h"
 #include "Transmission.h"
 #include "RealsenseGrabber.h"
@@ -11,29 +11,26 @@
 byte* buffer = NULL;
 RealsenseGrabber* grabber = NULL;
 TsdfVolume* volume = NULL;
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
-boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
-Transformation* world2color = NULL;
-Transformation* world2depth = NULL;
+Calibration* calibration;
 Transmission* transmission = NULL;
 int cameras = 0;
 float* depthImages_device;
 RGBQUAD* colorImages_device;
-Intrinsics* depthIntrinsics;
-Intrinsics* colorIntrinsics;
+boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 
 void registration(int targetId = 0) {
 	if (targetId == 0) {
-		SceneRegistration::align(cameras, grabber, world2color);
+		calibration->align(cameras, grabber);
 	} else {
-		SceneRegistration::align(cameras, grabber, world2color, targetId);
+		calibration->align(cameras, grabber, targetId);
 	}
-	Configuration::saveExtrinsics(world2color);
+	Configuration::saveExtrinsics(calibration->getExtrinsics());
 }
 
 void setOrigin() {
-	SceneRegistration::setOrigin(cameras, grabber, world2color);
-	Configuration::saveExtrinsics(world2color);
+	calibration->setOrigin(cameras, grabber);
+	Configuration::saveExtrinsics(calibration->getExtrinsics());
 }
 
 void saveBackground() {
@@ -47,15 +44,6 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	}
 	if (cmd == 'o' && event.keyDown()) {
 		setOrigin();
-	}
-	if ((cmd == 'z' || cmd == 'x' || cmd == 'c' || cmd == 'v' || cmd == 'p' || cmd == 'n') && event.keyDown()) {
-		SceneRegistration::adjust(cameras, world2color, cmd);
-	}
-	if ((cmd == '5' || cmd == '6' || cmd == '7' || cmd == '8' || cmd == '9' || cmd == '0') && event.keyUp()) {
-		SceneRegistration::adjust(cameras, world2color, cmd);
-	}
-	if (cmd == 's') {
-		Configuration::saveExtrinsics(world2color);
 	}
 	if (cmd == 'b' && event.keyDown()) {
 		saveBackground();
@@ -82,9 +70,8 @@ void start() {
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
 	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
-	world2color = new Transformation[MAX_CAMERAS];
-	world2depth = new Transformation[MAX_CAMERAS];
-	Configuration::loadExtrinsics(world2color);
+	calibration = new Calibration();
+	Configuration::loadExtrinsics(calibration->getExtrinsics());
 
 #if CALIBRATION == false
 	grabber->loadBackground();
@@ -96,7 +83,7 @@ void start() {
 	grabber->setTransmission(transmission);
 #endif
 
-	cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+	cameras = grabber->getRGBD(depthImages_device, colorImages_device, calibration->getExtrinsics());
 }
 
 void update() {
@@ -107,11 +94,11 @@ void update() {
 			int remoteCameras = 0;
 			if (transmission != NULL && transmission->isConnected) {
 				transmission->sendFrame();
-				remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, world2depth + cameras, depthIntrinsics + cameras, colorIntrinsics + cameras);
+				remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, calibration->getExtrinsics() + cameras, grabber->getDepthIntrinsics() + cameras, grabber->getColorIntrinsics() + cameras);
 			}
 
-			volume->integrate(buffer, cameras + remoteCameras, cameras, depthImages_device, colorImages_device, world2depth, depthIntrinsics, colorIntrinsics);
-			cameras = grabber->getRGBD(depthImages_device, colorImages_device, world2depth, world2color, depthIntrinsics, colorIntrinsics);
+			volume->integrate(buffer, grabber, cameras + remoteCameras, cameras, depthImages_device, colorImages_device, calibration->getExtrinsics());
+			cameras = grabber->getRGBD(depthImages_device, colorImages_device, calibration->getExtrinsics());
 		}
 		#pragma omp section
 		{
@@ -132,11 +119,8 @@ void stop() {
 	if (buffer != NULL) {
 		delete[] buffer;
 	}
-	if (world2color != NULL) {
-		delete[] world2color;
-	}
-	if (world2depth != NULL) {
-		delete[] world2depth;
+	if (calibration != NULL) {
+		delete[] calibration;
 	}
 	if (transmission != NULL) {
 		delete transmission;

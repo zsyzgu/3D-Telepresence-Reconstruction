@@ -1,8 +1,29 @@
-#include "SceneRegistration.h"
+#include "Calibration.h"
 #include "Timer.h"
 #include "Parameters.h"
 
-void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transformation* world2color) {
+void Calibration::updateWorld2Depth(int cameras, RealsenseGrabber* grabber) {
+	Transformation* color2depth = grabber->getColor2Depth();
+	for (int i = 0; i < cameras; i++) {
+		world2depth[i] = color2depth[i] * world2color[i];
+	}
+}
+
+Calibration::Calibration() {
+	world2color = new Transformation[MAX_CAMERAS];
+	world2depth = new Transformation[MAX_CAMERAS];
+}
+
+Calibration::~Calibration() {
+	if (world2color != NULL) {
+		delete[] world2color;
+	}
+	if (world2depth != NULL) {
+		delete[] world2depth;
+	}
+}
+
+void Calibration::setOrigin(int cameras, RealsenseGrabber* grabber) {
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.02513f;
@@ -14,14 +35,14 @@ void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transf
 		}
 	}
 
-	Intrinsics* colorIntrinsics;
+	Intrinsics* colorIntrinsics = grabber->getOriginColorIntrinsics();
 	RGBQUAD** colorImages;
 	std::vector<cv::Point2f> sourcePoints;
 	cv::Mat sourceColorMat(COLOR_H, COLOR_W, CV_8UC3);
 
 	int mainId = 0;
 	do {
-		grabber->getRGB(colorImages, colorIntrinsics);
+		grabber->getRGB(colorImages);
 		RGBQUAD* source = colorImages[mainId];
 		for (int i = 0; i < COLOR_H; i++) {
 			for (int j = 0; j < COLOR_W; j++) {
@@ -79,12 +100,13 @@ void SceneRegistration::setOrigin(int cameras, RealsenseGrabber* grabber, Transf
 	for (int i = 0; i < cameras; i++) {
 		world2color[i] = (world2color[i] * camera0Inv) * world2camera;
 	}
+	updateWorld2Depth(cameras, grabber);
 
 	cv::destroyAllWindows();
 }
 
 
-void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transformation* world2color, int targetId)
+void Calibration::align(int cameras, RealsenseGrabber* grabber, int targetId)
 {
 	if (targetId <= 0 || targetId >= cameras) {
 		return;
@@ -103,7 +125,7 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 	const int RECT_AREA_THRESHOLD = 20000;
 
 	RGBQUAD** colorImages;
-	Intrinsics* colorIntrinsics;
+	Intrinsics* colorIntrinsics = grabber->getOriginColorIntrinsics();
 	std::vector<cv::Point2f> sourcePoints;
 	std::vector<cv::Point2f> targetPoints;
 	cv::Mat sourceColorMat(COLOR_H, COLOR_W, CV_8UC3);
@@ -120,7 +142,7 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 	std::vector<std::vector<cv::Point2f> > targetPointsArray;
 	std::vector<cv::Point2f> rects;
 	for (int iter = 0; iter < ITERATION;) {
-		grabber->getRGB(colorImages, colorIntrinsics);
+		grabber->getRGB(colorImages);
 		RGBQUAD* source = colorImages[0];
 		RGBQUAD* target = colorImages[targetId];
 		for (int i = 0; i < COLOR_H; i++) {
@@ -242,72 +264,13 @@ void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transforma
 	std::cout << "RMS [" << targetId << "]= " << rms << std::endl;
 
 	world2color[targetId] = Transformation((double*)rotation.data, (double*)translation.data);
+	updateWorld2Depth(cameras, grabber);
 	cv::destroyAllWindows();
 }
 
-void SceneRegistration::align(int cameras, RealsenseGrabber* grabber, Transformation* world2color)
-{
+void Calibration::align(int cameras, RealsenseGrabber* grabber) {
 	world2color[0].setIdentity();
 	for (int targetId = 1; targetId < cameras; targetId++) {
-		align(cameras, grabber, world2color, targetId);
-	}
-}
-
-void SceneRegistration::adjust(int cameras, Transformation* world2color, char cmd)
-{
-	const float T = 0.001f;
-	const float R = 3.1415926f * 0.002f;
-	Transformation trans;
-
-	if (cmd == 'z') {
-		trans.translation.y -= T;
-	}
-	if (cmd == 'x') {
-		trans.translation.y += T;
-	}
-	if (cmd == 'c') {
-		trans.translation.x -= T;
-	}
-	if (cmd == 'v') {
-		trans.translation.x += T;
-	}
-	if (cmd == 'p') {
-		trans.translation.z -= T;
-	}
-	if (cmd == 'n') {
-		trans.translation.z += T;
-	}
-	if (cmd == '5') {
-		trans.rotation0 = make_float3(cos(-R), 0, -sin(-R));
-		trans.rotation1 = make_float3(0, 1, 0);
-		trans.rotation2 = make_float3(sin(-R), 0, cos(-R));
-	}
-	if (cmd == '6') {
-		trans.rotation0 = make_float3(cos(R), 0, -sin(R));
-		trans.rotation1 = make_float3(0, 1, 0);
-		trans.rotation2 = make_float3(sin(R), 0, cos(R));
-	}
-	if (cmd == '7') {
-		trans.rotation0 = make_float3(1, 0, 0);
-		trans.rotation1 = make_float3(0, cos(-R), sin(-R));
-		trans.rotation2 = make_float3(0, -sin(-R), cos(-R));
-	}
-	if (cmd == '8') {
-		trans.rotation0 = make_float3(1, 0, 0);
-		trans.rotation1 = make_float3(0, cos(R), sin(R));
-		trans.rotation2 = make_float3(0, -sin(R), cos(R));
-	}
-	if (cmd == '9') {
-		trans.rotation0 = make_float3(cos(-R), sin(-R), 0);
-		trans.rotation1 = make_float3(-sin(-R), cos(-R), 0);
-		trans.rotation2 = make_float3(0, 0, 1);
-	}
-	if (cmd == '0') {
-		trans.rotation0 = make_float3(cos(R), sin(R), 0);
-		trans.rotation1 = make_float3(-sin(R), cos(R), 0);
-		trans.rotation2 = make_float3(0, 0, 1);
-	}
-	for (int i = 0; i < cameras; i++) {
-		world2color[i] = world2color[i] * trans;
+		align(cameras, grabber, targetId);
 	}
 }

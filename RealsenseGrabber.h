@@ -17,10 +17,6 @@
 class RealsenseGrabber
 {
 private:
-	struct ViewPort {
-		rs2::pipeline pipe;
-		rs2::pipeline_profile profile;
-	};
 	std::vector<rs2::pipeline> devices;
 	std::vector<float> convertFactors;
 
@@ -37,16 +33,21 @@ private:
 	Transformation* color2depth;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
+	Intrinsics* originColorIntrinsics;
 	Transmission* transmission;
 
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* world2depth, Transformation* world2color, Intrinsics*& depthIntrinscis, Intrinsics*& colorIntrinsics);
-	int getRGB(RGBQUAD**& colorImages, Intrinsics*& colorIntrinsics);
+	int getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* extrinsics);
+	int getRGB(RGBQUAD**& colorImages);
 	void saveBackground();
 	void loadBackground();
 	void setTransmission(Transmission* transmission) { this->transmission = transmission; }
+	Intrinsics* getDepthIntrinsics() { return depthIntrinsics; }
+	Intrinsics* getColorIntrinsics() { return colorIntrinsics; }
+	Intrinsics* getOriginColorIntrinsics() { return originColorIntrinsics; }
+	Transformation* getColor2Depth() { return color2depth; }
 };
 
 #endif

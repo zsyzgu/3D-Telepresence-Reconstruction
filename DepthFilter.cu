@@ -9,9 +9,6 @@ namespace FilterNamespace {
 	__constant__ float SF_THRESHOLD = 40.0f;
 	__constant__ float TF_ALPHA = 0.5f;
 	__constant__ float TF_THRESHOLD = 40.0f;
-	__constant__ int HF_RADIUS = 5;		//领域半径（圆形）
-	__constant__ float HF_TC = 0.75;	//领域有效数量阈值，即领域内75%有效值时填洞
-	__constant__ float HF_TR = 40.0f;	//领域极差限制
 
 	float* lastFrame;
 };

@@ -4,6 +4,7 @@
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <Windows.h>
+#include "RealsenseGrabber.h"
 #include "Vertex.h"
 #include "TsdfVolume.cuh"
 
@@ -11,7 +12,7 @@ class TsdfVolume {
 public:
 	TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 	~TsdfVolume();
-	void integrate(byte* result, int cameras, int localCameras, float* depth_device, RGBQUAD* color_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics);
+	void integrate(byte* result, RealsenseGrabber* grabber, int cameras, int localCameras, float* depth_device, RGBQUAD* color_device, Transformation* world2depth);
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloudFromMesh(byte* buffer);
 };
 

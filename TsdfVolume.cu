@@ -6,6 +6,7 @@
 #include "Vertex.h"
 #include "Parameters.h"
 #include "TsdfVolume.cuh"
+#include "RealsenseGrabber.h"
 
 namespace tsdf {
 	float3 size;
@@ -388,13 +389,13 @@ __global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UIN
 	}
 }
 extern "C"
-void cudaIntegrate(int cameras, int localCameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics) {
+void cudaIntegrate(int cameras, RealsenseGrabber* grabber, int localCameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
 	dim3 threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
 
 	HANDLE_ERROR(cudaMemcpy(world2depth_device, world2depth, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, depthIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, colorIntrinsics, MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, grabber->getDepthIntrinsics(), MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, grabber->getColorIntrinsics(), MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 
 	kernelIntegrateDepth << <blocks, threads >> > (cameras, localCameras, volume_device, volumeBin_device, world2depth_device, depthIntrinsics_device, depth_device, volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());

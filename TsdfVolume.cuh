@@ -80,6 +80,14 @@ public:
 	float3 rotation2;
 	float3 translation;
 public:
+	CUDA_CALLABLE_MEMBER Transformation& operator = (const Transformation& trans) {
+		rotation0 = trans.rotation0;
+		rotation1 = trans.rotation1;
+		rotation2 = trans.rotation2;
+		translation = trans.translation;
+		return *this;
+	}
+
 	CUDA_CALLABLE_MEMBER Transformation() {
 		setIdentity();
 	}
