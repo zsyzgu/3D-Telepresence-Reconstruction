@@ -16,13 +16,12 @@ AlignColorMap::~AlignColorMap()
 	cudaAlignClean(alignedColor_devive, depthBackground_device, colorBackground_device);
 }
 
-RGBQUAD* AlignColorMap::getAlignedColor_device(int cameras, bool* check, float* depth_device, RGBQUAD* color_device, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color)
+void AlignColorMap::alignColor2Depth(int cameras, bool * check, float * depth_device, RGBQUAD * color_device, Intrinsics * depthIntrinsics, Intrinsics * colorIntrinsics, Transformation * depth2color)
 {
 	cudaAlignProcess(cameras, check, alignedColor_devive, depth_device, color_device, depthIntrinsics, colorIntrinsics, depth2color);
 	if (isRemoveBackground) {
 		cudaRemoveBackground(cameras, check, alignedColor_devive, depth_device, colorBackground_device, depthBackground_device);
 	}
-	return alignedColor_devive;
 }
 
 void AlignColorMap::enableBackground()

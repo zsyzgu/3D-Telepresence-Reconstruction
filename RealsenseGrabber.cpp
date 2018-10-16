@@ -163,10 +163,8 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	devices.push_back(pipeline);
 }
 
-int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* extrinsics)
+int RealsenseGrabber::getRGBD(Transformation* extrinsics)
 {
-	depthImages_device = depthFilter->getCurrFrame_device();
-	colorImages_device = colorFilter->getCurrFrame_device();
 	bool check[MAX_CAMERAS] = { false };
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
@@ -201,10 +199,10 @@ int RealsenseGrabber::getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_
 		}
 	}
 
-	colorImages_device = alignColorMap->getAlignedColor_device(devices.size(), check, depthImages_device, colorImages_device, depthIntrinsics, originColorIntrinsics, depth2color);
+	alignColorMap->alignColor2Depth(devices.size(), check, depthFilter->getCurrFrame_device(), colorFilter->getCurrFrame_device(), depthIntrinsics, originColorIntrinsics, depth2color);
 
 	if (transmission != NULL && transmission->isConnected) {
-		transmission->prepareSendFrame(devices.size(), check, depthImages_device, colorImages_device, extrinsics, depthIntrinsics, colorIntrinsics);
+		transmission->prepareSendFrame(devices.size(), check, depthFilter->getCurrFrame_device(), alignColorMap->getAlignedColor_device(), extrinsics, depthIntrinsics, colorIntrinsics);
 	}
 
 	return devices.size();

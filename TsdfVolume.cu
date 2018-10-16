@@ -389,7 +389,7 @@ __global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UIN
 	}
 }
 extern "C"
-void cudaIntegrate(int cameras, RealsenseGrabber* grabber, int localCameras, int& triSize, Vertex* vertex, float* depth_device, RGBQUAD* color_device, Transformation* world2depth) {
+void cudaIntegrate(int cameras, RealsenseGrabber* grabber, int localCameras, int& triSize, Vertex* vertex, Transformation* world2depth) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
 	dim3 threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
 
@@ -397,7 +397,7 @@ void cudaIntegrate(int cameras, RealsenseGrabber* grabber, int localCameras, int
 	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, grabber->getDepthIntrinsics(), MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, grabber->getColorIntrinsics(), MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 
-	kernelIntegrateDepth << <blocks, threads >> > (cameras, localCameras, volume_device, volumeBin_device, world2depth_device, depthIntrinsics_device, depth_device, volumeSize, offset);
+	kernelIntegrateDepth << <blocks, threads >> > (cameras, localCameras, volume_device, volumeBin_device, world2depth_device, depthIntrinsics_device, grabber->getDepthImages_device(), volumeSize, offset);
 	HANDLE_ERROR(cudaGetLastError());
 
 	kernelMarchingCubesCount << <blocks, threads >> > (volume_device, count_device);
@@ -408,7 +408,7 @@ void cudaIntegrate(int cameras, RealsenseGrabber* grabber, int localCameras, int
 		HANDLE_ERROR(cudaGetLastError());
 
 		if (triSize != 0) {
-			kernelColorization << <(triSize + 255) / 256, 256 >> > (cameras, triSize, vertex_device, triBin_device, (uchar4*)color_device, world2depth_device, colorIntrinsics_device);
+			kernelColorization << <(triSize + 255) / 256, 256 >> > (cameras, triSize, vertex_device, triBin_device, (uchar4*)grabber->getColorImages_device(), world2depth_device, colorIntrinsics_device);
 			HANDLE_ERROR(cudaGetLastError());
 		}
 

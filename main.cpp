@@ -14,8 +14,6 @@ TsdfVolume* volume = NULL;
 Calibration* calibration;
 Transmission* transmission = NULL;
 int cameras = 0;
-float* depthImages_device;
-RGBQUAD* colorImages_device;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 
@@ -83,7 +81,7 @@ void start() {
 	grabber->setTransmission(transmission);
 #endif
 
-	cameras = grabber->getRGBD(depthImages_device, colorImages_device, calibration->getExtrinsics());
+	cameras = grabber->getRGBD(calibration->getExtrinsics());
 }
 
 void update() {
@@ -94,11 +92,11 @@ void update() {
 			int remoteCameras = 0;
 			if (transmission != NULL && transmission->isConnected) {
 				transmission->sendFrame();
-				remoteCameras = transmission->getFrame(depthImages_device + cameras * DEPTH_H * DEPTH_W, colorImages_device + cameras * COLOR_H * COLOR_W, calibration->getExtrinsics() + cameras, grabber->getDepthIntrinsics() + cameras, grabber->getColorIntrinsics() + cameras);
+				remoteCameras = transmission->getFrame(grabber->getDepthImages_device() + cameras * DEPTH_H * DEPTH_W, grabber->getColorImages_device() + cameras * COLOR_H * COLOR_W, calibration->getExtrinsics() + cameras, grabber->getDepthIntrinsics() + cameras, grabber->getColorIntrinsics() + cameras);
 			}
 
-			volume->integrate(buffer, grabber, cameras + remoteCameras, cameras, depthImages_device, colorImages_device, calibration->getExtrinsics());
-			cameras = grabber->getRGBD(depthImages_device, colorImages_device, calibration->getExtrinsics());
+			volume->integrate(buffer, grabber, cameras + remoteCameras, cameras, calibration->getExtrinsics());
+			cameras = grabber->getRGBD(calibration->getExtrinsics());
 		}
 		#pragma omp section
 		{

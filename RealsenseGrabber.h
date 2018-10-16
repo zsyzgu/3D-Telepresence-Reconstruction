@@ -39,7 +39,7 @@ private:
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	int getRGBD(float*& depthImages_device, RGBQUAD*& colorImages_device, Transformation* extrinsics);
+	int getRGBD(Transformation* extrinsics);
 	int getRGB(RGBQUAD**& colorImages);
 	void saveBackground();
 	void loadBackground();
@@ -48,6 +48,8 @@ public:
 	Intrinsics* getColorIntrinsics() { return colorIntrinsics; }
 	Intrinsics* getOriginColorIntrinsics() { return originColorIntrinsics; }
 	Transformation* getColor2Depth() { return color2depth; }
+	float* getDepthImages_device() { return depthFilter->getCurrFrame_device(); }
+	RGBQUAD* getColorImages_device() { return alignColorMap->getAlignedColor_device(); }
 };
 
 #endif
