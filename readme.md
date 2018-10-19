@@ -57,14 +57,40 @@ We used optical fiber to connect the two sites.
 
 ## Build the Project
 
-* **calibration.exe** is the EXE for background removal, cameras calibration and origin point setting.
+Combined with the rendering part of TeleCP **3D-Telepresence-Rendering** (https://github.com/zsyzgu/3D-Telepresence-Rendering), we can release the following executable files:
 
-* **TeleCP.exe** is the final EXE that connects two ends for the 3D telepresence.
+* **calibration.exe**: the EXE for background removal, cameras calibration and original point setting.
+
+* **TeleCP.exe**: the EXE that connects two ends for the 3D telepresence.
 
 The building steps are as follows:
 
-1. Release **calibration.exe** and **TeleCP.dll** from this project. Before generating **TeleCP.dll**, we should define its version (server/client) in **Parameters.h**.
+1. Release **calibration.exe** from this project.
 
-2. Move **TeleCP.dll** to "Assets/Plugins/" of the rendering part of TeleCP, which is written in Unity3D (https://github.com/zsyzgu/3D-Telepresence-Rendering).
+2. Define the version (server/client) in **Parameters.h** and release **TeleCP.dll** from this project.
 
-3. Generate **TeleCP.exe** in Unity3D.
+3. Move **TeleCP.dll** to "Assets/Plugins/" in the project **3D-Telepresence-Rendering** (made by Unity3D).
+
+4. Generate **TeleCP.exe** in Unity3D.
+
+In particular, **TeleCP.dll** together with the project **3D-Telepresence-Rendering** make up the Unity3D plugin of TeleCP.
+
+## Run the Project
+
+* Run **calibration.exe** to calibrate each end.
+
+    * **Background removal**: move away everything that are not included in the virtual scene. Press key **"b"** to remove them from the 3D reconstruction.
+    
+    * **Cameras calibration**: press key **"r"** to start the calibration process. We use a checkerboard for the calibration. The checkerboard is a A4 paper printed with **checkerboard.png** pasted on a flat board.
+    
+    * **Original point setting**: press key **"o"** to set the original point as the center of checkerboard.
+    
+    This calibration information is stored in **Background.cfg** and **Extrinsics.cfg**.
+
+* Run **TeleCP.exe** to connect the two ends for the 3D telepresence.
+
+    * We use an optical fibre to connect the two ends.
+    
+    * Set the IP of **server** to **192.168.1.1**; set the IP of **client** to **192.168.1.2**.
+    
+    * First, run **TeleCP.exe** in server; then, run **TeleCP.exe** in client.
