@@ -1,4 +1,4 @@
-## Introduction:
+## Introduction
     
 This project is the kernel part of TeleCP: a 3D telepresence software framework that supports high-level co-presence.
 The rendering part of TeleCP is at https://github.com/zsyzgu/3D-Telepresence-Rendering
@@ -19,7 +19,7 @@ TeleCP has two advantages:
 	
 	* spatial synchronicity: shared space; shared props
 
-## Hardware requirements:
+## Hardware Requirements
 
 A 3D telepresence system consists of two capture sites. At each site, we have:
 
@@ -37,7 +37,7 @@ A 3D telepresence system consists of two capture sites. At each site, we have:
 
 We used optical fiber to connect the two sites.
 
-## Environment
+## Software and Environment
 
 * Install **visual studio 2017 (VS)**. Install neccessary components.
 
@@ -54,3 +54,17 @@ We used optical fiber to connect the two sites.
 * In the VS project, choose "x64 + Release" complie mode.
 
 * Set the path of *.dll of opencv and realsense in the environment variable.
+
+## Build the Project
+
+* **calibration.exe** is the EXE for background removal, cameras calibration and origin point setting.
+
+* **TeleCP.exe** is the final EXE that connects two ends for the 3D telepresence.
+
+The building steps are as follows:
+
+1. Release **calibration.exe** and **TeleCP.dll** from this project. Before generating **TeleCP.dll**, we should define its version (server/client) in **Parameters.h**.
+
+2. Move **TeleCP.dll** to "Assets/Plugins/" of the rendering part of TeleCP, which is written in Unity3D (https://github.com/zsyzgu/3D-Telepresence-Rendering).
+
+3. Generate **TeleCP.exe** in Unity3D.
