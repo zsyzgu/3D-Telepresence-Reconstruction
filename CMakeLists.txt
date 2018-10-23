@@ -28,6 +28,7 @@ find_package( OpenCV REQUIRED ) # Set OpenCV_DIR as the path of OpenCVConfig.cma
 include_directories( ${PCL_INCLUDE_DIRS} )
 include_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/include" )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
+include_directories( "./include" )
 
 # Preprocessor Definitions
 add_definitions( ${PCL_DEFINITIONS} )
@@ -36,9 +37,9 @@ add_definitions( ${PCL_DEFINITIONS} )
 link_directories( ${PCL_LIBRARY_DIRS} )
 link_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/lib/x64" )
 
-file(GLOB SRCS *.cpp *.h *.cu *.cuh)
+file(GLOB SRCS include/*.h src/*.cpp src/cuda/*.cu src/cuda/*.cuh)
 
-cuda_add_executable( 3D-Telepresence ${SRCS} )
+cuda_add_executable( 3D-Telepresence ${SRCS} tests/main.cpp )
 
 # Additional Dependencies
 target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )
