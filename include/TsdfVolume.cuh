@@ -11,6 +11,10 @@
 #include "CudaHandleError.h"
 #include "Parameters.h"
 
+#define BLOCK_SIZE 16
+#define VOLUME 256
+#define MAX_VERTEX 1000000
+
 CUDA_CALLABLE_MEMBER __forceinline__ float3 operator * (float3 a, float3 b) {
 	return make_float3(a.x * b.x, a.y * b.y, a.z * b.z);
 }

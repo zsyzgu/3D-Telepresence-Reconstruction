@@ -137,7 +137,7 @@ int Configuration::loadDelayFrame()
 	if (file) {
 		FILE* fin = fopen(DELAY_FILE, "r");
 		fscanf(fin, "%d", &result);
-		if (result <= 0 || result >= MAX_DELAY_FRAME) {
+		if (result <= 0) {
 			result = 1;
 		}
 		fclose(fin);

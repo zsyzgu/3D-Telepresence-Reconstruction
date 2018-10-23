@@ -6,6 +6,10 @@
 #include "TsdfVolume.cuh"
 #include "RealsenseGrabber.h"
 
+#define MAX_DELAY_FRAME 20
+#define FRAME_BUFFER_SIZE 30000000
+#define BUFF_SIZE 16384
+
 class RealsenseGrabber;
 
 class Transmission {

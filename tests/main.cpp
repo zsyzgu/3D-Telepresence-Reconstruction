@@ -56,6 +56,7 @@ void startViewer() {
 	viewer = boost::shared_ptr<pcl::visualization::PCLVisualizer>(new pcl::visualization::PCLVisualizer("Point Cloud Viewer"));
 	viewer->setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
 	viewer->registerKeyboardCallback(keyboardEventOccurred);
+	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 }
 
 void start() {
@@ -63,7 +64,6 @@ void start() {
 	omp_set_num_threads(2);
 
 	grabber = new RealsenseGrabber();
-	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
 	calibration = new Calibration();
 	Configuration::loadExtrinsics(calibration->getExtrinsics());

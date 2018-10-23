@@ -80,7 +80,7 @@ Transmission::Transmission(bool isServer, int delayFrames)
 {
 	start(isServer);
 	
-	this->delayFrames = delayFrames;
+	this->delayFrames = min(delayFrames, MAX_DELAY_FRAME - 1);
 	localFrames = 0;
 	remoteFrames = 0;
 
