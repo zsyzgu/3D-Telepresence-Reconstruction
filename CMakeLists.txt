@@ -37,7 +37,7 @@ add_definitions( ${PCL_DEFINITIONS} )
 link_directories( ${PCL_LIBRARY_DIRS} )
 link_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/lib/x64" )
 
-file(GLOB SRCS include/*.h src/*.cpp src/cuda/*.cu src/cuda/*.cuh)
+file(GLOB SRCS include/*.h include/*.cuh src/*.cpp src/cuda/*.cu)
 
 cuda_add_executable( 3D-Telepresence ${SRCS} tests/main.cpp )
 

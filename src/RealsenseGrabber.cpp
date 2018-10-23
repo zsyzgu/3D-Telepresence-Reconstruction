@@ -109,8 +109,6 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	std::vector<rs2::sensor> sensors = device.query_sensors();
 	for (int i = 0; i < sensors.size(); i++) {
 		if (strcmp(sensors[i].get_info(RS2_CAMERA_INFO_NAME), "Stereo Module") == 0) {
-
-
 			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, 0);
 			float depth_unit = sensors[i].get_option(RS2_OPTION_DEPTH_UNITS);
 			float stereo_baseline = sensors[i].get_option(RS2_OPTION_STEREO_BASELINE) * 0.001;
@@ -190,7 +188,7 @@ void RealsenseGrabber::updateRGBD(Transformation* extrinsics)
 			}
 		}
 	}
-	
+
 	for (int i = 0; i < devices.size(); i++) {
 		if (check[i]) {
 			depthFilter->setConvertFactor(i, depthIntrinsics[i].fx * convertFactors[i]);

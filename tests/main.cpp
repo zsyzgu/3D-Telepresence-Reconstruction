@@ -8,7 +8,6 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <windows.h>
 
-byte* buffer = NULL;
 RealsenseGrabber* grabber = NULL;
 TsdfVolume* volume = NULL;
 Calibration* calibration = NULL;
@@ -66,7 +65,6 @@ void start() {
 	grabber = new RealsenseGrabber();
 	cloud = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
-	buffer = new byte[MAX_VERTEX * sizeof(Vertex)];
 	calibration = new Calibration();
 	Configuration::loadExtrinsics(calibration->getExtrinsics());
 
@@ -94,7 +92,7 @@ void update() {
 				remoteCameras = transmission->getFrame(grabber, calibration->getExtrinsics() + grabber->getCameras());
 			}
 
-			volume->integrate(buffer, grabber, remoteCameras, calibration->getExtrinsics());
+			volume->integrate(grabber, remoteCameras, calibration->getExtrinsics());
 			grabber->updateRGBD(calibration->getExtrinsics());
 		}
 		#pragma omp section
@@ -112,9 +110,6 @@ void stop() {
 	}
 	if (volume != NULL) {
 		delete volume;
-	}
-	if (buffer != NULL) {
-		delete[] buffer;
 	}
 	if (calibration != NULL) {
 		delete[] calibration;
@@ -141,7 +136,7 @@ int main(int argc, char *argv[]) {
 		timer.outputTime(10);
 #endif
 
-		cloud = volume->getPointCloudFromMesh(buffer);
+		cloud = volume->getPointCloud();
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
 			viewer->addPointCloud(cloud, "cloud");
 		}
@@ -159,7 +154,7 @@ extern "C" {
 
 	__declspec(dllexport) byte* callUpdate() {
 		update();
-		return buffer;
+		return volume->getBuffer();
 	}
 
 	__declspec(dllexport) void callSaveBackground() {

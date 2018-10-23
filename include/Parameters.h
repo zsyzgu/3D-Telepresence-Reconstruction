@@ -5,7 +5,7 @@
 #define CREATE_EXE
 //#define TRANSMISSION
 #define IS_SERVER true
-#define CALIBRATION true
+#define CALIBRATION false
 // Camera Parameters
 #define MAX_CAMERAS 8
 #if CALIBRATION == false

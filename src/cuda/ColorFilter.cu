@@ -43,7 +43,7 @@ void cudaColorFiltering(UINT8* colorMap, UINT8* data_device, RGBQUAD* color_devi
 {
 	dim3 threadsPerBlock = dim3(256, 1);
 	dim3 blocksPerGrid = dim3((COLOR_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (COLOR_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
-	
+
 	HANDLE_ERROR(cudaMemcpy(data_device, colorMap, 2 * COLOR_H * COLOR_W * sizeof(UINT8), cudaMemcpyHostToDevice));
 
 	kernelColorFiltering << <blocksPerGrid, threadsPerBlock >> > (data_device, (uchar4*)color_device);

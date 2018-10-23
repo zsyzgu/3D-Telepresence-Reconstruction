@@ -9,11 +9,17 @@
 #include "TsdfVolume.cuh"
 
 class TsdfVolume {
+	/*
+	@buffer: The memory to store the 3D reconstruction. The first 4 bytes is an integer of vertex number, followed by all the vertexs stored as "Vertex" class.
+	*/
+private:
+	byte* buffer;
 public:
 	TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 	~TsdfVolume();
-	void integrate(byte* result, RealsenseGrabber* grabber, int remoteCameras, Transformation* world2depth);
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloudFromMesh(byte* buffer);
+	void integrate(RealsenseGrabber* grabber, int remoteCameras, Transformation* world2depth);
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
+	byte* getBuffer() { return buffer; }
 };
 
 #endif
