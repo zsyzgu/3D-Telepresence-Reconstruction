@@ -15,40 +15,22 @@ Transmission* transmission = NULL;
 boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 
-void registration(int targetId = 0) {
-	if (targetId == 0) {
-		calibration->align(grabber);
-	} else {
-		calibration->align(grabber, targetId);
-	}
-	Configuration::saveExtrinsics(calibration->getExtrinsics());
-}
-
-void setOrigin() {
-	calibration->setOrigin(grabber);
-	Configuration::saveExtrinsics(calibration->getExtrinsics());
-}
-
-void saveBackground() {
-	grabber->saveBackground();
-}
-
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	char cmd = event.getKeySym()[0];
 	if (cmd == 'r' && event.keyDown()) {
-		registration();
+		calibration->align(grabber);
 	}
 	if (cmd == 'o' && event.keyDown()) {
-		setOrigin();
+		calibration->setOrigin(grabber);
 	}
 	if (cmd == 'b' && event.keyDown()) {
-		saveBackground();
+		grabber->saveBackground();
 	}
 	if (cmd == '1' && event.keyUp()) {
-		registration(1);
+		calibration->align(grabber, 1);
 	}
 	if (cmd == '2' && event.keyUp()) {
-		registration(2);
+		calibration->align(grabber, 2);
 	}
 }
 
@@ -66,19 +48,20 @@ void start() {
 	grabber = new RealsenseGrabber();
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
 	calibration = new Calibration();
-	Configuration::loadExtrinsics(calibration->getExtrinsics());
 
 #if CALIBRATION == false
 	grabber->loadBackground();
 #endif
 
-#ifdef TRANSMISSION
-	int delayFrame = Configuration::loadDelayFrame();
-	transmission = new Transmission(IS_SERVER, delayFrame);
+#if TRANSMISSION == true
+	transmission = new Transmission(IS_SERVER);
 	grabber->setTransmission(transmission);
 #endif
 
-	grabber->updateRGBD(calibration->getExtrinsics());
+	grabber->updateRGBD();
+	if (transmission != NULL && transmission->isConnected) {
+		transmission->prepareSendFrame(grabber, calibration->getExtrinsics());
+	}
 }
 
 void update() {
@@ -93,7 +76,11 @@ void update() {
 			}
 
 			volume->integrate(grabber, remoteCameras, calibration->getExtrinsics());
-			grabber->updateRGBD(calibration->getExtrinsics());
+			grabber->updateRGBD();
+
+			if (transmission != NULL && transmission->isConnected) {
+				transmission->prepareSendFrame(grabber, calibration->getExtrinsics());
+			}
 		}
 		#pragma omp section
 		{
@@ -120,7 +107,7 @@ void stop() {
 	std::cout << "stopped" << std::endl;
 }
 
-#ifdef CREATE_EXE
+#if CREATE_EXE == true
 
 int main(int argc, char *argv[]) {
 	start();
@@ -132,9 +119,7 @@ int main(int argc, char *argv[]) {
 
 		timer.reset();
 		update();
-#if CALIBRATION == false
 		timer.outputTime(10);
-#endif
 
 		cloud = volume->getPointCloud();
 		if (!viewer->updatePointCloud(cloud, "cloud")) {
@@ -155,10 +140,6 @@ extern "C" {
 	__declspec(dllexport) byte* callUpdate() {
 		update();
 		return volume->getBuffer();
-	}
-
-	__declspec(dllexport) void callSaveBackground() {
-		saveBackground();
 	}
 
 	__declspec(dllexport) void callStop() {

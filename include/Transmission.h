@@ -34,12 +34,12 @@ public:
 	int remoteFrames;
 
 public:
-	Transmission(bool isServer, int delayFrames);
+	Transmission(bool isServer);
 	~Transmission();
 	bool isConnected;
 	void setDelayFrames(int delayFrames) { this->delayFrames = delayFrames; }
 	void recvFrame();
-	void prepareSendFrame(bool* check, RealsenseGrabber* grabber, Transformation* extrinsics);
+	void prepareSendFrame(RealsenseGrabber* grabber, Transformation* extrinsics);
 	void sendFrame();
 	int getFrame(RealsenseGrabber* grabber, Transformation* extrinsics);
 };

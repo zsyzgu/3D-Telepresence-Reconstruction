@@ -161,20 +161,15 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	devices.push_back(pipeline);
 }
 
-void RealsenseGrabber::updateRGBD(Transformation* extrinsics)
+void RealsenseGrabber::updateRGBD()
 {
-	bool check[MAX_CAMERAS] = { false };
-
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
 		rs2::frameset frameset = pipeline.wait_for_frames();
-		check[deviceId] = (frameset.size() == 2);
 
-		if (check[deviceId] == false) {
-			std::cout << deviceId << " Failed" << std::endl;
-		}
+		bool check = (frameset.size() == 2);
 
-		if (check[deviceId]) {
+		if (check) {
 			for (int i = 0; i < frameset.size(); i++) {
 				rs2::frame frame = frameset[i];
 				rs2::stream_profile profile = frame.get_profile();
@@ -186,35 +181,30 @@ void RealsenseGrabber::updateRGBD(Transformation* extrinsics)
 					memcpy(colorImages[deviceId], frame.get_data(), 2 * COLOR_H * COLOR_W * sizeof(UINT8));
 				}
 			}
+		} else {
+			std::cout << deviceId << " Failed" << std::endl;
 		}
 	}
 
 	for (int i = 0; i < devices.size(); i++) {
-		if (check[i]) {
-			depthFilter->setConvertFactor(i, depthIntrinsics[i].fx * convertFactors[i]);
-			depthFilter->process(i, depthImages[i]);
-			colorFilter->process(i, colorImages[i]);
-		}
+		depthFilter->setConvertFactor(i, depthIntrinsics[i].fx * convertFactors[i]);
+		depthFilter->process(i, depthImages[i]);
+		colorFilter->process(i, colorImages[i]);
 	}
 
-	alignColorMap->alignColor2Depth(devices.size(), check, depthFilter->getCurrFrame_device(), colorFilter->getCurrFrame_device(), depthIntrinsics, originColorIntrinsics, depth2color);
-
-	if (transmission != NULL && transmission->isConnected) {
-		transmission->prepareSendFrame(check, this, extrinsics);
-	}
+	alignColorMap->alignColor2Depth(devices.size(), depthFilter->getCurrFrame_device(), colorFilter->getCurrFrame_device(), depthIntrinsics, originColorIntrinsics, depth2color);
 }
 
 void RealsenseGrabber::getRGB(RGBQUAD**& colorImages)
 {
 	colorImages = this->colorImagesRGB;
-	bool check[MAX_CAMERAS];
 
 	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
 		rs2::pipeline pipeline = devices[deviceId];
 		rs2::frameset frameset = pipeline.wait_for_frames();
-		check[deviceId] = (frameset.size() == 2);
+		bool check = (frameset.size() == 2);
 
-		if (check[deviceId]) {
+		if (check) {
 			for (int i = 0; i < frameset.size(); i++) {
 				rs2::frame frame = frameset[i];
 				rs2::stream_profile profile = frame.get_profile();
@@ -229,10 +219,8 @@ void RealsenseGrabber::getRGB(RGBQUAD**& colorImages)
 
 	RGBQUAD* colorImages_device = colorFilter->getCurrFrame_device();
 	for (int i = 0; i < devices.size(); i++) {
-		if (check[i]) {
-			colorFilter->process(i, this->colorImages[i]);
-			cudaMemcpy(this->colorImagesRGB[i], colorImages_device + i * COLOR_W * COLOR_H, COLOR_W * COLOR_H * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
-		}
+		colorFilter->process(i, this->colorImages[i]);
+		cudaMemcpy(this->colorImagesRGB[i], colorImages_device + i * COLOR_W * COLOR_H, COLOR_W * COLOR_H * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
 	}
 }
 

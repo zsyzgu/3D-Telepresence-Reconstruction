@@ -7,11 +7,13 @@ void Calibration::updateWorld2Depth(int cameras, RealsenseGrabber* grabber) {
 	for (int i = 0; i < cameras; i++) {
 		world2depth[i] = color2depth[i] * world2color[i];
 	}
+	Configuration::saveExtrinsics(world2depth);
 }
 
 Calibration::Calibration() {
 	world2color = new Transformation[MAX_CAMERAS];
 	world2depth = new Transformation[MAX_CAMERAS];
+	Configuration::loadExtrinsics(world2depth);
 }
 
 Calibration::~Calibration() {

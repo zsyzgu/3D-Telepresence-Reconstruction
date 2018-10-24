@@ -1,6 +1,7 @@
 #include "Transmission.h"
 #include "Parameters.h"
 #include "Timer.h"
+#include "Configuration.h"
 #include <iostream>
 
 /*bool Transmission::isServer()
@@ -76,8 +77,9 @@ void Transmission::recvData(char* data, int tot)
 	}
 }
 
-Transmission::Transmission(bool isServer, int delayFrames)
+Transmission::Transmission(bool isServer)
 {
+	int delayFrame = Configuration::loadDelayFrame();
 	start(isServer);
 	
 	this->delayFrames = min(delayFrames, MAX_DELAY_FRAME - 1);
@@ -119,7 +121,7 @@ void Transmission::recvFrame()
 	remoteFrames++;
 }
 
-void Transmission::prepareSendFrame(bool* check, RealsenseGrabber* grabber, Transformation* extrinsics)
+void Transmission::prepareSendFrame(RealsenseGrabber* grabber, Transformation* extrinsics)
 {
 	int cameras = grabber->getCameras();
 	float* depthImages_device = grabber->getDepthImages_device();
@@ -130,21 +132,17 @@ void Transmission::prepareSendFrame(bool* check, RealsenseGrabber* grabber, Tran
 	sendOffset = 0;
 	memcpy(sendBuffer + sendOffset, &cameras, sizeof(int));
 	sendOffset += sizeof(int);
-	memcpy(sendBuffer + sendOffset, check, cameras * sizeof(bool));
-	sendOffset += cameras * sizeof(bool);
 	for (int i = 0; i < cameras; i++) {
-		if (check[i]) {
-			cudaMemcpy(sendBuffer + sendOffset, depthImages_device + i * DEPTH_H * DEPTH_W, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyDeviceToHost);
-			sendOffset += DEPTH_H * DEPTH_W * sizeof(float);
-			cudaMemcpy(sendBuffer + sendOffset, colorImages_device + i * COLOR_H * COLOR_W, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
-			sendOffset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(sendBuffer + sendOffset, extrinsics + i, sizeof(Transformation));
-			sendOffset += sizeof(Transformation);
-			memcpy(sendBuffer + sendOffset, depthIntrinsics + i, sizeof(Intrinsics));
-			sendOffset += sizeof(Intrinsics);
-			memcpy(sendBuffer + sendOffset, colorIntrinsics + i, sizeof(Intrinsics));
-			sendOffset += sizeof(Intrinsics);
-		}
+		cudaMemcpy(sendBuffer + sendOffset, depthImages_device + i * DEPTH_H * DEPTH_W, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyDeviceToHost);
+		sendOffset += DEPTH_H * DEPTH_W * sizeof(float);
+		cudaMemcpy(sendBuffer + sendOffset, colorImages_device + i * COLOR_H * COLOR_W, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
+		sendOffset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
+		memcpy(sendBuffer + sendOffset, extrinsics + i, sizeof(Transformation));
+		sendOffset += sizeof(Transformation);
+		memcpy(sendBuffer + sendOffset, depthIntrinsics + i, sizeof(Intrinsics));
+		sendOffset += sizeof(Intrinsics);
+		memcpy(sendBuffer + sendOffset, colorIntrinsics + i, sizeof(Intrinsics));
+		sendOffset += sizeof(Intrinsics);
 	}
 }
 
@@ -166,28 +164,23 @@ int Transmission::getFrame(RealsenseGrabber* grabber, Transformation* extrinsics
 		return 0;
 	}
 	int cameras = 0;
-	bool check[MAX_CAMERAS];
 	char* recvBuffer = buffer[(localFrames - delayFrames) % MAX_DELAY_FRAME];
 	localFrames++;
 
 	int offset = 0;
 	memcpy(&cameras, recvBuffer + offset, sizeof(int));
 	offset += sizeof(int);
-	memcpy(check, recvBuffer + offset, cameras * sizeof(bool));
-	offset += cameras * sizeof(bool);
 	for (int i = 0; i < cameras; i++) {
-		if (check[i]) {
-			cudaMemcpy(depthImages_device + i * DEPTH_H * DEPTH_W, recvBuffer + offset, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyHostToDevice);
-			offset += DEPTH_H * DEPTH_W * sizeof(float);
-			cudaMemcpy(colorImages_device + i * COLOR_H * COLOR_W, recvBuffer + offset, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyHostToDevice);
-			offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-			memcpy(extrinsics + i, recvBuffer + offset, sizeof(Transformation));
-			offset += sizeof(Transformation);
-			memcpy(depthIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
-			offset += sizeof(Intrinsics);
-			memcpy(colorIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
-			offset += sizeof(Intrinsics);
-		}
+		cudaMemcpy(depthImages_device + i * DEPTH_H * DEPTH_W, recvBuffer + offset, DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyHostToDevice);
+		offset += DEPTH_H * DEPTH_W * sizeof(float);
+		cudaMemcpy(colorImages_device + i * COLOR_H * COLOR_W, recvBuffer + offset, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyHostToDevice);
+		offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
+		memcpy(extrinsics + i, recvBuffer + offset, sizeof(Transformation));
+		offset += sizeof(Transformation);
+		memcpy(depthIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
+		offset += sizeof(Intrinsics);
+		memcpy(colorIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
+		offset += sizeof(Intrinsics);
 	}
 
 	return cameras;

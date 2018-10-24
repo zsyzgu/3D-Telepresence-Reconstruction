@@ -87,29 +87,25 @@ void cudaAlignClean(RGBQUAD *& alignedColor_device, float *& depthBackground_dev
 }
 
 extern "C"
-void cudaAlignProcess(int cameras, bool* check, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* color_device, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color) {
+void cudaAlignProcess(int cameras, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* color_device, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color) {
 	dim3 threadsPerBlock = dim3(512, 1);
 	dim3 blocksPerGrid = dim3((COLOR_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (COLOR_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
 	
 	for (int i = 0; i < cameras; i++) {
-		if (check[i]) {
-			kernelAlignProcess << <blocksPerGrid, threadsPerBlock >> >((uchar4*)alignedColor_device + i * COLOR_H * COLOR_W, depth_device + i * DEPTH_H * DEPTH_W, (uchar4*)color_device + i * COLOR_H * COLOR_W, depthIntrinsics[i], colorIntrinsics[i], depth2color[i]);
-			cudaGetLastError();
-		}
+		kernelAlignProcess << <blocksPerGrid, threadsPerBlock >> >((uchar4*)alignedColor_device + i * COLOR_H * COLOR_W, depth_device + i * DEPTH_H * DEPTH_W, (uchar4*)color_device + i * COLOR_H * COLOR_W, depthIntrinsics[i], colorIntrinsics[i], depth2color[i]);
+		cudaGetLastError();
 	}
 
 	cudaThreadSynchronize();
 }
 
 extern "C"
-void cudaRemoveBackground(int cameras, bool* check, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* colorBackground_device, float* depthBackground_device) {
+void cudaRemoveBackground(int cameras, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* colorBackground_device, float* depthBackground_device) {
 	dim3 threadsPerBlock = dim3(256, 1);
 	dim3 blocksPerGrid = dim3((DEPTH_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (DEPTH_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
 	for (int i = 0; i < cameras; i++) {
-		if (check[i]) {
-			kernelRemoveBackground << <blocksPerGrid, threadsPerBlock >> > ((uchar4*)alignedColor_device + i * COLOR_H * COLOR_W, depth_device + i * DEPTH_H * DEPTH_W, (uchar4*)colorBackground_device + i * COLOR_H * COLOR_W, depthBackground_device + i * DEPTH_H * DEPTH_W);
-			cudaGetLastError();
-		}
+		kernelRemoveBackground << <blocksPerGrid, threadsPerBlock >> > ((uchar4*)alignedColor_device + i * COLOR_H * COLOR_W, depth_device + i * DEPTH_H * DEPTH_W, (uchar4*)colorBackground_device + i * COLOR_H * COLOR_W, depthBackground_device + i * DEPTH_H * DEPTH_W);
+		cudaGetLastError();
 	}
 }

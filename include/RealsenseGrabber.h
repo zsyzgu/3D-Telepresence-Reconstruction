@@ -39,7 +39,7 @@ private:
 public:
 	RealsenseGrabber();
 	~RealsenseGrabber();
-	void updateRGBD(Transformation* extrinsics);
+	void updateRGBD();
 	void getRGB(RGBQUAD**& colorImages);
 	void saveBackground();
 	void loadBackground();

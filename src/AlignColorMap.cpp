@@ -2,8 +2,8 @@
 
 extern "C" void cudaAlignInit(RGBQUAD*& alignedColor_device, float*& depthBackground_device, RGBQUAD*& colorBackground_device);
 extern "C" void cudaAlignClean(RGBQUAD*& alignedColor_device, float*& depthBackground_device, RGBQUAD*& colorBackground_device);
-extern "C" void cudaAlignProcess(int cameras, bool* check, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* color_device, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color);
-extern "C" void cudaRemoveBackground(int cameras, bool* check, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* colorBackground_device, float* depthBackground_device);
+extern "C" void cudaAlignProcess(int cameras, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* color_device, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color);
+extern "C" void cudaRemoveBackground(int cameras, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* colorBackground_device, float* depthBackground_device);
 
 AlignColorMap::AlignColorMap()
 {
@@ -16,11 +16,11 @@ AlignColorMap::~AlignColorMap()
 	cudaAlignClean(alignedColor_devive, depthBackground_device, colorBackground_device);
 }
 
-void AlignColorMap::alignColor2Depth(int cameras, bool * check, float * depth_device, RGBQUAD * color_device, Intrinsics * depthIntrinsics, Intrinsics * colorIntrinsics, Transformation * depth2color)
+void AlignColorMap::alignColor2Depth(int cameras, float * depth_device, RGBQUAD * color_device, Intrinsics * depthIntrinsics, Intrinsics * colorIntrinsics, Transformation * depth2color)
 {
-	cudaAlignProcess(cameras, check, alignedColor_devive, depth_device, color_device, depthIntrinsics, colorIntrinsics, depth2color);
+	cudaAlignProcess(cameras, alignedColor_devive, depth_device, color_device, depthIntrinsics, colorIntrinsics, depth2color);
 	if (isRemoveBackground) {
-		cudaRemoveBackground(cameras, check, alignedColor_devive, depth_device, colorBackground_device, depthBackground_device);
+		cudaRemoveBackground(cameras, alignedColor_devive, depth_device, colorBackground_device, depthBackground_device);
 	}
 }
 
