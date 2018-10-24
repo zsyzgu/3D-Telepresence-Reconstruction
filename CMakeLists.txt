@@ -2,7 +2,7 @@
 set( CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH} )
 
 project( 3D-Telepresence )
-set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "3D-Telepresence" )
+set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "test" )
 
 # Cuda
 find_package( CUDA REQUIRED )
@@ -39,9 +39,20 @@ link_directories( "C:/Program Files (x86)/Intel RealSense SDK 2.0/lib/x64" )
 
 file(GLOB SRCS include/*.h include/*.cuh src/*.cpp src/cuda/*.cu)
 
-cuda_add_executable( 3D-Telepresence ${SRCS} tests/main.cpp )
+# Test/Development
+cuda_add_executable( test ${SRCS} tests/main.cpp )
+target_link_libraries( test ${PCL_LIBRARIES} )
+target_link_libraries( test realsense2.lib )
+target_link_libraries( test ${OpenCV_LIBS} )
 
-# Additional Dependencies
-target_link_libraries( 3D-Telepresence ${PCL_LIBRARIES} )
-target_link_libraries( 3D-Telepresence realsense2.lib )
-target_link_libraries( 3D-Telepresence ${OpenCV_LIBS} )
+# Generating calibration.exe
+cuda_add_executable( calibration ${SRCS} tests/calibration_exe.cpp )
+target_link_libraries( calibration ${PCL_LIBRARIES} )
+target_link_libraries( calibration realsense2.lib )
+target_link_libraries( calibration ${OpenCV_LIBS} )
+
+# Generating TeleCP.dll
+cuda_add_library( TeleCP SHARED ${SRCS} tests/telepresence_dll.cpp )
+target_link_libraries( TeleCP ${PCL_LIBRARIES} )
+target_link_libraries( TeleCP realsense2.lib )
+target_link_libraries( TeleCP ${OpenCV_LIBS} )

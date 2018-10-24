@@ -94,3 +94,9 @@ In particular, **TeleCP.dll** together with the project **3D-Telepresence-Render
     * Set the IP of **server** to **192.168.1.1**; set the IP of **client** to **192.168.1.2**.
     
     * First, run **TeleCP.exe** in server; then, run **TeleCP.exe** in client.
+
+## API
+
+* **TeleCP.h** summerizes APIs of TeleCP. Please see its annotation.
+
+* **calibration_exe.cpp** and **telepresence_dll.cpp** give examples of how to use these APIs.

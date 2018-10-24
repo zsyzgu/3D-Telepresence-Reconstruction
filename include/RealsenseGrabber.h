@@ -32,7 +32,6 @@ private:
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
 	Intrinsics* originColorIntrinsics;
-	Transmission* transmission;
 
 	void enableDevice(rs2::device device);
 
@@ -43,7 +42,6 @@ public:
 	void getRGB(RGBQUAD**& colorImages);
 	void saveBackground();
 	void loadBackground();
-	void setTransmission(Transmission* transmission) { this->transmission = transmission; }
 	int getCameras() { return devices.size(); }
 	Intrinsics* getDepthIntrinsics() { return depthIntrinsics; }
 	Intrinsics* getColorIntrinsics() { return colorIntrinsics; }

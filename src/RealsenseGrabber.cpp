@@ -26,7 +26,6 @@ RealsenseGrabber::RealsenseGrabber()
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
 	originColorIntrinsics = new Intrinsics[MAX_CAMERAS];
-	transmission = NULL;
 
 	rs2::context context;
 	rs2::device_list deviceList = context.query_devices();
