@@ -12,10 +12,10 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (cmd == 'r' && event.keyDown()) {
 		calibration->align(grabber);
 	}
-	/*if (cmd == 'o' && event.keyDown()) {
-		telecp->setOrigin();
+	if (cmd == 'o' && event.keyDown()) {
+		calibration->setOrigin(grabber);
 	}
-	if (cmd == 'b' && event.keyDown()) {
+	/*if (cmd == 'b' && event.keyDown()) {
 		telecp->saveBackground();
 	}*/
 	if (cmd == '1' && event.keyUp()) {

@@ -11,12 +11,15 @@
 
 class Calibration {
 	/*
+	Consts:
+	@INTERATION: The number of captured images in the calibration.
+	@(others): Consts of the checkerboard.
 	Parameters:
-	@world2color:	The extrinsics from the world coordinate to the color cameras.
-	@world2depth:	The extrinsics from the world coordinate to the depth cameras.
+	@world2color: The extrinsics from the world coordinate to the color cameras.
+	@world2depth: The extrinsics from the world coordinate to the depth cameras.
 	Functions:
-	@setOrigin():	Set the position of the checkerboard as the coordinate origin.
-	@align():		Align all the color cameras - calcuate @world2color
+	@setOrigin(): Set the position of the checkerboard as the coordinate origin.
+	@align(): Align all the color cameras - calcuate @world2color
 	Notes:
 	In the calibration, we use the color images as the cues. So the output is the extrinsics of color cameras.
 	Next, we get the extrinsics between color camera and depthe cameras (color2depth) from the Realsense SDK.
@@ -24,8 +27,18 @@ class Calibration {
 	Last, we used world2depth in the TSDF Volume.
 	*/
 private:
+	const int ITERATION = 5;
+	const cv::Size BOARD_SIZE = cv::Size(9, 6);
+	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
+	const float GRID_SIZE = 0.02513f;
+	const int CORNERS[4] = { 0, 8, 53, 45 };
+	const int RECT_DIST_THRESHOLD = COLOR_H / 20;
+	const int RECT_AREA_THRESHOLD = COLOR_H * COLOR_W / 100;
+private:
 	Transformation* world2color;
 	Transformation* world2depth;
+	Transformation calnInv(Transformation T);
+	void rgb2mat(cv::Mat* mat, RGBQUAD* rgb);
 	void updateWorld2Depth(int cameras, RealsenseGrabber* grabber);
 public:
 	Calibration();

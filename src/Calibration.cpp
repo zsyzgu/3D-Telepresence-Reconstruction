@@ -2,6 +2,32 @@
 #include "Timer.h"
 #include "Parameters.h"
 
+Transformation Calibration::calnInv(Transformation T)
+{
+	T.output();
+	cv::Mat rv(3, 3, CV_64FC1);
+	cv::Mat tv(3, 1, CV_64FC1);
+	double* rv_d = (double*)rv.data;
+	double* tv_d = (double*)tv.data;
+	rv_d[0] = T.rotation0.x, rv_d[1] = T.rotation0.y, rv_d[2] = T.rotation0.z;
+	rv_d[3] = T.rotation1.x, rv_d[4] = T.rotation1.y, rv_d[5] = T.rotation1.z;
+	rv_d[6] = T.rotation2.x, rv_d[7] = T.rotation2.y, rv_d[8] = T.rotation2.z;
+	tv_d[0] = T.translation.x, tv_d[1] = T.translation.y, tv_d[2] = T.translation.z;
+	rv = rv.inv();
+	tv = -rv * tv;
+	return Transformation((double*)rv.data, (double*)tv.data);
+}
+
+void Calibration::rgb2mat(cv::Mat* mat, RGBQUAD* rgb)
+{
+	for (int i = 0; i < COLOR_H; i++) {
+		for (int j = 0; j < COLOR_W; j++) {
+			RGBQUAD color = rgb[i * COLOR_W + j];
+			mat->at<cv::Vec3b>(i, j) = cv::Vec3b(color.rgbRed, color.rgbGreen, color.rgbBlue);
+		}
+	}
+}
+
 void Calibration::updateWorld2Depth(int cameras, RealsenseGrabber* grabber) {
 	Transformation* color2depth = grabber->getColor2Depth();
 	for (int i = 0; i < cameras; i++) {
@@ -27,9 +53,6 @@ Calibration::~Calibration() {
 
 void Calibration::setOrigin(RealsenseGrabber* grabber) {
 	int cameras = grabber->getCameras();
-	const cv::Size BOARD_SIZE = cv::Size(9, 6);
-	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
-	const float GRID_SIZE = 0.02513f;
 
 	std::vector<cv::Point3f> objectPoints;
 	for (int r = 0; r < BOARD_SIZE.height; r++) {
@@ -46,13 +69,7 @@ void Calibration::setOrigin(RealsenseGrabber* grabber) {
 	int mainId = 0;
 	do {
 		grabber->getRGB(colorImages);
-		RGBQUAD* source = colorImages[mainId];
-		for (int i = 0; i < COLOR_H; i++) {
-			for (int j = 0; j < COLOR_W; j++) {
-				RGBQUAD color = source[i * COLOR_W + j];
-				sourceColorMat.at<cv::Vec3b>(i, j) = cv::Vec3b(color.rgbRed, color.rgbGreen, color.rgbBlue);
-			}
-		}
+		rgb2mat(&sourceColorMat, colorImages[mainId]);
 		sourcePoints.clear();
 		findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, /*cv::CALIB_CB_ADAPTIVE_THRESH | */cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
 
@@ -87,18 +104,7 @@ void Calibration::setOrigin(RealsenseGrabber* grabber) {
 	solvePnP(objectPoints, sourcePoints, sourceCameraMatrix, distCoeffs, rv, tv);
 	cv::Rodrigues(rv, rv);
 	Transformation world2camera((double*)rv.data, (double*)tv.data);
-
-	//Caln Inv of Main Camera
-	Transformation* mainTrans = &world2color[mainId];
-	double* rvData = (double*)rv.data;
-	rvData[0] = mainTrans->rotation0.x, rvData[1] = mainTrans->rotation0.y, rvData[2] = mainTrans->rotation0.z;
-	rvData[3] = mainTrans->rotation1.x, rvData[4] = mainTrans->rotation1.y, rvData[5] = mainTrans->rotation1.z;
-	rvData[6] = mainTrans->rotation2.x, rvData[7] = mainTrans->rotation2.y, rvData[8] = mainTrans->rotation2.z;
-	double* tvData = (double*)tv.data;
-	tvData[0] = mainTrans->translation.x, tvData[1] = mainTrans->translation.y, tvData[2] = mainTrans->translation.z;
-	rv = rv.inv();
-	tv = -rv * tv;
-	Transformation camera0Inv = Transformation((double*)rv.data, (double*)tv.data);
+	Transformation camera0Inv = calnInv(world2color[mainId]);
 
 	for (int i = 0; i < cameras; i++) {
 		world2color[i] = (world2color[i] * camera0Inv) * world2camera;
@@ -111,18 +117,7 @@ void Calibration::setOrigin(RealsenseGrabber* grabber) {
 void Calibration::align(RealsenseGrabber* grabber, int targetId)
 {
 	int cameras = grabber->getCameras();
-
-	if (targetId <= 0 || targetId >= cameras) {
-		return;
-	}
-
-	const cv::Size BOARD_SIZE = cv::Size(9, 6);
-	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
-	const float GRID_SIZE = 0.02513f;
-	const int ITERATION = 10;
-	const int CORNERS[4] = { 0, 8, 53, 45 };
-	const int RECT_DIST_THRESHOLD = 50;
-	const int RECT_AREA_THRESHOLD = 20000;
+	assert(0 < targetId && targetId < cameras);
 
 	RGBQUAD** colorImages;
 	Intrinsics* colorIntrinsics = grabber->getOriginColorIntrinsics();
@@ -143,17 +138,8 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 	std::vector<cv::Point2f> rects;
 	for (int iter = 0; iter < ITERATION;) {
 		grabber->getRGB(colorImages);
-		RGBQUAD* source = colorImages[0];
-		RGBQUAD* target = colorImages[targetId];
-		for (int i = 0; i < COLOR_H; i++) {
-			for (int j = 0; j < COLOR_W; j++) {
-				RGBQUAD color;
-				color = source[i * COLOR_W + j];
-				sourceColorMat.at<cv::Vec3b>(i, j) = cv::Vec3b(color.rgbRed, color.rgbGreen, color.rgbBlue);
-				color = target[i * COLOR_W + j];
-				targetColorMat.at<cv::Vec3b>(i, j) = cv::Vec3b(color.rgbRed, color.rgbGreen, color.rgbBlue);
-			}
-		}
+		rgb2mat(&sourceColorMat, colorImages[0]);
+		rgb2mat(&targetColorMat, colorImages[targetId]);
 
 		sourcePoints.clear();
 		targetPoints.clear();
