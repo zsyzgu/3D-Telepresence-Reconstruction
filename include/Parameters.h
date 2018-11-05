@@ -1,7 +1,7 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
-#define CALIBRATION false
+#define CALIBRATION true
 #define MAX_CAMERAS 8
 #if CALIBRATION == false
 	#define DEPTH_W 640

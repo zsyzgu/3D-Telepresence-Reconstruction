@@ -108,7 +108,6 @@ void Calibration::setOrigin(RealsenseGrabber* grabber) {
 	cv::destroyAllWindows();
 }
 
-
 void Calibration::align(RealsenseGrabber* grabber, int targetId)
 {
 	int cameras = grabber->getCameras();
@@ -120,11 +119,7 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.02513f;
-#if CALIBRATION == true
 	const int ITERATION = 10;
-#else
-	const int ITERATION = 1;
-#endif
 	const int CORNERS[4] = { 0, 8, 53, 45 };
 	const int RECT_DIST_THRESHOLD = 50;
 	const int RECT_AREA_THRESHOLD = 20000;
@@ -211,9 +206,7 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 		}
 
 		cv::hconcat(sourceColorMat, targetColorMat, mergeImage);
-#if CALIBRATION == true
 		cv::pyrDown(mergeImage, mergeImage, cv::Size(mergeImage.cols / 2, mergeImage.rows / 2));
-#endif
 		cv::imshow("Calibration", mergeImage);
 
 		char ch = cv::waitKey(1);

@@ -106,12 +106,13 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	cfg.disable_stream(RS2_STREAM_INFRARED, 2);
 	
 	std::vector<rs2::sensor> sensors = device.query_sensors();
+	float convertFactor = 0;
 	for (int i = 0; i < sensors.size(); i++) {
 		if (strcmp(sensors[i].get_info(RS2_CAMERA_INFO_NAME), "Stereo Module") == 0) {
 			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, 0);
 			float depth_unit = sensors[i].get_option(RS2_OPTION_DEPTH_UNITS);
 			float stereo_baseline = sensors[i].get_option(RS2_OPTION_STEREO_BASELINE) * 0.001;
-			convertFactors.push_back(stereo_baseline * (1 << 5) / depth_unit);
+			convertFactor = stereo_baseline * (1 << 5) / depth_unit;
 		}
 		if (strcmp(sensors[i].get_info(RS2_CAMERA_INFO_NAME), "RGB Camera") == 0) {
 			sensors[i].set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, 0);
@@ -146,6 +147,7 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	depthIntrinsics[id].fy = dIntrinsics.fy;
 	depthIntrinsics[id].ppx = dIntrinsics.ppx;
 	depthIntrinsics[id].ppy = dIntrinsics.ppy;
+	depthFilter->setConvertFactor(id, dIntrinsics.fx * convertFactor); // convertFactor is for the transformation between Depth and Disparity (their product)
 	rs2_intrinsics cIntrinsics = colorProfile.as<rs2::video_stream_profile>().get_intrinsics();
 	originColorIntrinsics[id].fx = cIntrinsics.fx;
 	originColorIntrinsics[id].fy = cIntrinsics.fy;
@@ -186,7 +188,6 @@ void RealsenseGrabber::updateRGBD()
 	}
 
 	for (int i = 0; i < devices.size(); i++) {
-		depthFilter->setConvertFactor(i, depthIntrinsics[i].fx * convertFactors[i]);
 		depthFilter->process(i, depthImages[i]);
 		colorFilter->process(i, colorImages[i]);
 	}
@@ -207,7 +208,6 @@ void RealsenseGrabber::getRGB(RGBQUAD**& colorImages)
 			for (int i = 0; i < frameset.size(); i++) {
 				rs2::frame frame = frameset[i];
 				rs2::stream_profile profile = frame.get_profile();
-				rs2_intrinsics intrinsics = profile.as<rs2::video_stream_profile>().get_intrinsics();
 
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
 					memcpy(this->colorImages[deviceId], frame.get_data(), 2 * COLOR_W * COLOR_H * sizeof(UINT8));
