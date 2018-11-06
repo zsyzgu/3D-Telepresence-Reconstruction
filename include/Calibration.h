@@ -13,6 +13,8 @@ class Calibration {
 	/*
 	Consts:
 	@INTERATION: The number of captured images in the calibration.
+	@RECT_DIST_THRESHOLD: In the calibration, the captured checkerboard should be big enough.
+	@RECT_AREA_THRESHOLD: In the calibration, the captured checkerboards should be far away enough from each others.
 	@(others): Consts of the checkerboard.
 	Parameters:
 	@world2color: The extrinsics from the world coordinate to the color cameras.
@@ -29,12 +31,12 @@ class Calibration {
 	*/
 private:
 	const int ITERATION = 5;
+	const int RECT_DIST_THRESHOLD = COLOR_H / 20;
+	const int RECT_AREA_THRESHOLD = COLOR_H * COLOR_W / 100;
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.02513f;
 	const int CORNERS[4] = { 0, 8, 53, 45 };
-	const int RECT_DIST_THRESHOLD = COLOR_H / 20;
-	const int RECT_AREA_THRESHOLD = COLOR_H * COLOR_W / 100;
 private:
 	Transformation* world2color;
 	Transformation* world2depth;

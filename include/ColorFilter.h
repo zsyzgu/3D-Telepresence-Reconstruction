@@ -13,6 +13,7 @@ class ColorFilter
 	Functions:
 	@process(cameraId, colorMap): CPU YUV --> GPU RGB (id=cameraId). 
 	*/
+private:
 	UINT8* data_device;
 	RGBQUAD* color_device;
 public:

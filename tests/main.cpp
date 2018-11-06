@@ -15,9 +15,9 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event) {
 	if (cmd == 'o' && event.keyDown()) {
 		calibration->setOrigin(grabber);
 	}
-	/*if (cmd == 'b' && event.keyDown()) {
-		telecp->saveBackground();
-	}*/
+	if (cmd == 'b' && event.keyDown()) {
+		grabber->saveBackground();
+	}
 	if (cmd == '1' && event.keyUp()) {
 		calibration->align(grabber, 1);
 	}
@@ -33,10 +33,6 @@ void start() {
 	grabber = new RealsenseGrabber();
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
 	calibration = new Calibration();
-
-#if HD == false
-	grabber->loadBackground();
-#endif
 
 	grabber->updateRGBD();
 
@@ -90,7 +86,7 @@ void stop() {
 
 int main(int argc, char *argv[]) {
 	start();
-	
+
 	pcl::visualization::PCLVisualizer viewer("Point Cloud Viewer");
 	viewer.setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
 	viewer.registerKeyboardCallback(keyboardEventOccurred);

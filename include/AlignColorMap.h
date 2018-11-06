@@ -6,6 +6,10 @@
 #include "TsdfVolume.cuh"
 
 class AlignColorMap {
+	/*
+	Functions:
+	@alignColor2Depth(): align color images to the instrinsics of depth images, and also remove background.
+	*/
 	RGBQUAD* alignedColor_devive;
 	bool isRemoveBackground;
 	float* depthBackground_device;

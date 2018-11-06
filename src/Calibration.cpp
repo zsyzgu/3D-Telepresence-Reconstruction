@@ -77,14 +77,15 @@ void Calibration::setOrigin(RealsenseGrabber* grabber) {
 	int cameras = grabber->getCameras();
 
 	Intrinsics* colorIntrinsics = grabber->getOriginColorIntrinsics();
-	RGBQUAD** colorImages;
 	std::vector<cv::Point2f> sourcePoints;
 	cv::Mat sourceColorMat(COLOR_H, COLOR_W, CV_8UC3);
 
 	int mainId = 0;
 	do {
-		grabber->getRGB(colorImages);
-		rgb2mat(&sourceColorMat, colorImages[mainId]);
+		grabber->updateRGBD();
+		RGBQUAD* originColorImages = grabber->getOriginColorImages_host();
+
+		rgb2mat(&sourceColorMat, originColorImages + mainId * COLOR_H * COLOR_W);
 		sourcePoints.clear();
 		findChessboardCorners(sourceColorMat, BOARD_SIZE, sourcePoints, /*cv::CALIB_CB_ADAPTIVE_THRESH | */cv::CALIB_CB_FAST_CHECK | cv::CALIB_CB_NORMALIZE_IMAGE);
 
@@ -129,7 +130,6 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 	int cameras = grabber->getCameras();
 	assert(0 < targetId && targetId < cameras);
 
-	RGBQUAD** colorImages;
 	Intrinsics* colorIntrinsics = grabber->getOriginColorIntrinsics();
 	std::vector<cv::Point2f> sourcePoints;
 	std::vector<cv::Point2f> targetPoints;
@@ -140,9 +140,11 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 	std::vector<std::vector<cv::Point2f> > targetPointsArray;
 	std::vector<cv::Point2f> rects;
 	for (int iter = 0; iter < ITERATION;) {
-		grabber->getRGB(colorImages);
-		rgb2mat(&sourceColorMat, colorImages[0]);
-		rgb2mat(&targetColorMat, colorImages[targetId]);
+		grabber->updateRGBD();
+		RGBQUAD* originColorImages = grabber->getOriginColorImages_host();
+
+		rgb2mat(&sourceColorMat, originColorImages);
+		rgb2mat(&targetColorMat, originColorImages + targetId * COLOR_H * COLOR_W);
 
 		sourcePoints.clear();
 		targetPoints.clear();

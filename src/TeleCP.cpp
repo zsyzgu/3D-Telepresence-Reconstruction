@@ -9,10 +9,6 @@ TeleCP::TeleCP()
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
 	calibration = new Calibration();
 
-#if HD == false
-	grabber->loadBackground();
-#endif
-
 	grabber->updateRGBD();
 
 	if (transmission != NULL && transmission->isConnected) {

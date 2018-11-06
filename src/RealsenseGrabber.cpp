@@ -9,23 +9,14 @@ RealsenseGrabber::RealsenseGrabber()
 	depthFilter = new DepthFilter();
 	colorFilter = new ColorFilter();
 	alignColorMap = new AlignColorMap();
-	depthImages = new UINT16*[MAX_CAMERAS];
-	colorImages = new UINT8*[MAX_CAMERAS];
-	for (int i = 0; i < MAX_CAMERAS; i++) {
-		depthImages[i] = new UINT16[DEPTH_H * DEPTH_W];
-		colorImages[i] = new UINT8[2 * COLOR_H * COLOR_W];
-		memset(depthImages[i], 0, DEPTH_H * DEPTH_W * sizeof(UINT16));
-		memset(colorImages[i], 0, 2 * COLOR_H * COLOR_W * sizeof(UINT8));
-	}
-	colorImagesRGB = new RGBQUAD*[MAX_CAMERAS];
-	for (int i = 0; i < MAX_CAMERAS; i++) {
-		colorImagesRGB[i] = new RGBQUAD[COLOR_H * COLOR_W];
-	}
 	depth2color = new Transformation[MAX_CAMERAS];
 	color2depth = new Transformation[MAX_CAMERAS];
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
 	originColorIntrinsics = new Intrinsics[MAX_CAMERAS];
+	depthImages = new float[MAX_CAMERAS * DEPTH_H * DEPTH_W];
+	colorImages = new RGBQUAD[MAX_CAMERAS * COLOR_H * COLOR_W];
+	originColorImages = new RGBQUAD[MAX_CAMERAS * COLOR_H * COLOR_W];
 
 	rs2::context context;
 	rs2::device_list deviceList = context.query_devices();
@@ -33,6 +24,10 @@ RealsenseGrabber::RealsenseGrabber()
 		enableDevice(deviceList[i]);
 		std::cout << "Device " << i << " open." << std::endl;
 	}
+
+#if HD == false
+	Configuration::loadBackground(alignColorMap);
+#endif
 }
 
 RealsenseGrabber::~RealsenseGrabber()
@@ -45,30 +40,6 @@ RealsenseGrabber::~RealsenseGrabber()
 	}
 	if (alignColorMap != NULL) {
 		delete alignColorMap;
-	}
-	if (depthImages != NULL) {
-		for (int i = 0; i < MAX_CAMERAS; i++) {
-			if (depthImages[i] != NULL) {
-				delete depthImages[i];
-			}
-		}
-		delete[] depthImages;
-	}
-	if (colorImages != NULL) {
-		for (int i = 0; i < MAX_CAMERAS; i++) {
-			if (colorImages[i] != NULL) {
-				delete colorImages[i];
-			}
-		}
-		delete[] colorImages;
-	}
-	if (colorImagesRGB != NULL) {
-		for (int i = 0; i < MAX_CAMERAS; i++) {
-			if (colorImagesRGB[i] != NULL) {
-				delete colorImagesRGB[i];
-			}
-		}
-		delete[] colorImagesRGB;
 	}
 	if (depth2color != NULL) {
 		delete[] depth2color;
@@ -85,6 +56,16 @@ RealsenseGrabber::~RealsenseGrabber()
 	if (originColorIntrinsics != NULL) {
 		delete[] originColorIntrinsics;
 	}
+	if (depthImages != NULL) {
+		delete[] depthImages;
+	}
+	if (colorImages != NULL) {
+		delete[] colorImages;
+	}
+	if (originColorImages != NULL) {
+		delete[] originColorImages;
+	}
+
 	for (int i = 0; i < devices.size(); i++) {
 		devices[i].stop();
 	}
@@ -176,10 +157,10 @@ void RealsenseGrabber::updateRGBD()
 				rs2::stream_profile profile = frame.get_profile();
 
 				if (profile.stream_type() == RS2_STREAM_DEPTH) {
-					memcpy(depthImages[deviceId], frame.get_data(), DEPTH_H * DEPTH_W * sizeof(UINT16));
+					depthFilter->process(deviceId, (UINT16*)frame.get_data());
 				}
 				if (profile.stream_type() == RS2_STREAM_COLOR) {
-					memcpy(colorImages[deviceId], frame.get_data(), 2 * COLOR_H * COLOR_W * sizeof(UINT8));
+					colorFilter->process(deviceId, (UINT8*)frame.get_data());
 				}
 			}
 		} else {
@@ -187,40 +168,7 @@ void RealsenseGrabber::updateRGBD()
 		}
 	}
 
-	for (int i = 0; i < devices.size(); i++) {
-		depthFilter->process(i, depthImages[i]);
-		colorFilter->process(i, colorImages[i]);
-	}
-
 	alignColorMap->alignColor2Depth(devices.size(), depthFilter->getCurrFrame_device(), colorFilter->getCurrFrame_device(), depthIntrinsics, originColorIntrinsics, depth2color);
-}
-
-void RealsenseGrabber::getRGB(RGBQUAD**& colorImages)
-{
-	colorImages = this->colorImagesRGB;
-
-	for (int deviceId = 0; deviceId < devices.size(); deviceId++) {
-		rs2::pipeline pipeline = devices[deviceId];
-		rs2::frameset frameset = pipeline.wait_for_frames();
-		bool check = (frameset.size() == 2);
-
-		if (check) {
-			for (int i = 0; i < frameset.size(); i++) {
-				rs2::frame frame = frameset[i];
-				rs2::stream_profile profile = frame.get_profile();
-
-				if (profile.stream_type() == RS2_STREAM_COLOR) {
-					memcpy(this->colorImages[deviceId], frame.get_data(), 2 * COLOR_W * COLOR_H * sizeof(UINT8));
-				}
-			}
-		}
-	}
-
-	RGBQUAD* colorImages_device = colorFilter->getCurrFrame_device();
-	for (int i = 0; i < devices.size(); i++) {
-		colorFilter->process(i, this->colorImages[i]);
-		cudaMemcpy(this->colorImagesRGB[i], colorImages_device + i * COLOR_W * COLOR_H, COLOR_W * COLOR_H * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
-	}
 }
 
 void RealsenseGrabber::saveBackground() {
@@ -232,7 +180,20 @@ void RealsenseGrabber::saveBackground() {
 	Configuration::saveBackground(alignColorMap);
 }
 
-void RealsenseGrabber::loadBackground()
+float* RealsenseGrabber::getDepthImages_host()
 {
-	Configuration::loadBackground(alignColorMap);
+	HANDLE_ERROR(cudaMemcpy(depthImages, getDepthImages_device(), devices.size() * DEPTH_H * DEPTH_W * sizeof(float), cudaMemcpyDeviceToHost));
+	return depthImages;
+}
+
+RGBQUAD* RealsenseGrabber::getColorImages_host()
+{
+	HANDLE_ERROR(cudaMemcpy(colorImages, getColorImages_device(), devices.size() * COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost));
+	return colorImages;
+}
+
+RGBQUAD* RealsenseGrabber::getOriginColorImages_host()
+{
+	HANDLE_ERROR(cudaMemcpy(originColorImages, getOriginColorImages_device(), devices.size() * COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost));
+	return originColorImages;
 }
