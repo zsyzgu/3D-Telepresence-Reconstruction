@@ -17,6 +17,7 @@ class Calibration {
 	Parameters:
 	@world2color: The extrinsics from the world coordinate to the color cameras.
 	@world2depth: The extrinsics from the world coordinate to the depth cameras.
+	@checkerboardPoints: The points cloud of the checkerboard when it is at the origin point.
 	Functions:
 	@setOrigin(): Set the position of the checkerboard as the coordinate origin.
 	@align(): Align all the color cameras - calcuate @world2color
@@ -37,8 +38,11 @@ private:
 private:
 	Transformation* world2color;
 	Transformation* world2depth;
+	std::vector<cv::Point3f> checkerboardPoints;
+	void initCheckerboardPoints();
 	Transformation calnInv(Transformation T);
 	void rgb2mat(cv::Mat* mat, RGBQUAD* rgb);
+	cv::Mat intrinsics2mat(Intrinsics T);
 	void updateWorld2Depth(int cameras, RealsenseGrabber* grabber);
 public:
 	Calibration();

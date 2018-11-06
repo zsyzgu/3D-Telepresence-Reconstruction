@@ -2,6 +2,16 @@
 #include "Timer.h"
 #include "Parameters.h"
 
+void Calibration::initCheckerboardPoints()
+{
+	checkerboardPoints.clear();
+	for (int r = 0; r < BOARD_SIZE.height; r++) {
+		for (int c = 0; c < BOARD_SIZE.width; c++) {
+			checkerboardPoints.push_back(cv::Point3f(c * GRID_SIZE, r * GRID_SIZE, 0));
+		}
+	}
+}
+
 Transformation Calibration::calnInv(Transformation T)
 {
 	T.output();
@@ -28,6 +38,17 @@ void Calibration::rgb2mat(cv::Mat* mat, RGBQUAD* rgb)
 	}
 }
 
+cv::Mat Calibration::intrinsics2mat(Intrinsics I)
+{
+	cv::Mat mat(cv::Size(3, 3), CV_32F);
+	mat.at<float>(0, 0) = I.fx;
+	mat.at<float>(1, 1) = I.fy;
+	mat.at<float>(0, 2) = I.ppx;
+	mat.at<float>(1, 2) = I.ppy;
+	mat.at<float>(2, 2) = 1;
+	return mat;
+}
+
 void Calibration::updateWorld2Depth(int cameras, RealsenseGrabber* grabber) {
 	Transformation* color2depth = grabber->getColor2Depth();
 	for (int i = 0; i < cameras; i++) {
@@ -40,6 +61,7 @@ Calibration::Calibration() {
 	world2color = new Transformation[MAX_CAMERAS];
 	world2depth = new Transformation[MAX_CAMERAS];
 	Configuration::loadExtrinsics(world2depth);
+	initCheckerboardPoints();
 }
 
 Calibration::~Calibration() {
@@ -53,13 +75,6 @@ Calibration::~Calibration() {
 
 void Calibration::setOrigin(RealsenseGrabber* grabber) {
 	int cameras = grabber->getCameras();
-
-	std::vector<cv::Point3f> objectPoints;
-	for (int r = 0; r < BOARD_SIZE.height; r++) {
-		for (int c = 0; c < BOARD_SIZE.width; c++) {
-			objectPoints.push_back(cv::Point3f(c * GRID_SIZE, r * GRID_SIZE, 0));
-		}
-	}
 
 	Intrinsics* colorIntrinsics = grabber->getOriginColorIntrinsics();
 	RGBQUAD** colorImages;
@@ -92,16 +107,11 @@ void Calibration::setOrigin(RealsenseGrabber* grabber) {
 
 	} while (sourcePoints.size() != BOARD_NUM);
 
-	cv::Mat sourceCameraMatrix(cv::Size(3, 3), CV_32F);
-	sourceCameraMatrix.at<float>(0, 0) = colorIntrinsics[mainId].fx;
-	sourceCameraMatrix.at<float>(1, 1) = colorIntrinsics[mainId].fy;
-	sourceCameraMatrix.at<float>(0, 2) = colorIntrinsics[mainId].ppx;
-	sourceCameraMatrix.at<float>(1, 2) = colorIntrinsics[mainId].ppy;
-
+	cv::Mat sourceCameraMatrix = intrinsics2mat(colorIntrinsics[mainId]);
 	cv::Mat distCoeffs;
 	cv::Mat rv(3, 1, CV_64FC1);
 	cv::Mat tv(3, 1, CV_64FC1);
-	solvePnP(objectPoints, sourcePoints, sourceCameraMatrix, distCoeffs, rv, tv);
+	solvePnP(checkerboardPoints, sourcePoints, sourceCameraMatrix, distCoeffs, rv, tv);
 	cv::Rodrigues(rv, rv);
 	Transformation world2camera((double*)rv.data, (double*)tv.data);
 	Transformation camera0Inv = calnInv(world2color[mainId]);
@@ -125,13 +135,6 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 	std::vector<cv::Point2f> targetPoints;
 	cv::Mat sourceColorMat(COLOR_H, COLOR_W, CV_8UC3);
 	cv::Mat targetColorMat(COLOR_H, COLOR_W, CV_8UC3);
-
-	std::vector<cv::Point3f> objectPoints;
-	for (int r = 0; r < BOARD_SIZE.height; r++) {
-		for (int c = 0; c < BOARD_SIZE.width; c++) {
-			objectPoints.push_back(cv::Point3f(c * GRID_SIZE, r * GRID_SIZE, 0));
-		}
-	}
 
 	std::vector<std::vector<cv::Point2f> > sourcePointsArray;
 	std::vector<std::vector<cv::Point2f> > targetPointsArray;
@@ -210,29 +213,14 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 		}
 	}
 
-	std::vector<std::vector<cv::Point3f> > objectPointsArray;
-	for (int i = 0; i < sourcePointsArray.size(); i++) {
-		objectPointsArray.push_back(objectPoints);
-	}
-
-	cv::Mat sourceCameraMatrix(cv::Size(3, 3), CV_32F);
-	sourceCameraMatrix.at<float>(0, 0) = colorIntrinsics[0].fx;
-	sourceCameraMatrix.at<float>(1, 1) = colorIntrinsics[0].fy;
-	sourceCameraMatrix.at<float>(0, 2) = colorIntrinsics[0].ppx;
-	sourceCameraMatrix.at<float>(1, 2) = colorIntrinsics[0].ppy;
-	sourceCameraMatrix.at<float>(2, 2) = 1;
-	cv::Mat targetCameraMatrix(cv::Size(3, 3), CV_32F);
-	targetCameraMatrix.at<float>(0, 0) = colorIntrinsics[targetId].fx;
-	targetCameraMatrix.at<float>(1, 1) = colorIntrinsics[targetId].fy;
-	targetCameraMatrix.at<float>(0, 2) = colorIntrinsics[targetId].ppx;
-	targetCameraMatrix.at<float>(1, 2) = colorIntrinsics[targetId].ppy;
-	targetCameraMatrix.at<float>(2, 2) = 1;
-
+	std::vector<std::vector<cv::Point3f> > checkerboardPointsArray(sourcePointsArray.size(), checkerboardPoints);
+	cv::Mat sourceCameraMatrix = intrinsics2mat(colorIntrinsics[0]);
+	cv::Mat targetCameraMatrix = intrinsics2mat(colorIntrinsics[targetId]);
 	cv::Mat sourceDistCoeffs;
 	cv::Mat targetDistCoeffs;
 	cv::Mat rotation, translation, essential, fundamental;
 	double rms = cv::stereoCalibrate(
-		objectPointsArray,
+		checkerboardPointsArray,
 		sourcePointsArray,
 		targetPointsArray,
 		sourceCameraMatrix,

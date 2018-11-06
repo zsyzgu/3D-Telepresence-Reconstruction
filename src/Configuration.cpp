@@ -65,7 +65,7 @@ void Configuration::saveBackground(AlignColorMap* alignColorMap)
 			fprintf(fout, "%f\n", depth[i]);
 		}
 		for (int i = 0; i < MAX_CAMERAS * COLOR_W * COLOR_H; i++) {
-#if CALIBRATION == false
+#if HD == false
 			fprintf(fout, "%d\n", color[i]);
 #else
 			int id = i % (COLOR_W * COLOR_H);

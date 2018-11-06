@@ -34,7 +34,7 @@ void start() {
 	volume = new TsdfVolume(2, 2, 2, 0, 0, 0);
 	calibration = new Calibration();
 
-#if CALIBRATION == false
+#if HD == false
 	grabber->loadBackground();
 #endif
 

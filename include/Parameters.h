@@ -1,9 +1,9 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
-#define CALIBRATION true
+#define HD false
 #define MAX_CAMERAS 8
-#if CALIBRATION == false
+#if HD == false
 	#define DEPTH_W 640
 	#define DEPTH_H 480
 	#define COLOR_W 960
