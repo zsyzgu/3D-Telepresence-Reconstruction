@@ -12,9 +12,8 @@ void Calibration::initCheckerboardPoints()
 	}
 }
 
-Transformation Calibration::calnInv(Transformation T)
+Extrinsics Calibration::calnInv(Extrinsics T)
 {
-	T.output();
 	cv::Mat rv(3, 3, CV_64FC1);
 	cv::Mat tv(3, 1, CV_64FC1);
 	double* rv_d = (double*)rv.data;
@@ -25,7 +24,7 @@ Transformation Calibration::calnInv(Transformation T)
 	tv_d[0] = T.translation.x, tv_d[1] = T.translation.y, tv_d[2] = T.translation.z;
 	rv = rv.inv();
 	tv = -rv * tv;
-	return Transformation((double*)rv.data, (double*)tv.data);
+	return Extrinsics((double*)rv.data, (double*)tv.data);
 }
 
 void Calibration::rgb2mat(cv::Mat* mat, RGBQUAD* rgb)
@@ -49,17 +48,69 @@ cv::Mat Calibration::intrinsics2mat(Intrinsics I)
 	return mat;
 }
 
-void Calibration::updateWorld2Depth(int cameras, RealsenseGrabber* grabber) {
-	Transformation* color2depth = grabber->getColor2Depth();
-	for (int i = 0; i < cameras; i++) {
-		world2depth[i] = color2depth[i] * world2color[i];
+void Calibration::updateWorld2Depth(int cameraId, RealsenseGrabber* grabber) {
+	assert(0 <= cameraId && cameraId < MAX_CAMERAS);
+	Extrinsics* color2depth = grabber->getColor2Depth();
+	world2depth[cameraId] = color2depth[cameraId] * world2color[cameraId];
+	Configuration::saveExtrinsics(world2depth);
+}
+
+#include <pcl/io/pcd_io.h>
+void Calibration::icpWorld2Depth(int cameraId, RealsenseGrabber* grabber)
+{
+	assert(0 < cameraId && cameraId < MAX_CAMERAS);
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr source(new pcl::PointCloud<pcl::PointXYZRGB>());
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr target(new pcl::PointCloud<pcl::PointXYZRGB>());
+	float* depthSource = grabber->getDepthImages_host();
+	float* depthTarget = depthSource + cameraId * DEPTH_H * DEPTH_W;
+	RGBQUAD* colorSource = grabber->getColorImages_host();
+	RGBQUAD* colorTarget = colorSource + cameraId * COLOR_H * COLOR_W;
+	Intrinsics* intrinsicsSource = grabber->getDepthIntrinsics();
+	Intrinsics* intrinsicsTarget = intrinsicsSource + cameraId;
+	Intrinsics* intrinsicsColorSource = grabber->getColorIntrinsics();
+	Intrinsics* intrinsicsColorTarget = intrinsicsColorSource + cameraId;
+	for (int y = 0; y < DEPTH_H; y++) {
+		for (int x = 0; x < DEPTH_W; x++) {
+			int id = y * DEPTH_W + x;
+			if (depthSource[id] != 0 && depthSource[id] < BOARD_MAX_DISTANCE) {
+				float3 pos = intrinsicsSource->deproject(make_float2(x, y), depthSource[id]);
+				int2 pos2d = intrinsicsColorSource->translate(pos);
+				RGBQUAD rgb = colorSource[pos2d.y * COLOR_W + pos2d.x];
+				pcl::PointXYZRGB point;
+				point.x = pos.x;
+				point.y = pos.y;
+				point.z = pos.z;
+				point.r = rgb.rgbRed;
+				point.g = rgb.rgbGreen;
+				point.b = rgb.rgbBlue;
+				source->push_back(point);
+			}
+			if (depthTarget[id] != 0 && depthTarget[id] < BOARD_MAX_DISTANCE) {
+				float3 pos = intrinsicsTarget->deproject(make_float2(x, y), depthTarget[id]);
+				int2 pos2d = intrinsicsColorTarget->translate(pos);
+				RGBQUAD rgb = colorTarget[pos2d.y * COLOR_W + pos2d.x];
+				pcl::PointXYZRGB point;
+				point.x = pos.x;
+				point.y = pos.y;
+				point.z = pos.z;
+				point.r = rgb.rgbRed;
+				point.g = rgb.rgbGreen;
+				point.b = rgb.rgbBlue;
+				target->push_back(point);
+			}
+		}
 	}
+
+	pcl::io::savePCDFileASCII("source.pcd", *source);
+	pcl::io::savePCDFileASCII("target.pcd", *target);
+
 	Configuration::saveExtrinsics(world2depth);
 }
 
 Calibration::Calibration() {
-	world2color = new Transformation[MAX_CAMERAS];
-	world2depth = new Transformation[MAX_CAMERAS];
+	world2color = new Extrinsics[MAX_CAMERAS];
+	world2depth = new Extrinsics[MAX_CAMERAS];
 	Configuration::loadExtrinsics(world2depth);
 	initCheckerboardPoints();
 }
@@ -114,13 +165,13 @@ void Calibration::setOrigin(RealsenseGrabber* grabber) {
 	cv::Mat tv(3, 1, CV_64FC1);
 	solvePnP(checkerboardPoints, sourcePoints, sourceCameraMatrix, distCoeffs, rv, tv);
 	cv::Rodrigues(rv, rv);
-	Transformation world2camera((double*)rv.data, (double*)tv.data);
-	Transformation camera0Inv = calnInv(world2color[mainId]);
+	Extrinsics world2camera((double*)rv.data, (double*)tv.data);
+	Extrinsics camera0Inv = calnInv(world2color[mainId]);
 
 	for (int i = 0; i < cameras; i++) {
 		world2color[i] = (world2color[i] * camera0Inv) * world2camera;
+		updateWorld2Depth(i, grabber);
 	}
-	updateWorld2Depth(cameras, grabber);
 
 	cv::destroyAllWindows();
 }
@@ -237,14 +288,16 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 	);
 	std::cout << "RMS [" << targetId << "]= " << rms << std::endl;
 
-	world2color[targetId] = Transformation((double*)rotation.data, (double*)translation.data);
-	updateWorld2Depth(cameras, grabber);
+	world2color[targetId] = Extrinsics((double*)rotation.data, (double*)translation.data);
+	updateWorld2Depth(targetId, grabber); // caln world2depth from world2color and color2depth
+	icpWorld2Depth(targetId, grabber); // using ICP and points cloud to adjust the calibration
 	cv::destroyAllWindows();
 }
 
 void Calibration::align(RealsenseGrabber* grabber) {
 	int cameras = grabber->getCameras();
 	world2color[0].setIdentity();
+	updateWorld2Depth(0, grabber);
 	for (int targetId = 1; targetId < cameras; targetId++) {
 		align(grabber, targetId);
 	}

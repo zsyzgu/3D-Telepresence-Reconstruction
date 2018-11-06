@@ -17,7 +17,7 @@ private:
 public:
 	TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 	~TsdfVolume();
-	void integrate(RealsenseGrabber* grabber, int remoteCameras, Transformation* world2depth);
+	void integrate(RealsenseGrabber* grabber, int remoteCameras, Extrinsics* world2depth);
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr getPointCloud();
 	byte* getBuffer() { return buffer; }
 };

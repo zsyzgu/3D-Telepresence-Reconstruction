@@ -5,7 +5,7 @@
 
 extern "C" void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ);
 extern "C" void cudaReleaseVolume();
-extern "C" void cudaIntegrate(RealsenseGrabber* grabber, int remoteCameras, int& triSize, Vertex* vertex, Transformation* world2depth);
+extern "C" void cudaIntegrate(RealsenseGrabber* grabber, int remoteCameras, int& triSize, Vertex* vertex, Extrinsics* world2depth);
 
 TsdfVolume::TsdfVolume(float sizeX, float sizeY, float sizeZ, float centerX, float centerY, float centerZ)
 {
@@ -21,7 +21,7 @@ TsdfVolume::~TsdfVolume()
 	cudaReleaseVolume();
 }
 
-void TsdfVolume::integrate(RealsenseGrabber* grabber, int remoteCameras, Transformation* world2depth)
+void TsdfVolume::integrate(RealsenseGrabber* grabber, int remoteCameras, Extrinsics* world2depth)
 {
 	Vertex* vertex = (Vertex*)(buffer + 4);
 	cudaIntegrate(grabber, remoteCameras, *((int*)buffer), vertex, world2depth);

@@ -7,8 +7,8 @@
 
 class Configuration {
 public:
-	static void saveExtrinsics(Transformation* transformation);
-	static void loadExtrinsics(Transformation* transformation);
+	static void saveExtrinsics(Extrinsics* extrinsics);
+	static void loadExtrinsics(Extrinsics* extrinsics);
 	static void saveBackground(AlignColorMap* alignColorMap);
 	static void loadBackground(AlignColorMap* alignColorMap);
 	static int loadDelayFrame();

@@ -77,14 +77,14 @@ public:
 	}
 };
 
-class Transformation {
+class Extrinsics {
 public:
 	float3 rotation0;
 	float3 rotation1;
 	float3 rotation2;
 	float3 translation;
 public:
-	CUDA_CALLABLE_MEMBER Transformation& operator = (const Transformation& trans) {
+	CUDA_CALLABLE_MEMBER Extrinsics& operator = (const Extrinsics& trans) {
 		rotation0 = trans.rotation0;
 		rotation1 = trans.rotation1;
 		rotation2 = trans.rotation2;
@@ -92,18 +92,18 @@ public:
 		return *this;
 	}
 
-	CUDA_CALLABLE_MEMBER Transformation() {
+	CUDA_CALLABLE_MEMBER Extrinsics() {
 		setIdentity();
 	}
 
-	CUDA_CALLABLE_MEMBER Transformation(float* rotation, float* translation) { // Realsense Format
+	CUDA_CALLABLE_MEMBER Extrinsics(float* rotation, float* translation) { // Realsense Format
 		rotation0 = make_float3(rotation[0], rotation[3], rotation[6]);
 		rotation1 = make_float3(rotation[1], rotation[4], rotation[7]);
 		rotation2 = make_float3(rotation[2], rotation[5], rotation[8]);
 		this->translation = make_float3(translation[0], translation[1], translation[2]);
 	}
 
-	CUDA_CALLABLE_MEMBER Transformation(double* rotation, double* translation) { // Opencv Format
+	CUDA_CALLABLE_MEMBER Extrinsics(double* rotation, double* translation) { // Opencv Format
 		rotation0 = make_float3(rotation[0], rotation[1], rotation[2]);
 		rotation1 = make_float3(rotation[3], rotation[4], rotation[5]);
 		rotation2 = make_float3(rotation[6], rotation[7], rotation[8]);
@@ -140,11 +140,11 @@ public:
 		translation = make_float3(0, 0, 0);
 	}
 
-	CUDA_CALLABLE_MEMBER Transformation operator * (Transformation trans) {
+	CUDA_CALLABLE_MEMBER Extrinsics operator * (Extrinsics trans) {
 		float3 col0 = trans.col(0);
 		float3 col1 = trans.col(1);
 		float3 col2 = trans.col(2);
-		Transformation result;
+		Extrinsics result;
 		result.rotation0 = make_float3(dot(rotation0, col0), dot(rotation0, col1), dot(rotation0, col2));
 		result.rotation1 = make_float3(dot(rotation1, col0), dot(rotation1, col1), dot(rotation1, col2));
 		result.rotation2 = make_float3(dot(rotation2, col0), dot(rotation2, col1), dot(rotation2, col2));

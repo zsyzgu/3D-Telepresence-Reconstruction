@@ -17,7 +17,7 @@ class AlignColorMap {
 public:
 	AlignColorMap();
 	~AlignColorMap();
-	void alignColor2Depth(int cameras, float* depth_device, RGBQUAD* color_device, Intrinsics * depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color);
+	void alignColor2Depth(int cameras, float* depth_device, RGBQUAD* color_device, Intrinsics * depthIntrinsics, Intrinsics* colorIntrinsics, Extrinsics* depth2color);
 	bool isBackgroundOn() { return this->isRemoveBackground; };
 	void enableBackground();
 	void enableBackground(float* depth_device);

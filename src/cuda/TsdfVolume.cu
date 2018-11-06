@@ -16,7 +16,7 @@ namespace tsdf {
 
 	float* volume_device;
 	UINT8* volumeBin_device;
-	Transformation* world2depth_device;
+	Extrinsics* world2depth_device;
 	Intrinsics* depthIntrinsics_device;
 	Intrinsics* colorIntrinsics_device;
 	Vertex* vertex_device;
@@ -52,7 +52,7 @@ void cudaInitVolume(float sizeX, float sizeY, float sizeZ, float centerX, float 
 	offset = center - size * 0.5;
 	HANDLE_ERROR(cudaMalloc(&volume_device, VOLUME * VOLUME * VOLUME * sizeof(float)));
 	HANDLE_ERROR(cudaMalloc(&volumeBin_device, VOLUME * VOLUME * VOLUME * sizeof(UINT8)));
-	HANDLE_ERROR(cudaMalloc(&world2depth_device, MAX_CAMERAS * sizeof(Transformation)));
+	HANDLE_ERROR(cudaMalloc(&world2depth_device, MAX_CAMERAS * sizeof(Extrinsics)));
 	HANDLE_ERROR(cudaMalloc(&depthIntrinsics_device, MAX_CAMERAS * sizeof(Intrinsics)));
 	HANDLE_ERROR(cudaMalloc(&colorIntrinsics_device, MAX_CAMERAS * sizeof(Intrinsics)));
 	HANDLE_ERROR(cudaMalloc(&vertex_device, MAX_VERTEX * sizeof(Vertex)));
@@ -72,7 +72,7 @@ void cudaReleaseVolume() {
 	HANDLE_ERROR(cudaFree(triBin_device));
 }
 
-__global__ void kernelIntegrateDepth(int cameras, int localCameras, float* volume, UINT8* volumeBin, Transformation* transformation, Intrinsics* intrinsics, float* depthMap, float3 volumeSize, float3 offset) {
+__global__ void kernelIntegrateDepth(int cameras, int localCameras, float* volume, UINT8* volumeBin, Extrinsics* extrinsics, Intrinsics* intrinsics, float* depthMap, float3 volumeSize, float3 offset) {
 	int x = threadIdx.x + blockIdx.x * blockDim.x;
 	int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -92,8 +92,8 @@ __global__ void kernelIntegrateDepth(int cameras, int localCameras, float* volum
 
 	for (int i = 0; i < cameras; i++) {
 		float3 ori = make_float3(x, y, -1) * volumeSize + offset;
-		float3 pos = transformation[i].translate(ori);
-		float3 deltaZ = transformation[i].deltaZ() * volumeSize;
+		float3 pos = extrinsics[i].translate(ori);
+		float3 deltaZ = extrinsics[i].deltaZ() * volumeSize;
 
 		for (int z = 0; z < VOLUME; z++) {
 			float tsdf = -1;
@@ -345,12 +345,12 @@ int cpu_cudaCountAccumulation() {
 	return tris_size;
 }
 
-__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, Transformation* transformation, Intrinsics* intrinsics, uchar4* color, float3 normal) {
+__device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, Extrinsics* extrinsics, Intrinsics* intrinsics, uchar4* color, float3 normal) {
 	float4 colorSum = float4();
 	float weight = 0;
 	for (int i = 0; i < cameras; i++) {
 		if ((bin >> i) & 1) {
-			float3 pos = transformation[i].translate(ori);
+			float3 pos = extrinsics[i].translate(ori);
 			int2 pixel = intrinsics[i].translate(pos);
 			if (pos.z > 0 && 0 <= pixel.x && pixel.x < COLOR_W && 0 <= pixel.y && pixel.y < COLOR_H) {
 				uchar4 tmp = color[(i * COLOR_H + pixel.y) * COLOR_W + pixel.x];
@@ -370,7 +370,7 @@ __device__ __forceinline__ uchar4 calnColor(int cameras, UINT8 bin, float3 ori, 
 	return make_uchar4(colorSum.x / weight, colorSum.y / weight, colorSum.z / weight, 0);
 }
 
-__global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UINT8* triBin, uchar4* color, Transformation* transformation, Intrinsics* intrinsics) {
+__global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UINT8* triBin, uchar4* color, Extrinsics* extrinsics, Intrinsics* intrinsics) {
 	int id = threadIdx.x + blockIdx.x * blockDim.x;
 	if (id < triSize) {
 
@@ -383,17 +383,17 @@ __global__ void kernelColorization(int cameras, int triSize, Vertex* vertex, UIN
 		pos[5] = (pos[2] + pos[0]) * 0.5f;
 		float3 normal = multi(pos[1] - pos[0], pos[2] - pos[0]);
 		for (int j = 0; j < 3; j++) {
-			vertex[id * 3 + j].color = calnColor(cameras, triBin[id], pos[j], transformation, intrinsics, color, normal);
-			vertex[id * 3 + j].color2 = calnColor(cameras, triBin[id], pos[j + 3], transformation, intrinsics, color, normal);
+			vertex[id * 3 + j].color = calnColor(cameras, triBin[id], pos[j], extrinsics, intrinsics, color, normal);
+			vertex[id * 3 + j].color2 = calnColor(cameras, triBin[id], pos[j + 3], extrinsics, intrinsics, color, normal);
 		}
 	}
 }
 extern "C"
-void cudaIntegrate(RealsenseGrabber* grabber, int remoteCameras, int& triSize, Vertex* vertex, Transformation* world2depth) {
+void cudaIntegrate(RealsenseGrabber* grabber, int remoteCameras, int& triSize, Vertex* vertex, Extrinsics* world2depth) {
 	dim3 blocks = dim3(VOLUME / BLOCK_SIZE, VOLUME / BLOCK_SIZE);
 	dim3 threads = dim3(BLOCK_SIZE, BLOCK_SIZE);
 
-	HANDLE_ERROR(cudaMemcpy(world2depth_device, world2depth, MAX_CAMERAS * sizeof(Transformation), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(world2depth_device, world2depth, MAX_CAMERAS * sizeof(Extrinsics), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(depthIntrinsics_device, grabber->getDepthIntrinsics(), MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(colorIntrinsics_device, grabber->getColorIntrinsics(), MAX_CAMERAS * sizeof(Intrinsics), cudaMemcpyHostToDevice));
 

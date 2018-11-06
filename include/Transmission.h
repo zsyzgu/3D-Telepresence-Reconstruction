@@ -39,9 +39,9 @@ public:
 	bool isConnected;
 	void setDelayFrames(int delayFrames) { this->delayFrames = delayFrames; }
 	void recvFrame();
-	void prepareSendFrame(RealsenseGrabber* grabber, Transformation* extrinsics);
+	void prepareSendFrame(RealsenseGrabber* grabber, Extrinsics* extrinsics);
 	void sendFrame();
-	int getFrame(RealsenseGrabber* grabber, Transformation* extrinsics);
+	int getFrame(RealsenseGrabber* grabber, Extrinsics* extrinsics);
 };
 
 #endif

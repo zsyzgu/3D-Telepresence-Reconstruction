@@ -4,24 +4,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void Configuration::saveExtrinsics(Transformation* transformation)
+void Configuration::saveExtrinsics(Extrinsics* extrinsics)
 {
 	const char* EXTRINSICS_FILE = "Extrinsics.cfg";
 	std::ofstream fout(EXTRINSICS_FILE);
 
 	for (int i = 0; i < MAX_CAMERAS; i++) {
-		fout << transformation->rotation0.x << " " << transformation->rotation0.y << " " << transformation->rotation0.z << std::endl;
-		fout << transformation->rotation1.x << " " << transformation->rotation1.y << " " << transformation->rotation1.z << std::endl;
-		fout << transformation->rotation2.x << " " << transformation->rotation2.y << " " << transformation->rotation2.z << std::endl;
-		fout << transformation->translation.x << " " << transformation->translation.y << " " << transformation->translation.z << std::endl;
-		transformation++;
+		fout << extrinsics->rotation0.x << " " << extrinsics->rotation0.y << " " << extrinsics->rotation0.z << std::endl;
+		fout << extrinsics->rotation1.x << " " << extrinsics->rotation1.y << " " << extrinsics->rotation1.z << std::endl;
+		fout << extrinsics->rotation2.x << " " << extrinsics->rotation2.y << " " << extrinsics->rotation2.z << std::endl;
+		fout << extrinsics->translation.x << " " << extrinsics->translation.y << " " << extrinsics->translation.z << std::endl;
+		extrinsics++;
 	}
 
 	fout.close();
 	std::cout << "Extrinsics saved." << std::endl;
 }
 
-void Configuration::loadExtrinsics(Transformation* transformation)
+void Configuration::loadExtrinsics(Extrinsics* extrinsics)
 {
 	const char* EXTRINSICS_FILE = "Extrinsics.cfg";
 	std::fstream file;
@@ -31,18 +31,18 @@ void Configuration::loadExtrinsics(Transformation* transformation)
 		std::ifstream fin(EXTRINSICS_FILE);
 
 		for (int i = 0; i < MAX_CAMERAS; i++) {
-			fin >> transformation->rotation0.x >> transformation->rotation0.y >> transformation->rotation0.z;
-			fin >> transformation->rotation1.x >> transformation->rotation1.y >> transformation->rotation1.z;
-			fin >> transformation->rotation2.x >> transformation->rotation2.y >> transformation->rotation2.z;
-			fin >> transformation->translation.x >> transformation->translation.y >> transformation->translation.z;
-			transformation++;
+			fin >> extrinsics->rotation0.x >> extrinsics->rotation0.y >> extrinsics->rotation0.z;
+			fin >> extrinsics->rotation1.x >> extrinsics->rotation1.y >> extrinsics->rotation1.z;
+			fin >> extrinsics->rotation2.x >> extrinsics->rotation2.y >> extrinsics->rotation2.z;
+			fin >> extrinsics->translation.x >> extrinsics->translation.y >> extrinsics->translation.z;
+			extrinsics++;
 		}
 
 		fin.close();
 	} else {
 		for (int i = 0; i < MAX_CAMERAS; i++) {
-			transformation->setIdentity();
-			transformation++;
+			extrinsics->setIdentity();
+			extrinsics++;
 		}
 	}
 

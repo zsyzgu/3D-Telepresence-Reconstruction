@@ -121,7 +121,7 @@ void Transmission::recvFrame()
 	remoteFrames++;
 }
 
-void Transmission::prepareSendFrame(RealsenseGrabber* grabber, Transformation* extrinsics)
+void Transmission::prepareSendFrame(RealsenseGrabber* grabber, Extrinsics* extrinsics)
 {
 	int cameras = grabber->getCameras();
 	float* depthImages_device = grabber->getDepthImages_device();
@@ -137,8 +137,8 @@ void Transmission::prepareSendFrame(RealsenseGrabber* grabber, Transformation* e
 		sendOffset += DEPTH_H * DEPTH_W * sizeof(float);
 		cudaMemcpy(sendBuffer + sendOffset, colorImages_device + i * COLOR_H * COLOR_W, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyDeviceToHost);
 		sendOffset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-		memcpy(sendBuffer + sendOffset, extrinsics + i, sizeof(Transformation));
-		sendOffset += sizeof(Transformation);
+		memcpy(sendBuffer + sendOffset, extrinsics + i, sizeof(Extrinsics));
+		sendOffset += sizeof(Extrinsics);
 		memcpy(sendBuffer + sendOffset, depthIntrinsics + i, sizeof(Intrinsics));
 		sendOffset += sizeof(Intrinsics);
 		memcpy(sendBuffer + sendOffset, colorIntrinsics + i, sizeof(Intrinsics));
@@ -151,7 +151,7 @@ void Transmission::sendFrame() {
 	sendData(sendBuffer, sendOffset);
 }
 
-int Transmission::getFrame(RealsenseGrabber* grabber, Transformation* extrinsics)
+int Transmission::getFrame(RealsenseGrabber* grabber, Extrinsics* extrinsics)
 {
 	int localCameras = grabber->getCameras();
 	float* depthImages_device = grabber->getDepthImages_device() + localCameras * DEPTH_H * DEPTH_W;
@@ -175,8 +175,8 @@ int Transmission::getFrame(RealsenseGrabber* grabber, Transformation* extrinsics
 		offset += DEPTH_H * DEPTH_W * sizeof(float);
 		cudaMemcpy(colorImages_device + i * COLOR_H * COLOR_W, recvBuffer + offset, COLOR_H * COLOR_W * sizeof(RGBQUAD), cudaMemcpyHostToDevice);
 		offset += COLOR_H * COLOR_W * sizeof(RGBQUAD);
-		memcpy(extrinsics + i, recvBuffer + offset, sizeof(Transformation));
-		offset += sizeof(Transformation);
+		memcpy(extrinsics + i, recvBuffer + offset, sizeof(Extrinsics));
+		offset += sizeof(Extrinsics);
 		memcpy(depthIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));
 		offset += sizeof(Intrinsics);
 		memcpy(colorIntrinsics + i, recvBuffer + offset, sizeof(Intrinsics));

@@ -39,8 +39,8 @@ private:
 	DepthFilter* depthFilter;
 	ColorFilter* colorFilter;
 	AlignColorMap* alignColorMap;
-	Transformation* depth2color;
-	Transformation* color2depth;
+	Extrinsics* depth2color;
+	Extrinsics* color2depth;
 	Intrinsics* depthIntrinsics;
 	Intrinsics* colorIntrinsics;
 	Intrinsics* originColorIntrinsics;
@@ -59,7 +59,7 @@ public:
 	Intrinsics* getDepthIntrinsics() { return depthIntrinsics; }
 	Intrinsics* getColorIntrinsics() { return colorIntrinsics; }
 	Intrinsics* getOriginColorIntrinsics() { return originColorIntrinsics; }
-	Transformation* getColor2Depth() { return color2depth; }
+	Extrinsics* getColor2Depth() { return color2depth; }
 	float* getDepthImages_device() { return depthFilter->getCurrFrame_device(); }
 	RGBQUAD* getColorImages_device() { return alignColorMap->getAlignedColor_device(); }
 	RGBQUAD* getOriginColorImages_device() { return colorFilter->getCurrFrame_device(); }

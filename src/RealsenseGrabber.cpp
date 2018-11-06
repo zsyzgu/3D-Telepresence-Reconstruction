@@ -9,8 +9,8 @@ RealsenseGrabber::RealsenseGrabber()
 	depthFilter = new DepthFilter();
 	colorFilter = new ColorFilter();
 	alignColorMap = new AlignColorMap();
-	depth2color = new Transformation[MAX_CAMERAS];
-	color2depth = new Transformation[MAX_CAMERAS];
+	depth2color = new Extrinsics[MAX_CAMERAS];
+	color2depth = new Extrinsics[MAX_CAMERAS];
 	depthIntrinsics = new Intrinsics[MAX_CAMERAS];
 	colorIntrinsics = new Intrinsics[MAX_CAMERAS];
 	originColorIntrinsics = new Intrinsics[MAX_CAMERAS];
@@ -136,9 +136,9 @@ void RealsenseGrabber::enableDevice(rs2::device device)
 	originColorIntrinsics[id].ppy = cIntrinsics.ppy;
 	colorIntrinsics[id] = depthIntrinsics[id].zoom((float)COLOR_W / DEPTH_W, (float)COLOR_H / DEPTH_H);
 	rs2_extrinsics d2cExtrinsics = depthProfile.get_extrinsics_to(colorProfile);
-	depth2color[id] = Transformation(d2cExtrinsics.rotation, d2cExtrinsics.translation);
+	depth2color[id] = Extrinsics(d2cExtrinsics.rotation, d2cExtrinsics.translation);
 	rs2_extrinsics c2dExtrinsics = colorProfile.get_extrinsics_to(depthProfile);
-	color2depth[id] = Transformation(c2dExtrinsics.rotation, c2dExtrinsics.translation);
+	color2depth[id] = Extrinsics(c2dExtrinsics.rotation, c2dExtrinsics.translation);
 
 	devices.push_back(pipeline);
 }

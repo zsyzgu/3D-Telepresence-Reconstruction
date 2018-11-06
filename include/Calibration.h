@@ -15,6 +15,7 @@ class Calibration {
 	@INTERATION: The number of captured images in the calibration.
 	@RECT_DIST_THRESHOLD: In the calibration, the captured checkerboard should be big enough.
 	@RECT_AREA_THRESHOLD: In the calibration, the captured checkerboards should be far away enough from each others.
+	@BOARD_MAX_DISTANCE: the maximum distance between the camera and the chekerboard (points out of range are ignored in ICP).
 	@(others): Consts of the checkerboard.
 	Parameters:
 	@world2color: The extrinsics from the world coordinate to the color cameras.
@@ -30,29 +31,31 @@ class Calibration {
 	Last, we used world2depth in the TSDF Volume.
 	*/
 private:
-	const int ITERATION = 5;
+	const int ITERATION = 1;
 	const int RECT_DIST_THRESHOLD = COLOR_H / 20;
 	const int RECT_AREA_THRESHOLD = COLOR_H * COLOR_W / 100;
+	const float BOARD_MAX_DISTANCE = 1;
 	const cv::Size BOARD_SIZE = cv::Size(9, 6);
 	const int BOARD_NUM = BOARD_SIZE.width * BOARD_SIZE.height;
 	const float GRID_SIZE = 0.02513f;
 	const int CORNERS[4] = { 0, 8, 53, 45 };
 private:
-	Transformation* world2color;
-	Transformation* world2depth;
+	Extrinsics* world2color;
+	Extrinsics* world2depth;
 	std::vector<cv::Point3f> checkerboardPoints;
 	void initCheckerboardPoints();
-	Transformation calnInv(Transformation T);
+	Extrinsics calnInv(Extrinsics T);
 	void rgb2mat(cv::Mat* mat, RGBQUAD* rgb);
 	cv::Mat intrinsics2mat(Intrinsics T);
-	void updateWorld2Depth(int cameras, RealsenseGrabber* grabber);
+	void updateWorld2Depth(int cameraId, RealsenseGrabber* grabber);
+	void icpWorld2Depth(int cameraId, RealsenseGrabber* grabber);
 public:
 	Calibration();
 	~Calibration();
 	void setOrigin(RealsenseGrabber* grabber);
 	void align(RealsenseGrabber* grabber, int targetId);
 	void align(RealsenseGrabber* grabber);
-	Transformation* getExtrinsics() { return world2depth; }
+	Extrinsics* getExtrinsics() { return world2depth; }
 };
 
 #endif

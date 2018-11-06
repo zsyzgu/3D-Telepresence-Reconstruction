@@ -8,7 +8,7 @@ namespace BackgroundNamespace {
 };
 using namespace BackgroundNamespace;
 
-__global__ void kernelAlignProcess(uchar4* alignedColor, float* depth, uchar4* color, Intrinsics depthIntrinsics, Intrinsics colorIntrinsics, Transformation depth2color) {
+__global__ void kernelAlignProcess(uchar4* alignedColor, float* depth, uchar4* color, Intrinsics depthIntrinsics, Intrinsics colorIntrinsics, Extrinsics depth2color) {
 	const int MAX_SHIFT = DEPTH_W >> 4;
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -87,7 +87,7 @@ void cudaAlignClean(RGBQUAD *& alignedColor_device, float *& depthBackground_dev
 }
 
 extern "C"
-void cudaAlignProcess(int cameras, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* color_device, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics, Transformation* depth2color) {
+void cudaAlignProcess(int cameras, RGBQUAD* alignedColor_device, float* depth_device, RGBQUAD* color_device, Intrinsics* depthIntrinsics, Intrinsics* colorIntrinsics, Extrinsics* depth2color) {
 	dim3 threadsPerBlock = dim3(512, 1);
 	dim3 blocksPerGrid = dim3((COLOR_W + threadsPerBlock.x - 1) / threadsPerBlock.x, (COLOR_H + threadsPerBlock.y - 1) / threadsPerBlock.y);
 	
