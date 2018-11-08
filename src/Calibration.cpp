@@ -78,6 +78,7 @@ void Calibration::updateWorld2Depth(int cameraId, RealsenseGrabber* grabber) {
 void Calibration::icpWorld2Depth(int cameraId, RealsenseGrabber* grabber)
 {
 	assert(0 < cameraId && cameraId < MAX_CAMERAS);
+	std::cout << "GICP..." << std::endl;
 
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr source(new pcl::PointCloud<pcl::PointXYZRGBA>());
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr target(new pcl::PointCloud<pcl::PointXYZRGBA>());
@@ -133,11 +134,11 @@ void Calibration::icpWorld2Depth(int cameraId, RealsenseGrabber* grabber)
 	pcl::transformPointCloud(*source, *source, depth2worldSource);
 	pcl::transformPointCloud(*target, *target, depth2worldTarget);
 
-	std::cout << "GICP..." << std::endl;
 	pcl::GeneralizedIterativeClosestPoint6D gicp;
 	gicp.setInputSource(source); // align cameras[cameraId] to cameras[0]
 	gicp.setInputTarget(target);
-	gicp.setMaximumIterations(50);
+	gicp.setMaxCorrespondenceDistance(0.01);
+	gicp.setMaximumIterations(10);
 	gicp.setTransformationEpsilon(1e-8);
 	gicp.align(*output);
 	std::cout << "Fitness Score = " << gicp.getFitnessScore() << std::endl;
