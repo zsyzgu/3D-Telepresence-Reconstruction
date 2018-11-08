@@ -1,6 +1,8 @@
 #include "Calibration.h"
 #include "Timer.h"
 #include "Parameters.h"
+#include <pcl/registration/gicp6d.h>
+#include <pcl/io/pcd_io.h>
 
 void Calibration::initCheckerboardPoints()
 {
@@ -48,6 +50,24 @@ cv::Mat Calibration::intrinsics2mat(Intrinsics I)
 	return mat;
 }
 
+Eigen::Matrix4f Calibration::extrinsics2Mat4(Extrinsics extrinsics) {
+	Eigen::Matrix4f mat;
+	float* data = mat.data();
+	data[0] = extrinsics.rotation0.x;
+	data[1] = extrinsics.rotation1.x;
+	data[2] = extrinsics.rotation2.x;
+	data[4] = extrinsics.rotation0.y;
+	data[5] = extrinsics.rotation1.y;
+	data[6] = extrinsics.rotation2.y;
+	data[8] = extrinsics.rotation0.z;
+	data[9] = extrinsics.rotation1.z;
+	data[10] = extrinsics.rotation2.z;
+	data[12] = extrinsics.translation.x;
+	data[13] = extrinsics.translation.y;
+	data[14] = extrinsics.translation.z;
+	return mat;
+}
+
 void Calibration::updateWorld2Depth(int cameraId, RealsenseGrabber* grabber) {
 	assert(0 <= cameraId && cameraId < MAX_CAMERAS);
 	Extrinsics* color2depth = grabber->getColor2Depth();
@@ -55,55 +75,76 @@ void Calibration::updateWorld2Depth(int cameraId, RealsenseGrabber* grabber) {
 	Configuration::saveExtrinsics(world2depth);
 }
 
-#include <pcl/io/pcd_io.h>
 void Calibration::icpWorld2Depth(int cameraId, RealsenseGrabber* grabber)
 {
 	assert(0 < cameraId && cameraId < MAX_CAMERAS);
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr source(new pcl::PointCloud<pcl::PointXYZRGB>());
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr target(new pcl::PointCloud<pcl::PointXYZRGB>());
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr source(new pcl::PointCloud<pcl::PointXYZRGBA>());
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr target(new pcl::PointCloud<pcl::PointXYZRGBA>());
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGBA>());
 	float* depthSource = grabber->getDepthImages_host();
 	float* depthTarget = depthSource + cameraId * DEPTH_H * DEPTH_W;
 	RGBQUAD* colorSource = grabber->getColorImages_host();
 	RGBQUAD* colorTarget = colorSource + cameraId * COLOR_H * COLOR_W;
-	Intrinsics* intrinsicsSource = grabber->getDepthIntrinsics();
-	Intrinsics* intrinsicsTarget = intrinsicsSource + cameraId;
+	Intrinsics* intrinsicsDepthSource = grabber->getDepthIntrinsics();
+	Intrinsics* intrinsicsDepthTarget = intrinsicsDepthSource + cameraId;
 	Intrinsics* intrinsicsColorSource = grabber->getColorIntrinsics();
 	Intrinsics* intrinsicsColorTarget = intrinsicsColorSource + cameraId;
+
 	for (int y = 0; y < DEPTH_H; y++) {
 		for (int x = 0; x < DEPTH_W; x++) {
 			int id = y * DEPTH_W + x;
 			if (depthSource[id] != 0 && depthSource[id] < BOARD_MAX_DISTANCE) {
-				float3 pos = intrinsicsSource->deproject(make_float2(x, y), depthSource[id]);
+				float3 pos = intrinsicsDepthSource->deproject(make_float2(x, y), depthSource[id]);
 				int2 pos2d = intrinsicsColorSource->translate(pos);
-				RGBQUAD rgb = colorSource[pos2d.y * COLOR_W + pos2d.x];
-				pcl::PointXYZRGB point;
-				point.x = pos.x;
-				point.y = pos.y;
-				point.z = pos.z;
-				point.r = rgb.rgbRed;
-				point.g = rgb.rgbGreen;
-				point.b = rgb.rgbBlue;
-				source->push_back(point);
+				if (0 <= pos2d.x && pos2d.x < COLOR_W && 0 <= pos2d.y && pos2d.y < COLOR_H) {
+					RGBQUAD rgb = colorSource[pos2d.y * COLOR_W + pos2d.x];
+					pcl::PointXYZRGBA point;
+					point.x = pos.x;
+					point.y = pos.y;
+					point.z = pos.z;
+					point.r = rgb.rgbRed;
+					point.g = rgb.rgbGreen;
+					point.b = rgb.rgbBlue;
+					source->push_back(point);
+				}
 			}
 			if (depthTarget[id] != 0 && depthTarget[id] < BOARD_MAX_DISTANCE) {
-				float3 pos = intrinsicsTarget->deproject(make_float2(x, y), depthTarget[id]);
+				float3 pos = intrinsicsDepthTarget->deproject(make_float2(x, y), depthTarget[id]);
 				int2 pos2d = intrinsicsColorTarget->translate(pos);
-				RGBQUAD rgb = colorTarget[pos2d.y * COLOR_W + pos2d.x];
-				pcl::PointXYZRGB point;
-				point.x = pos.x;
-				point.y = pos.y;
-				point.z = pos.z;
-				point.r = rgb.rgbRed;
-				point.g = rgb.rgbGreen;
-				point.b = rgb.rgbBlue;
-				target->push_back(point);
+				if (0 <= pos2d.x && pos2d.x < COLOR_W && 0 <= pos2d.y && pos2d.y < COLOR_H) {
+					RGBQUAD rgb = colorTarget[pos2d.y * COLOR_W + pos2d.x];
+					pcl::PointXYZRGBA point;
+					point.x = pos.x;
+					point.y = pos.y;
+					point.z = pos.z;
+					point.r = rgb.rgbRed;
+					point.g = rgb.rgbGreen;
+					point.b = rgb.rgbBlue;
+					target->push_back(point);
+				}
 			}
 		}
 	}
 
-	pcl::io::savePCDFileASCII("source.pcd", *source);
-	pcl::io::savePCDFileASCII("target.pcd", *target);
+	Eigen::Matrix4f depth2worldSource = extrinsics2Mat4(calnInv(world2depth[0]));
+	Eigen::Matrix4f depth2worldTarget = extrinsics2Mat4(calnInv(world2depth[cameraId]));
+
+	pcl::transformPointCloud(*source, *source, depth2worldSource);
+	pcl::transformPointCloud(*target, *target, depth2worldTarget);
+
+	std::cout << "GICP..." << std::endl;
+	pcl::GeneralizedIterativeClosestPoint6D gicp;
+	gicp.setInputSource(source); // align cameras[cameraId] to cameras[0]
+	gicp.setInputTarget(target);
+	gicp.setMaximumIterations(50);
+	gicp.setTransformationEpsilon(1e-8);
+	gicp.align(*output);
+	std::cout << "Fitness Score = " << gicp.getFitnessScore() << std::endl;
+	Eigen::Matrix4f adjustment = gicp.getFinalTransformation();
+	Extrinsics source2target = Extrinsics((float*)adjustment.data());
+	source2target.output();
+	world2depth[cameraId] = world2depth[cameraId] * source2target;
 
 	Configuration::saveExtrinsics(world2depth);
 }
@@ -145,11 +186,7 @@ void Calibration::setOrigin(RealsenseGrabber* grabber) {
 			color = cv::Scalar(0, 255, 255);
 		}
 		for (int i = 0; i < sourcePoints.size(); i++) {
-			if (i == 0) {
-				cv::circle(sourceColorMat, sourcePoints[i], 3, cv::Scalar(255, 0, 0), 2);
-			} else {
-				cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
-			}
+			cv::circle(sourceColorMat, sourcePoints[i], 3, (i == 0) ? cv::Scalar(255, 0, 0) : color, 2);
 		}
 		cv::imshow("Get Depth", sourceColorMat);
 		char ch = cv::waitKey(1);
@@ -206,14 +243,10 @@ void Calibration::align(RealsenseGrabber* grabber, int targetId)
 			color = cv::Scalar(0, 255, 0);
 		}
 		for (int i = 0; i < sourcePoints.size(); i++) {
-			if (i == 0) {
-				cv::circle(sourceColorMat, sourcePoints[i], 3, cv::Scalar(255, 0, 0), 2);
-			} else {
-				cv::circle(sourceColorMat, sourcePoints[i], 3, color, 2);
-			}
+			cv::circle(sourceColorMat, sourcePoints[i], 3, (i == 0) ? cv::Scalar(255, 0, 0) : color, 2);
 		}
 		for (int i = 0; i < targetPoints.size(); i++) {
-			cv::circle(targetColorMat, targetPoints[i], 3, color, 2);
+			cv::circle(targetColorMat, targetPoints[i], 3, (i == 0) ? cv::Scalar(255, 0, 0) : color, 2);
 		}
 		cv::Mat mergeImage;
 		bool valid = (iter != -1 && sourcePoints.size() == BOARD_NUM && targetPoints.size() == BOARD_NUM);

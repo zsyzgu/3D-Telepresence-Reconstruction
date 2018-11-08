@@ -110,6 +110,13 @@ public:
 		this->translation = make_float3(translation[0], translation[1], translation[2]);
 	}
 
+	CUDA_CALLABLE_MEMBER Extrinsics(float* mat) { // Eigen::Matrix4f Format
+		rotation0 = make_float3(mat[0], mat[4], mat[8]);
+		rotation1 = make_float3(mat[1], mat[5], mat[9]);
+		rotation2 = make_float3(mat[2], mat[6], mat[10]);
+		this->translation = make_float3(mat[12], mat[13], mat[14]);
+	}
+
 	CUDA_CALLABLE_MEMBER float3 rotate(float3 pos) {
 		return make_float3(dot(pos, rotation0), dot(pos, rotation1), dot(pos, rotation2));
 	}

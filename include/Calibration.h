@@ -46,6 +46,7 @@ private:
 	void initCheckerboardPoints();
 	Extrinsics calnInv(Extrinsics T);
 	void rgb2mat(cv::Mat* mat, RGBQUAD* rgb);
+	Eigen::Matrix4f extrinsics2Mat4(Extrinsics extrinsics);
 	cv::Mat intrinsics2mat(Intrinsics T);
 	void updateWorld2Depth(int cameraId, RealsenseGrabber* grabber);
 	void icpWorld2Depth(int cameraId, RealsenseGrabber* grabber);

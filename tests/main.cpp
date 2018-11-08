@@ -84,10 +84,9 @@ void stop() {
 	std::cout << "stopped" << std::endl;
 }
 
+#include <pcl/registration/gicp6d.h>
 #include <pcl/io/pcd_io.h>
-#include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/visualization/cloud_viewer.h>
-#include <pcl/registration/correspondence_rejection_sample_consensus.h>
 Eigen::Matrix4f extrinsics2Mat4(Extrinsics extrinsics) {
 	Eigen::Matrix4f mat;
 	float* data = mat.data();
@@ -119,26 +118,16 @@ Extrinsics calnInv(Extrinsics T)
 	tv = -rv * tv;
 	return Extrinsics((double*)rv.data, (double*)tv.data);
 }
-#include <pcl/registration/gicp6d.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl/common/impl/io.hpp>
-#include <pcl/point_types.h>
-#include <pcl/point_cloud.h>
 int main(int argc, char *argv[]) {
-
 	pcl::visualization::PCLVisualizer viewer("Point Cloud Viewer");
 	viewer.setCameraPosition(0.0, 0.0, -2.0, 0.0, 0.0, 0.0);
 	viewer.registerKeyboardCallback(keyboardEventOccurred);
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr sourceInput(new pcl::PointCloud<pcl::PointXYZRGB>());
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr targetInput(new pcl::PointCloud<pcl::PointXYZRGB>());
-	pcl::io::loadPCDFile("source.pcd", *sourceInput);
-	pcl::io::loadPCDFile("target.pcd", *targetInput);
-	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr source(new pcl::PointCloud<pcl::PointXYZRGBA>());
+	/*pcl::PointCloud<pcl::PointXYZRGBA>::Ptr source(new pcl::PointCloud<pcl::PointXYZRGBA>());
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr target(new pcl::PointCloud<pcl::PointXYZRGBA>());
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGBA>());
-	pcl::copyPointCloud(*sourceInput, *source);
-	pcl::copyPointCloud(*targetInput, *target);
+	pcl::io::loadPCDFile("source.pcd", *source);
+	pcl::io::loadPCDFile("target.pcd", *target);
 
 	Extrinsics extrinsics[MAX_CAMERAS];
 	Configuration::loadExtrinsics(extrinsics);
@@ -148,33 +137,27 @@ int main(int argc, char *argv[]) {
 	pcl::transformPointCloud(*source, *source, world2depthSource);
 	pcl::transformPointCloud(*target, *target, world2depthTarget);
 
-	//Eigen::Matrix4f adjustment = align(source, target);
-	//pcl::transformPointCloud(*source, *source, adjustment);
 	pcl::GeneralizedIterativeClosestPoint6D gicp;
 	gicp.setInputSource(source);
 	gicp.setInputTarget(target);
 	gicp.setMaximumIterations(50);
 	gicp.setTransformationEpsilon(1e-8);
 	gicp.align(*output);
+	std::cout << gicp.getFitnessScore() << std::endl;
 	Eigen::Matrix4f adjustment = gicp.getFinalTransformation();
 
 	pcl::transformPointCloud(*source, *source, adjustment);
 
 	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGBA> sourceRGB(source, 0, 0, 255);
 	viewer.addPointCloud<pcl::PointXYZRGBA>(source, sourceRGB, "source");
-	//viewer.addPointCloud<pcl::PointXYZRGBA>(source, "source");
-
 	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGBA> targetRGB(target, 0, 255, 0);
 	viewer.addPointCloud<pcl::PointXYZRGBA>(target, targetRGB, "target");
-	//viewer.addPointCloud<pcl::PointXYZRGBA>(target, "target");
 
 	while (!viewer.wasStopped()) {
 		viewer.spinOnce();
-	}
+	}*/
 
-
-
-	/*start();
+	start();
 
 	while (!viewer.wasStopped()) {
 		viewer.spinOnce();
@@ -189,7 +172,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	stop();*/
+	stop();
 
 	return 0;
 }
