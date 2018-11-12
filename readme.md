@@ -65,15 +65,23 @@ Combined with the rendering part of TeleCP **3D-Telepresence-Rendering** (https:
 
 The building steps are as follows:
 
-1. Release **calibration.exe** from this project.
+1. In the "calibration" project, release **calibration.exe**.
 
-2. Define the version (server/client) in **Parameters.h** and release **TeleCP.dll** from this project.
+2. In the "TeleCP" project:
 
-3. Move **TeleCP.dll** to "Assets/Plugins/" in the project **3D-Telepresence-Rendering** (made by Unity3D).
+	* Define the end (server or client) by setting "telecp = new TeleCP(true / false)" in telepresence_dll.cpp.
+	
+	* Release **TeleCP.dll** from this project.
+	
+	* Move **TeleCP.dll** to "Assets/Plugins/" in the project **3D-Telepresence-Rendering** (made by Unity3D).
 
-4. Generate **TeleCP.exe** in Unity3D.
+	* Generate **TeleCP.exe** in Unity3D.
 
-In particular, **TeleCP.dll** together with the project **3D-Telepresence-Rendering** make up the Unity3D plugin of TeleCP.
+3. Notes:
+
+	* The "test" project is for development.
+
+	* **TeleCP.dll** together with the project **3D-Telepresence-Rendering** make up the Unity3D plugin of TeleCP.
 
 ## Run the Project
 
